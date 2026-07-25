@@ -1,0 +1,18 @@
+{
+  "duration": 33.9,
+  "assertions": [
+    { "kind": "appearsBy", "selector": "#video-window", "bySec": 0.5 },
+    { "kind": "appearsBy", "selector": "#meaning-window", "bySec": 1.1 },
+    { "kind": "appearsBy", "selector": "#beat-research", "bySec": 4.1 },
+    { "kind": "appearsBy", "selector": "#beat-hyperframes", "bySec": 6.3 },
+    { "kind": "appearsBy", "selector": "#beat-output", "bySec": 9.7 },
+    { "kind": "appearsBy", "selector": "#effects-word", "bySec": 10.8 },
+    { "kind": "appearsBy", "selector": ".tool-plate-ae", "bySec": 16.7 },
+    { "kind": "appearsBy", "selector": ".slash-cut", "bySec": 19.2 },
+    { "kind": "appearsBy", "selector": "#key-meter", "bySec": 22.9 },
+    { "kind": "appearsBy", "selector": "#door-title", "bySec": 25.7 },
+    { "kind": "before", "a": "#video-window", "b": "#meaning-window" },
+    { "kind": "before", "a": "#beat-research", "b": ".tool-plate-ae" },
+    { "kind": "before", "a": ".tool-plate-ae", "b": "#door-title" }
+  ]
+}

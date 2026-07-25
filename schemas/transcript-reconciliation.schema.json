@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://motionscript.dev/schemas/transcript-reconciliation.schema.json",
+  "title": "MotionScript Transcript Reconciliation",
+  "type": "object",
+  "required": ["schemaVersion", "mediaFingerprint", "transcriptRevision", "referenceScript", "items", "verification"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": "1.0.0" },
+    "mediaFingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "transcriptRevision": { "type": "integer", "minimum": 1 },
+    "referenceScript": {
+      "type": "object",
+      "required": ["status", "path", "sha256"],
+      "properties": {
+        "status": { "enum": ["none", "provided"] },
+        "path": { "type": ["string", "null"] },
+        "sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "start", "end", "referenceText", "heardText", "resolution", "releaseImpact", "confidence", "evidence"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "type": { "enum": ["matched", "script-only", "speech-only", "asr-correction", "ambiguous"] },
+          "segmentId": { "type": ["string", "null"] },
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "minimum": 0 },
+          "referenceText": { "type": ["string", "null"] },
+          "heardText": { "type": ["string", "null"] },
+          "resolution": { "enum": ["accepted-speech", "accepted-reference", "omitted-unspoken", "unresolved"] },
+          "releaseImpact": { "type": "boolean" },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "evidence": {
+            "type": "object",
+            "required": ["audioChecked", "note"],
+            "properties": {
+              "audioChecked": { "const": true },
+              "supportsReference": { "type": "boolean" },
+              "note": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          },
+          "decision": {
+            "type": "object",
+            "required": ["actor", "at", "note"],
+            "properties": {
+              "actor": { "type": "string" },
+              "at": { "type": "string" },
+              "note": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": ["audioChecked", "mediaPath", "mediaFingerprintMatches", "transcriptRevisionMatches", "unresolvedReleaseImpactCount"],
+      "properties": {
+        "audioChecked": { "const": true },
+        "mediaPath": { "type": "string", "minLength": 1 },
+        "mediaFingerprintMatches": { "type": "boolean" },
+        "transcriptRevisionMatches": { "type": "boolean" },
+        "unresolvedReleaseImpactCount": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

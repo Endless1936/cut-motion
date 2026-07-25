@@ -1,0 +1,10 @@
+{
+  "id": "timeline-pullout",
+  "intent": "Turn editing language into a readable timeline diagram.",
+  "bestFor": ["editing", "workflow", "time", "progress"],
+  "axis": "A",
+  "phases": ["tracks pull from opposite sides", "labels resolve", "playhead triangle lands above tracks", "thin line scans"],
+  "timing": { "entranceFrames": [8, 14], "playheadFrames": [5, 8], "holdMinimumFrames": 18 },
+  "style": ["thin playhead", "triangle above track stack", "no heavy frame", "clear track labels"],
+  "avoid": ["playhead buried inside tracks", "thick orange divider", "unlabeled empty bars"]
+}

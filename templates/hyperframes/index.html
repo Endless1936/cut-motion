@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MotionScript Composition</title>
+    <script src="./assets/gsap.min.js"></script>
+    <link rel="stylesheet" href="./caption.css" />
+    <style>
+      @font-face {
+        font-family: "Smiley Sans";
+        src: url("./assets/fonts/smiley-sans-oblique.woff2") format("woff2");
+        font-display: block;
+      }
+
+      :root {
+        --ink: #161719;
+        --paper: #f6f4ed;
+        --blue: #3864f6;
+        --violet: #8a67f6;
+        --coral: #ef5d57;
+        --green: #23c98a;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+      body { font-family: "Smiley Sans", sans-serif; font-weight: 400; font-synthesis: none; color: var(--ink); }
+
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        overflow: hidden;
+      }
+
+      #a-roll {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .clip { position: absolute; inset: 0; }
+      .scene-inner { position: absolute; inset: 0; }
+
+      .hero-card {
+        position: absolute;
+        left: 72px;
+        right: 72px;
+        top: 660px;
+        min-height: 420px;
+        padding: 72px;
+        border: 4px solid var(--ink);
+        border-radius: 52px;
+        background: color-mix(in srgb, var(--paper) 92%, transparent);
+        box-shadow: 18px 22px 0 color-mix(in srgb, var(--ink) 82%, transparent);
+        backdrop-filter: blur(14px);
+      }
+
+      .hero-card h1 {
+        margin: 0;
+        font-size: 118px;
+        line-height: 0.96;
+        letter-spacing: -0.04em;
+      }
+
+      .accent { color: var(--blue); }
+
+      .no-orphan-line {
+        overflow-wrap: normal;
+        word-break: normal;
+        text-wrap: balance;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-width="1080" data-height="1920" data-fps="30" data-duration="10" data-layout-constraints="enforced">
+      <video id="a-roll" class="clip" src="./assets/input-video.mp4" data-start="0" data-duration="10" data-track-index="0" muted playsinline preload="auto"></video>
+      <audio id="source-audio" src="./assets/input-video.mp4" data-start="0" data-duration="10" data-track-index="1" data-volume="1" preload="auto"></audio>
+
+      <section id="hero" class="clip" data-start="0" data-duration="10" data-track-index="10">
+        <div class="scene-inner">
+          <div class="hero-card">
+            <h1 id="hero-copy" class="no-orphan-line" data-no-orphan-line="true">一句话，<span class="accent">一个动作理由</span></h1>
+          </div>
+        </div>
+      </section>
+      <!-- MOTIONSCRIPT_CAPTIONS_START -->
+      <!-- MOTIONSCRIPT_CAPTIONS_END -->
+    </div>
+
+    <script>
+      const timeline = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
+      timeline.set(".hero-card", { y: 180, rotation: 2, opacity: 0 }, 0);
+      timeline.to(".hero-card", { y: 0, rotation: 0, opacity: 1, duration: 0.55, ease: "back.out(1.3)" }, 0.2);
+      timeline.from("#hero-copy", { y: 70, opacity: 0, duration: 0.4 }, 0.42);
+      window.__timelines = window.__timelines || {};
+      window.__timelines.main = timeline;
+    </script>
+  </body>
+</html>

@@ -1,0 +1,88 @@
+{
+  "duration": 3.2,
+  "fps": 30,
+  "captionMode": "motion-copy",
+  "designSystem": "state/design-system.json",
+  "beats": [
+    {
+      "id": "beat-001",
+      "sceneId": "showcase",
+      "sourceSegmentIds": ["seg-001"],
+      "text": "看看这些特效",
+      "start": 0,
+      "end": 1.5,
+      "audioAnchorTime": 0,
+      "axis": "B",
+      "recipe": "b-axis-showcase",
+      "primaryFlowAxis": "vertical",
+      "visualReference": "proposal:showcase-module-stack",
+      "intent": "Introduce the effect showcase",
+      "motionFamily": "technical",
+      "transitionFamily": "module-build",
+      "microEvents": [
+        { "time": 0.35, "type": "headline-reveal", "semanticChange": "看看这些 enters" },
+        { "time": 0.9, "type": "module-complete", "semanticChange": "特效 becomes the focal word" }
+      ],
+      "layout": {
+        "primaryOccupancyRatio": 0.42,
+        "primaryBoundsNormalized": { "x": 0.08, "y": 0.22, "width": 0.84, "height": 0.42 },
+        "supportingElementCount": 3,
+        "emptyComponentCount": 0,
+        "panelPaddingPx": 56,
+        "safeAreaPass": true,
+        "faceCover": "partial"
+      },
+      "typography": {
+        "fontFamily": "Smiley Sans",
+        "role": "primary",
+        "fontSizePx": 118,
+        "lineHeight": 0.98,
+        "maxLines": 2,
+        "outlineReservePx": 20
+      },
+      "components": ["motion card", "GSAP orbit", "live PIP"],
+      "entranceFrames": 10,
+      "exitFrames": 8
+    },
+    {
+      "id": "beat-002",
+      "sceneId": "showcase",
+      "sourceSegmentIds": ["seg-002"],
+      "text": "看看这些动画",
+      "start": 1.5,
+      "end": 3.2,
+      "audioAnchorTime": 1.5,
+      "axis": "B",
+      "recipe": "b-axis-showcase",
+      "primaryFlowAxis": "vertical",
+      "visualReference": "proposal:showcase-module-stack",
+      "intent": "Escalate from effects to animation systems",
+      "motionFamily": "technical",
+      "transitionFamily": "semantic-morph",
+      "microEvents": [
+        { "time": 1.85, "type": "copy-morph", "semanticChange": "特效 morphs into 动画" },
+        { "time": 2.45, "type": "component-activate", "semanticChange": "keyframe and FPS modules animate" }
+      ],
+      "layout": {
+        "primaryOccupancyRatio": 0.46,
+        "primaryBoundsNormalized": { "x": 0.08, "y": 0.2, "width": 0.84, "height": 0.46 },
+        "supportingElementCount": 3,
+        "emptyComponentCount": 0,
+        "panelPaddingPx": 56,
+        "safeAreaPass": true,
+        "faceCover": "partial"
+      },
+      "typography": {
+        "fontFamily": "Smiley Sans",
+        "role": "primary",
+        "fontSizePx": 118,
+        "lineHeight": 0.98,
+        "maxLines": 2,
+        "outlineReservePx": 20
+      },
+      "components": ["keyframe card", "timing orbit", "live PIP"],
+      "entranceFrames": 8,
+      "exitFrames": 8
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "celebration-loop",
+  "intent": "Sustain a high-energy call-to-action through the final spoken beat.",
+  "bestFor": ["follow", "subscribe", "finale", "celebration"],
+  "axis": "A",
+  "phases": ["callout card enters", "supporter lights begin", "confetti bursts on each phrase", "motion continues to final frame"],
+  "timing": { "entranceFrames": [6, 10], "burstFrames": [4, 8], "tailFrames": 1 },
+  "style": ["two edge supporter lights", "center confetti", "clear callout card", "continuous alternating sway"],
+  "avoid": ["bottom confetti cannons", "large opaque circles", "loop stopping before audio", "full-frame particle fog"]
+}

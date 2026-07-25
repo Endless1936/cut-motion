@@ -1,0 +1,11 @@
+.DS_Store
+node_modules/
+.env
+.env.*
+jobs/*
+**/renders/
+**/.hyperframes/
+**/snapshots/
+**/assets/fonts/*.woff2
+**/assets/gsap.min.js
+*.log

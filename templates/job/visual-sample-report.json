@@ -1,0 +1,9 @@
+{
+  "$schema": "../../../schemas/visual-sample-report.schema.json",
+  "passed": false,
+  "checkedAt": null,
+  "artifact": { "path": null, "sha256": null },
+  "source": { "path": null, "sha256": null },
+  "creativePackageSha256": null,
+  "checks": []
+}

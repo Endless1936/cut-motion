@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://motionscript.dev/schemas/project.schema.json",
+  "title": "MotionScript Project",
+  "type": "object",
+  "required": ["schemaVersion", "id", "mode", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "intakeDecisionBlock", "authoritativeMediaPath", "sourceVideo", "language", "width", "height", "fps", "designSystem", "status"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "mode": { "enum": ["review", "auto"] },
+    "captionMode": { "enum": ["motion-copy", "subtitles"] },
+    "captionModeSource": { "enum": ["default", "user", "auto"] },
+    "captionModeAcknowledged": { "type": "boolean" },
+    "visualAxisMode": { "enum": ["a-axis-overlay", "b-axis-stage", "hybrid"] },
+    "visualAxisModeSource": { "enum": ["default", "user", "auto"] },
+    "visualAxisModeAcknowledged": { "type": "boolean" },
+    "referenceScriptStatus": { "enum": ["unknown", "none", "provided"] },
+    "referenceScriptAcknowledged": { "type": "boolean" },
+    "referenceScriptPath": { "type": ["string", "null"] },
+    "referenceScriptSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+    "intakeDecisionBlock": { "type": "boolean" },
+    "authoritativeMediaPath": { "type": ["string", "null"] },
+    "sourceVideo": { "type": "string", "minLength": 1 },
+    "transcript": { "type": ["string", "null"] },
+    "language": { "type": "string", "default": "zh-CN" },
+    "width": { "type": "integer", "minimum": 240 },
+    "height": { "type": "integer", "minimum": 240 },
+    "fps": { "type": "number", "exclusiveMinimum": 0 },
+    "roughCutEngine": { "enum": ["chatcut", "ffmpeg-fallback"] },
+    "designSystem": { "type": "string", "minLength": 1 },
+    "silence": {
+      "type": "object",
+      "required": ["noiseDb", "minimumSeconds", "edgePaddingSeconds"],
+      "properties": {
+        "noiseDb": { "type": "number", "maximum": 0 },
+        "minimumSeconds": { "type": "number", "minimum": 0.2 },
+        "edgePaddingSeconds": { "type": "number", "minimum": 0.03, "maximum": 0.2 }
+      },
+      "additionalProperties": false
+    },
+    "status": {
+      "enum": ["intake", "transcription", "rough-cut", "rough-cut-review", "motion-plan", "motion-plan-review", "visual-sample", "visual-sample-review", "composition", "qa", "final-preview", "render", "complete"]
+    },
+    "deviations": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    }
+  },
+  "additionalProperties": true
+}

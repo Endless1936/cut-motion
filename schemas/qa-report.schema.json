@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://motionscript.dev/schemas/qa-report.schema.json",
+  "title": "MotionScript QA Report",
+  "type": "object",
+  "required": ["passed", "checkedAt", "artifacts", "checks"],
+  "properties": {
+    "passed": { "type": "boolean" },
+    "checkedAt": { "type": "string", "format": "date-time" },
+    "artifacts": {
+      "type": "object",
+      "required": ["composition", "preview"],
+      "properties": {
+        "composition": { "$ref": "#/$defs/artifact" },
+        "preview": { "$ref": "#/$defs/artifact" }
+      },
+      "additionalProperties": false
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "enum": ["pass", "fail", "warning"] },
+          "details": { "type": "string" },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["kind", "path", "sha256", "subjectSha256", "bundleSha256", "validator", "validatorVersion", "runnerSha256", "command"],
+              "properties": {
+                "kind": { "enum": ["validator-report", "snapshot-manifest", "audio-analysis", "media-probe"] },
+                "path": { "type": "string" },
+                "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "subjectSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "bundleSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "validator": { "type": "string", "minLength": 1 },
+                "validatorVersion": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "runnerSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "command": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

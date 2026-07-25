@@ -1,0 +1,22 @@
+{
+  "source": "chatcut-viewer-pages",
+  "fps": 30,
+  "cleanExport": "roughcut/a-roll.mp4",
+  "timelineVersion": "chatcut-example-v1",
+  "roughCutLocked": true,
+  "captionRenderDisabled": true,
+  "pages": [
+    {
+      "id": "chatcut-page-0001",
+      "startFrame": 0,
+      "endFrame": 45,
+      "viewerText": "看看这些特效"
+    },
+    {
+      "id": "chatcut-page-0002",
+      "startFrame": 45,
+      "endFrame": 96,
+      "viewerText": "看看这些/动画？"
+    }
+  ]
+}

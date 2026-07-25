@@ -1,0 +1,10 @@
+{
+  "id": "incremental-stack",
+  "intent": "Accumulate clauses without removing earlier meaning until the complete sentence resolves.",
+  "bestFor": ["lists", "setup-payoff", "escalation"],
+  "axis": "A",
+  "phases": ["first clause anchors", "later clauses layer or stamp", "full statement holds", "group exits once"],
+  "timing": { "entranceFrames": [5, 10], "holdMinimumFrames": 20, "exitFrames": [6, 10] },
+  "style": ["stable first clause", "varied scale per clause", "shared baseline or orbit"],
+  "avoid": ["shrinking earlier clauses into corners", "replacing each clause", "detached decoration"]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "tool-strikeout",
+  "intent": "Visually reject named legacy tools by making the spoken clause become the strike action.",
+  "bestFor": ["rejection", "before-and-after", "tool comparison"],
+  "axis": "A",
+  "phases": ["tool cards enter", "spoken clause sweeps across its tool", "tool desaturates", "final rejected tool exits physically"],
+  "timing": { "entranceFrames": [6, 12], "strikeFrames": [5, 8], "holdMinimumFrames": 12 },
+  "style": ["three aligned tool cards", "red semantic strike", "progressive desaturation"],
+  "avoid": ["placing the sentence above the cards", "decorative strike disconnected from text", "leaving the final tool fully saturated"]
+}

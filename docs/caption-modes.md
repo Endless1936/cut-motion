@@ -1,0 +1,40 @@
+# Caption Modes
+
+## Motion-copy mode
+
+This is the high-density style used by the gold-standard video. Every spoken phrase appears as motion typography. There is no additional caption layer. The beat map must cover every transcript segment exactly.
+
+## Subtitles mode
+
+This is the default release path. Captions carry the complete reconciled spoken content. ChatCut viewer pages provide raw timing evidence; `captions/caption-review-plan.json` is the approved wording, grouping, and boundary authority.
+
+Default 1080×1920 caption treatment:
+
+- 得意黑, locally embedded;
+- white `#FFFFFF`;
+- 96 px;
+- line height 1.15;
+- centered;
+- 330 px above the bottom edge;
+- soft black shadow offset downward;
+- exactly one rendered line; target 4–10.5 measured display units and allow up to 11.8 only with the approved 88–96px cue-level fit range;
+- lexical units and fixed phrases are protected; particles and conjunctions may not stand alone;
+- target one short clause or breath per cue, normally 0.8–2.5 seconds and never below 0.5 seconds;
+- no opaque subtitle bar.
+
+Use this sequence:
+
+```bash
+node scripts/check-caption-review-plan.mjs jobs/<job-id>/captions/caption-review-plan.json
+node scripts/promote-caption-review-plan.mjs jobs/<job-id>
+node scripts/check-captions.mjs jobs/<job-id>/captions/captions.json jobs/<job-id>/captions/chatcut-pages.json jobs/<job-id>/state/design-system.json
+node scripts/install-captions.mjs jobs/<job-id>/captions/captions.json jobs/<job-id>/hyperframes/index.html
+```
+
+Before promotion, lock the ChatCut rough cut, reconcile wording against the recording, author semantic one-line cues, and approve them in the creative package. Disable ChatCut caption rendering before exporting clean A-roll. The installer uses only the approved promoted cues and replaces prior generated clips idempotently.
+
+Caption-only HyperFrames is the first publishable result. Only add MG when a selected semantic node has room outside the caption, face, PiP, and evidence regions; it must be local, brief, and supplemental. Keep the talking-head video full-frame beneath MG by default. A full-screen MG stage with speaker PiP requires explicit user approval. Never add a global MG treatment in this mode.
+
+Creative confirmation calls these treatments **A-axis overlay mode** and **B-axis stage mode**, defines both for the user, and records any B-axis or hybrid choice before approval.
+
+`docs/subtitle-mg-standard.md` is the binding selection rule. A local MG must close a documented viewer cognition gap; merely adding a new fact, technical term, visual stimulus, or subtitle paraphrase is insufficient.

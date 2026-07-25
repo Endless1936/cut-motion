@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://motionscript.dev/schemas/validation-receipt.schema.json",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "status",
+    "kind",
+    "validator",
+    "validatorVersion",
+    "runnerSha256",
+    "bundleSha256",
+    "command",
+    "exitCode",
+    "output",
+    "subject",
+    "checkedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "status": { "const": "pass" },
+    "kind": {
+      "enum": [
+        "validator-report",
+        "snapshot-manifest",
+        "audio-analysis",
+        "media-probe"
+      ]
+    },
+    "validator": { "type": "string", "minLength": 1 },
+    "validatorVersion": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "runnerSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "bundleSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "command": { "type": "string", "minLength": 1 },
+    "exitCode": { "const": 0 },
+    "output": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "subject": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "checkedAt": { "type": "string", "format": "date-time" },
+    "snapshots": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "required": ["time", "path", "sha256"],
+        "properties": {
+          "time": { "type": "number", "minimum": 0 },
+          "path": { "type": "string" },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "metrics": { "type": "object" }
+  },
+  "additionalProperties": false
+}

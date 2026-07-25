@@ -1,0 +1,117 @@
+{
+  "id": "motionscript-gold-standard-v1",
+  "canvas": {
+    "width": 1080,
+    "height": 1920,
+    "safeAreaPx": { "top": 88, "right": 54, "bottom": 88, "left": 54 },
+    "primaryStageYRatio": [0.22, 0.78]
+  },
+  "typography": {
+    "displayFamily": "Smiley Sans",
+    "displayNameZh": "得意黑",
+    "fontAsset": "assets/fonts/smiley-sans-oblique.woff2",
+    "required": true,
+    "fontWeight": 400,
+    "primarySizePx": [84, 156],
+    "secondarySizePx": [42, 72],
+    "displayLineHeight": [0.92, 1.12],
+    "bodyLineHeight": [1.15, 1.35],
+    "outlineReservePx": 18,
+    "minimumLastLineCharacters": 2,
+    "orphanLineAllowed": false
+  },
+  "spacing": {
+    "panelPaddingPx": [48, 72],
+    "minimumElementGapPx": 24,
+    "preferredElementGapPx": [32, 56]
+  },
+  "density": {
+    "primaryOccupancyRatio": [0.28, 0.65],
+    "supportingElementCount": [1, 4],
+    "emptyComponentCount": 0,
+    "minimumVisibleTextPx": 42,
+    "forbiddenSelfEvidentLabels": ["真人画面", "人物画面", "PIP VIDEO", "LIVE VIDEO"]
+  },
+  "rhythmProfiles": {
+    "motion-copy": {
+      "microEventGapSeconds": [0.35, 0.9],
+      "majorSceneGapSeconds": [1.8, 3.5],
+      "minimumBAxisRunSeconds": 2.5,
+      "maximumRepeatedTransitionFamily": 2,
+      "syncToleranceFrames": 3
+    },
+    "subtitles": {
+      "microEventGapSeconds": [0.8, 1.8],
+      "majorSceneGapSeconds": [2.5, 5.0],
+      "minimumBAxisRunSeconds": 3.0,
+      "maximumRepeatedTransitionFamily": 2,
+      "syncToleranceFrames": 3
+    }
+  },
+  "captions": {
+    "fontFamily": "Smiley Sans",
+    "fontAsset": "assets/fonts/smiley-sans-oblique.woff2",
+    "fontWeight": 400,
+    "color": "#FFFFFF",
+    "fontSizePx": 96,
+    "lineHeight": 1.15,
+    "maximumDisplayUnits": 11.8,
+    "minimumFontSizePx": 88,
+    "maximumLines": 1,
+    "bottomOffsetPx": 330,
+    "textAlign": "center",
+    "opaqueBackground": false,
+    "shadow": {
+      "xPx": 0,
+      "yPx": 9,
+      "blurPx": 21,
+      "color": "rgba(0, 0, 0, 0.76)"
+    }
+  },
+  "surface": {
+    "localizedGlassOnly": true,
+    "fullFrameHazeAllowed": false,
+    "dominantAccentCount": 1,
+    "supportingAccentMaximum": 1,
+    "shadow": "broad-low-contrast"
+  },
+  "axisPolicies": {
+    "A": {
+      "accumulation": "replace",
+      "maximumPrimaryGroups": 1,
+      "maximumAuxiliaryGroups": 1,
+      "preferredGroupDurationSeconds": [1.8, 3.0],
+      "clearBeforeNextGroup": true,
+      "overlayZones": ["top", "bottom", "side"],
+      "faceCoverPolicy": "brief-semantic-only",
+      "surface": {
+        "kind": "localized-glass",
+        "opacityRange": [0.58, 0.76],
+        "maximumBackdropBlurPx": 18,
+        "fullFrame": false
+      }
+    },
+    "B": {
+      "accumulation": "accumulate",
+      "groupedExit": true,
+      "livePipRequired": true,
+      "pipProtectionRequired": true,
+      "pipExclusionZone": {
+        "rightPx": 60,
+        "bottomPx": 138,
+        "widthPx": 420,
+        "heightPx": 420
+      }
+    }
+  },
+  "palette": {
+    "ink": "#171717",
+    "paper": "#F1ECE4",
+    "ice": "#E9EEF1",
+    "cobalt": "#3155FF",
+    "coral": "#EC544F",
+    "green": "#20C77A",
+    "yellow": "#F4C840",
+    "violet": "#8D68FF"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../schemas/transcript-reconciliation.schema.json",
+  "schemaVersion": "1.0.0",
+  "mediaFingerprint": "",
+  "transcriptRevision": 1,
+  "referenceScript": {
+    "status": "none",
+    "path": null,
+    "sha256": null
+  },
+  "items": [],
+  "verification": {
+    "audioChecked": false,
+    "mediaPath": "input/source.mov",
+    "mediaFingerprintMatches": false,
+    "transcriptRevisionMatches": false,
+    "unresolvedReleaseImpactCount": 0
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "duration": 10,
+  "assertions": [
+    { "kind": "appearsBy", "selector": "#hero-copy", "bySec": 1.0 }
+  ]
+}

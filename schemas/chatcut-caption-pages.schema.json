@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://motionscript.dev/schemas/chatcut-caption-pages.schema.json",
+  "title": "MotionScript ChatCut Caption Pages",
+  "type": "object",
+  "required": ["source", "fps", "cleanExport", "roughCutLocked", "captionRenderDisabled", "pages"],
+  "properties": {
+    "source": { "const": "chatcut-viewer-pages" },
+    "fps": { "type": "number", "exclusiveMinimum": 0 },
+    "cleanExport": { "type": "string", "minLength": 1 },
+    "timelineVersion": { "type": ["string", "null"] },
+    "roughCutLocked": { "const": true },
+    "captionRenderDisabled": { "const": true },
+    "pages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "startFrame", "endFrame", "viewerText"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "startFrame": { "type": "integer", "minimum": 0 },
+          "endFrame": { "type": "integer", "minimum": 1 },
+          "viewerText": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}

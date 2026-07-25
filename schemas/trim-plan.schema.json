@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://motionscript.dev/schemas/trim-plan.schema.json",
+  "title": "MotionScript Trim Plan",
+  "type": "object",
+  "required": ["source", "fps", "remove"],
+  "properties": {
+    "source": { "type": "string" },
+    "fps": { "type": "number", "exclusiveMinimum": 0 },
+    "trimProfile": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "acousticThresholdsDb": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "outgoingHandleSeconds": { "type": "number", "minimum": 0 },
+        "incomingHandleSeconds": { "type": "number", "minimum": 0 },
+        "audioTransitionFrames": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "seams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "classification": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 },
+          "semanticEvidence": { "type": "string", "minLength": 1 },
+          "visualEvidence": { "type": "string", "minLength": 1 },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "acousticBoundaryFrames": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "appliedFrame": { "type": "integer", "minimum": 0 },
+          "audioTransitionFrames": { "type": "integer", "minimum": 0 },
+          "pictureAudited": { "type": "boolean" },
+          "audioAudited": { "type": "boolean" }
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "properties": {
+        "everySeamAudited": { "type": "boolean" },
+        "contiguous": { "type": "boolean" }
+      }
+    },
+    "remove": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["start", "end", "reason", "confidence"],
+        "properties": {
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "exclusiveMinimum": 0 },
+          "reason": { "enum": ["dead-air", "false-start", "duplicate", "manual"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "paddingBefore": { "type": "number", "minimum": 0 },
+          "paddingAfter": { "type": "number", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "revision": 1,
+  "language": "zh-CN",
+  "duration": 3.2,
+  "source": "supplied",
+  "segments": [
+    {
+      "id": "seg-001",
+      "text": "看看这些特效",
+      "start": 0,
+      "end": 1.5,
+      "confidence": 1,
+      "words": [
+        { "text": "看看", "start": 0, "end": 0.4, "confidence": 1 },
+        { "text": "这些", "start": 0.4, "end": 0.8, "confidence": 1 },
+        { "text": "特效", "start": 0.8, "end": 1.5, "confidence": 1 }
+      ]
+    },
+    {
+      "id": "seg-002",
+      "text": "看看这些动画",
+      "start": 1.5,
+      "end": 3.2,
+      "confidence": 1,
+      "words": [
+        { "text": "看看", "start": 1.5, "end": 1.9, "confidence": 1 },
+        { "text": "这些", "start": 1.9, "end": 2.3, "confidence": 1 },
+        { "text": "动画", "start": 2.3, "end": 3.2, "confidence": 1 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "$schema": "../../../schemas/creative-confirmation.schema.json",
+  "schemaVersion": "1.0.0",
+  "captionMode": "subtitles",
+  "captionModeDecision": {
+    "status": "default-proposed",
+    "source": "default"
+  },
+  "visualAxisMode": "a-axis-overlay",
+  "visualAxisModeDecision": {
+    "status": "default-proposed",
+    "source": "default"
+  },
+  "storyboard": {
+    "motionPlan": "docs/motion-plan.md",
+    "captionPlan": "docs/caption-plan.md",
+    "beatMap": "state/beat-map.json",
+    "beatCount": 0
+  },
+  "authorities": {},
+  "changeControl": {
+    "implementationMayStartAfter": "creative-package-approved",
+    "planChangesRequireReapproval": true,
+    "reapprovalFields": [
+      "caption-segmentation",
+      "mg-node-set",
+      "mg-count",
+      "on-screen-copy",
+      "support-role",
+      "visual-style",
+      "primary-flow-axis",
+      "visual-reference",
+      "axis-mode"
+    ]
+  },
+  "axisPolicy": {
+    "A": {
+      "accumulation": "replace",
+      "overlayZones": ["top", "bottom", "side"],
+      "faceProtection": "brief-semantic-only",
+      "surface": {
+        "kind": "localized-glass",
+        "fullFrame": false,
+        "opacityRange": [0.58, 0.76],
+        "backdropBlurPx": 14
+      }
+    },
+    "B": {
+      "accumulation": "accumulate",
+      "groupedExit": true,
+      "pip": {
+        "live": true,
+        "protected": true,
+        "exclusionZone": {
+          "rightPx": 60,
+          "bottomPx": 138,
+          "widthPx": 420,
+          "heightPx": 420
+        }
+      }
+    }
+  },
+  "visualSample": {
+    "required": false,
+    "scope": "caption-only",
+    "requiredAxes": [],
+    "purpose": "verify-caption-layout"
+  },
+  "review": {
+    "required": false,
+    "status": "draft"
+  }
+}

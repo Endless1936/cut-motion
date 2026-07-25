@@ -1,0 +1,15 @@
+{
+  "duration": 33.9,
+  "fps": 30,
+  "scenes": [
+    { "id": "a-irony", "start": 0, "duration": 2.5, "axis": "A", "recipe": "depth-emergence" },
+    { "id": "a-kinetic", "start": 2.553, "duration": 7.79, "axis": "A", "recipe": "incremental-stack" },
+    { "id": "b-showcase", "start": 10.3, "duration": 5.5, "axis": "B", "recipe": "b-axis-showcase" },
+    { "id": "b-tools", "start": 15.8, "duration": 5.113333, "axis": "A", "recipe": "tool-strikeout" },
+    { "id": "a-codex", "start": 21.166667, "duration": 1.1, "axis": "A", "recipe": "incremental-stack" },
+    { "id": "b-key", "start": 22.3, "duration": 1.966667, "axis": "A", "recipe": "depth-emergence" },
+    { "id": "b-door", "start": 24.433333, "duration": 2.033333, "axis": "A", "recipe": "depth-emergence" },
+    { "id": "a-trick", "start": 26.466667, "duration": 2.333333, "axis": "A", "recipe": "incremental-stack" },
+    { "id": "celebration", "start": 28.8, "duration": 5.1, "axis": "A", "recipe": "celebration-loop" }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "id": "depth-emergence",
+  "intent": "Reveal a second phrase as if it emerges from behind or through the first phrase.",
+  "bestFor": ["contrast", "semantic completion", "surprise"],
+  "axis": "A",
+  "phases": ["anchor phrase settles", "second phrase crosses depth plane", "phrases hold together", "group exits"],
+  "timing": { "entranceFrames": [8, 14], "holdMinimumFrames": 18, "exitFrames": [6, 10] },
+  "style": ["three depth planes", "soft occlusion", "large typography", "single focal path"],
+  "avoid": ["using on consecutive sentences", "tiny receding copy", "camera movement without semantic purpose"]
+}

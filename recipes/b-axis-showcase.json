@@ -1,0 +1,10 @@
+{
+  "id": "b-axis-showcase",
+  "intent": "Give motion design the full frame while preserving a live speaker window.",
+  "bestFor": ["showcase", "demonstration", "visual montage"],
+  "axis": "B",
+  "phases": ["A-axis hands off once", "full motion stage builds", "live PIP remains in motion", "single return to A-axis"],
+  "timing": { "transitionFrames": [8, 14], "minimumSceneFrames": 75, "pipSampleIntervalFrames": 12 },
+  "style": ["editorial grid", "meaningful modules", "large headline", "soft technical palette"],
+  "avoid": ["rapid axis toggling", "static speaker portrait", "empty colored blocks", "black background replacing source without reason"]
+}

@@ -1,0 +1,8 @@
+{
+  "title": "MotionScript Composition",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "duration": 10,
+  "source": "assets/input-video.mp4"
+}

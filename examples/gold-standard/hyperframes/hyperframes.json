@@ -1,0 +1,5 @@
+{
+  "$schema": "https://hyperframes.heygen.com/schema/hyperframes.json",
+  "name": "HyperFrames Showcase AB V4",
+  "entry": "index.html"
+}
