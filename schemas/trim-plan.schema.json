@@ -19,7 +19,8 @@
         },
         "outgoingHandleSeconds": { "type": "number", "minimum": 0 },
         "incomingHandleSeconds": { "type": "number", "minimum": 0 },
-        "audioTransitionFrames": { "type": "integer", "minimum": 0 }
+        "audioTransitionFrames": { "type": "integer", "minimum": 0 },
+        "maximumResidualSilenceMs": { "type": "number", "minimum": 0 }
       }
     },
     "seams": {
@@ -28,7 +29,7 @@
         "type": "object",
         "properties": {
           "id": { "type": "string", "minLength": 1 },
-          "classification": { "type": "string", "minLength": 1 },
+          "classification": { "enum": ["reading-reset", "false-start", "restart", "body-reset", "reset-removed", "duplicate-take", "natural-pause"] },
           "reason": { "type": "string", "minLength": 1 },
           "semanticEvidence": { "type": "string", "minLength": 1 },
           "visualEvidence": { "type": "string", "minLength": 1 },
@@ -41,6 +42,9 @@
           },
           "appliedFrame": { "type": "integer", "minimum": 0 },
           "audioTransitionFrames": { "type": "integer", "minimum": 0 },
+          "outputTime": { "type": "number", "minimum": 0 },
+          "measuredResidualSilenceMs": { "type": "number", "minimum": 0 },
+          "residualSilenceByThresholdMs": { "type": "object" },
           "pictureAudited": { "type": "boolean" },
           "audioAudited": { "type": "boolean" }
         }
@@ -50,7 +54,19 @@
       "type": "object",
       "properties": {
         "everySeamAudited": { "type": "boolean" },
-        "contiguous": { "type": "boolean" }
+        "contiguous": { "type": "boolean" },
+        "mediaAudit": {
+          "type": "object",
+          "required": ["path", "sha256", "duration", "thresholdsDb", "minimumSilenceMs", "checkedAt"],
+          "properties": {
+            "path": { "type": "string", "minLength": 1 },
+            "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+            "duration": { "type": "number", "exclusiveMinimum": 0 },
+            "thresholdsDb": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
+            "minimumSilenceMs": { "type": "number", "minimum": 1 },
+            "checkedAt": { "type": "string", "minLength": 1 }
+          }
+        }
       }
     },
     "remove": {

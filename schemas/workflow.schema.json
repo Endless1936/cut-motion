@@ -30,6 +30,15 @@
     "visualPlanSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
     "compositionArtifactPath": { "type": ["string", "null"] },
     "compositionArtifactSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+    "lastKnownGoodDelivery": {
+      "type": ["object", "null"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "validatedAt": { "type": "string", "minLength": 1 }
+      },
+      "required": ["path", "sha256", "validatedAt"]
+    },
     "revisionId": { "type": "integer", "minimum": 1 },
     "approvedVisualSampleFingerprint": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
     "currentState": {

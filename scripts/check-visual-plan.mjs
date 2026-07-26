@@ -14,7 +14,12 @@ const errors = [];
 const warnings = [];
 const beats = [...beatMap.beats].sort((left, right) => left.start - right.start);
 const transcriptById = new Map(transcript.segments.map((segment) => [segment.id, segment]));
+const wordsById = new Map(transcript.segments.flatMap((segment) => (segment.words ?? []).map((word, index) => [
+  `${segment.id}:word-${String(index + 1).padStart(3, "0")}`,
+  word
+])));
 const sourceUsage = new Map();
+const signatureUsage = new Map();
 const normalize = (value) => value.replace(/[\s，。！？、,.!?]/g, "").toLowerCase();
 const captionMode = beatMap.captionMode ?? "motion-copy";
 const rhythm = designSystem.rhythmProfiles[captionMode];
@@ -72,6 +77,9 @@ for (let index = 0; index < beats.length; index += 1) {
   }
   if (!["horizontal", "vertical"].includes(beat.primaryFlowAxis)) errors.push(`${beat.id}: motion beat must declare a horizontal or vertical primaryFlowAxis`);
   if (typeof beat.visualReference !== "string" || beat.visualReference.trim().length === 0) errors.push(`${beat.id}: motion beat must declare its approved or proposed visualReference`);
+  if (!["sequence", "comparison", "convergence", "branch", "mapping", "emphasis", "evidence"].includes(beat.semanticTopology)) errors.push(`${beat.id}: motion beat must declare semanticTopology`);
+  const entryWord = wordsById.get(beat.entryAnchorWordId);
+  if (!entryWord) errors.push(`${beat.id}: entryAnchorWordId does not resolve to a transcript word`);
   if (captionMode === "subtitles" && beat.mgScope !== "local") errors.push(`${beat.id}: subtitles mode only permits local MG`);
   if (captionMode === "subtitles" && beat.captionSafeZonePass !== true) errors.push(`${beat.id}: local MG must pass caption safe-zone review`);
   if (captionMode === "subtitles") {
@@ -169,10 +177,66 @@ for (let index = 0; index < beats.length; index += 1) {
   const rhythmPoints = [beat.start, ...microTimes, beat.end];
   const largestGap = Math.max(...rhythmPoints.slice(1).map((time, pointIndex) => time - rhythmPoints[pointIndex]));
   if (largestGap > rhythm.microEventGapSeconds[1] && !beat.staticHoldReason) errors.push(`${beat.id}: visual dead zone is ${largestGap.toFixed(2)}s`);
+  if (entryWord && microTimes.length > 0) {
+    const firstMeaningfulDelayMs = (microTimes[0] - entryWord.start) * 1000;
+    if (firstMeaningfulDelayMs < -rhythm.syncToleranceFrames / beatMap.fps * 1000) errors.push(`${beat.id}: first meaningful event starts before its anchor word`);
+    if (firstMeaningfulDelayMs > (rhythm.firstMeaningfulEventMaxMs ?? 400)) errors.push(`${beat.id}: first meaningful event is delayed ${firstMeaningfulDelayMs.toFixed(1)}ms`);
+  }
+
+  const topologyRoles = beat.microEvents.map((event) => event.topologyRole).filter(Boolean);
+  if (beat.semanticTopology === "sequence" && topologyRoles.filter((role) => role === "node").length < 2) errors.push(`${beat.id}: sequence topology requires at least two nodes`);
+  if (beat.semanticTopology === "comparison" && (!topologyRoles.includes("comparison-a") || !topologyRoles.includes("comparison-b"))) errors.push(`${beat.id}: comparison topology requires both sides`);
+  if (beat.semanticTopology === "convergence" && (topologyRoles.filter((role) => role === "input").length < 2 || !topologyRoles.includes("result"))) errors.push(`${beat.id}: convergence topology requires two inputs and a result`);
+  if (beat.semanticTopology === "branch" && (!topologyRoles.includes("source") || topologyRoles.filter((role) => role === "branch").length < 2)) errors.push(`${beat.id}: branch topology requires one source and two branches`);
+  if (beat.semanticTopology === "mapping" && (!topologyRoles.includes("source") || !topologyRoles.includes("result"))) errors.push(`${beat.id}: mapping topology requires source and result roles`);
+  if (["convergence", "branch", "mapping"].includes(beat.semanticTopology)
+    && !beat.microEvents.some((event) => event.visualRole === "connector")) {
+    errors.push(`${beat.id}: ${beat.semanticTopology} topology requires a connector`);
+  }
+
+  const revealGroups = new Map();
+  for (const event of beat.microEvents.filter((candidate) => candidate.revealGroup)) {
+    const events = revealGroups.get(event.revealGroup) ?? [];
+    events.push(event);
+    revealGroups.set(event.revealGroup, events);
+  }
+  for (const [group, events] of revealGroups) {
+    if (!events.some((event) => event.visualRole === "connector")) continue;
+    if (!events.some((event) => event.visualRole === "container")) errors.push(`${beat.id}: reveal group ${group} has a connector without a container`);
+    const times = events.map((event) => event.time);
+    if ((Math.max(...times) - Math.min(...times)) * beatMap.fps > (rhythm.revealGroupMaxSkewFrames ?? 2)) errors.push(`${beat.id}: reveal group ${group} exceeds two-frame coordination`);
+  }
+  if (beat.microEvents.some((event) => event.visualRole === "connector" && !event.revealGroup)) errors.push(`${beat.id}: connector events must declare revealGroup`);
+
+  const visualSignature = JSON.stringify({
+    axis: beat.axis,
+    visualReference: beat.visualReference,
+    semanticTopology: beat.semanticTopology,
+    primaryFlowAxis: beat.primaryFlowAxis,
+    motionFamily: beat.motionFamily,
+    visualStyle: beat.visualStyle ?? null
+  });
+  const signatureBeats = signatureUsage.get(visualSignature) ?? [];
+  signatureBeats.push(beat);
+  signatureUsage.set(visualSignature, signatureBeats);
 
   if (index >= rhythm.maximumRepeatedTransitionFamily) {
     const recent = beats.slice(index - rhythm.maximumRepeatedTransitionFamily, index + 1);
     if (recent.every((candidate) => candidate.transitionFamily === beat.transitionFamily)) errors.push(`${beat.id}: transition family repeats too many times`);
+  }
+}
+
+const aAxisMotionBeats = beats.filter((beat) => beat.axis === "A" && !(captionMode === "subtitles" && beat.mgScope === "none"));
+for (const [index, beat] of aAxisMotionBeats.entries()) {
+  if (beat.layout?.faceCover !== "none" && beat.end - beat.start > 3) errors.push(`${beat.id}: A-axis face coverage exceeds three seconds`);
+  if (index > 0 && beat.start < aAxisMotionBeats[index - 1].end) errors.push(`${beat.id}: A-axis information groups overlap instead of replacing`);
+}
+
+for (const repeatedBeats of signatureUsage.values()) {
+  if (repeatedBeats.length < 2) continue;
+  const reuseGroups = new Set(repeatedBeats.map((beat) => beat.reuseGroup).filter(Boolean));
+  if (reuseGroups.size !== 1 || repeatedBeats.some((beat) => typeof beat.reuseReason !== "string" || beat.reuseReason.trim().length === 0)) {
+    errors.push(`${repeatedBeats.map((beat) => beat.id).join(", ")}: repeated visual signature requires one reuseGroup and a reason`);
   }
 }
 

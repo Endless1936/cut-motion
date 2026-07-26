@@ -61,3 +61,5 @@ When evidence conflicts, protect speech with 50–120 ms of padding, record low 
 - Every seam has been listened to and inspected at the frame before and after the cut.
 
 The rough-cut review artifact must already pass these checks. Review is for editorial judgment, not for discovering routine boundary cleanup.
+
+Before review, `audit-roughcut-seams.mjs` measures the final export around every seam at `-30`, `-35`, and `-40 dB` and records its SHA-256. Removed reset, false-start, restart, body-reset, and duplicate-take seams use an 80ms ceiling quantized down to source frames. Natural or intentional pauses remain exempt. Automated measurement supplements rather than replaces picture and phoneme review.

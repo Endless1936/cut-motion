@@ -1,16 +1,24 @@
 import fs from "node:fs";
+import path from "node:path";
+import { sha256File } from "./workflow-utils.mjs";
 
 const argumentsList = process.argv.slice(2);
 const requireAudit = argumentsList.includes("--require-audit");
-const planPath = argumentsList.find((argument) => argument !== "--require-audit");
+const mediaOptionIndex = argumentsList.indexOf("--media");
+const mediaPath = mediaOptionIndex >= 0 ? argumentsList[mediaOptionIndex + 1] : null;
+const planPath = argumentsList.find((argument, index) => argument !== "--require-audit"
+  && argument !== "--media"
+  && (mediaOptionIndex < 0 || index !== mediaOptionIndex + 1));
 
-if (!planPath || argumentsList.length > 2) {
-  console.error("Usage: node check-trim-plan.mjs <trim-plan.json> [--require-audit]");
+if (!planPath || mediaOptionIndex >= 0 && !mediaPath) {
+  console.error("Usage: node check-trim-plan.mjs <trim-plan.json> [--require-audit] [--media roughcut.mp4]");
   process.exit(64);
 }
 
 const plan = JSON.parse(fs.readFileSync(planPath, "utf8"));
 const errors = [];
+const removableClassifications = new Set(["reading-reset", "false-start", "restart", "body-reset", "reset-removed", "duplicate-take"]);
+const allowedClassifications = new Set([...removableClassifications, "natural-pause"]);
 
 if (!Number.isFinite(plan.fps) || plan.fps <= 0) errors.push("fps must be a positive number");
 if (!Array.isArray(plan.remove)) {
@@ -46,12 +54,15 @@ if (requireAudit) {
       if (profile.outgoingHandleSeconds !== 0.02) errors.push("tight-talking-head requires a 20 ms outgoing handle");
       if (profile.incomingHandleSeconds !== 0.05) errors.push("tight-talking-head requires a 50 ms incoming handle");
       if (profile.audioTransitionFrames !== 2) errors.push("tight-talking-head requires a two-frame audio transition");
+      if (profile.maximumResidualSilenceMs !== 80) errors.push("tight-talking-head requires an 80 ms removable-pause ceiling");
     }
   }
 
   if (!Array.isArray(seams)) {
     errors.push("seams is required after precision trim");
   } else {
+    if (seams.length !== (plan.remove ?? []).length) errors.push("seams must contain exactly one entry for every removed range");
+    let removedDuration = 0;
     seams.forEach((seam, index) => {
       const prefix = `seams[${index}]`;
       if (!seam || typeof seam !== "object") {
@@ -59,7 +70,7 @@ if (requireAudit) {
         return;
       }
       if (typeof seam.id !== "string" || seam.id.length === 0) errors.push(`${prefix}.id is required`);
-      if (typeof seam.classification !== "string" || seam.classification.length === 0) errors.push(`${prefix}.classification is required`);
+      if (!allowedClassifications.has(seam.classification)) errors.push(`${prefix}.classification is invalid`);
       if (typeof seam.reason !== "string" || seam.reason.length === 0) errors.push(`${prefix}.reason is required`);
       if (typeof seam.semanticEvidence !== "string" || seam.semanticEvidence.length === 0) errors.push(`${prefix}.semanticEvidence is required`);
       if (typeof seam.visualEvidence !== "string" || seam.visualEvidence.length === 0) errors.push(`${prefix}.visualEvidence is required`);
@@ -71,11 +82,29 @@ if (requireAudit) {
       if (!Number.isInteger(seam.audioTransitionFrames) || seam.audioTransitionFrames < 0) errors.push(`${prefix}.audioTransitionFrames is required`);
       if (profile?.name === "tight-talking-head" && seam.audioTransitionFrames !== 2) errors.push(`${prefix}.audioTransitionFrames must be two for tight-talking-head`);
       if (seam.pictureAudited !== true || seam.audioAudited !== true) errors.push(`${prefix} must record pictureAudited and audioAudited as true`);
+      if (mediaPath) {
+        const expectedOutputTime = plan.remove[index]?.start - removedDuration;
+        if (!Number.isFinite(seam.outputTime) || Math.abs(seam.outputTime - expectedOutputTime) > 0.5 / plan.fps) errors.push(`${prefix}.outputTime must match its derived cut position`);
+        if (!Number.isFinite(seam.measuredResidualSilenceMs) || seam.measuredResidualSilenceMs < 0) errors.push(`${prefix}.measuredResidualSilenceMs is required`);
+        if (removableClassifications.has(seam.classification)) {
+          const maximumFrames = Math.floor(profile.maximumResidualSilenceMs * plan.fps / 1000);
+          const quantizedMaximumMs = maximumFrames / plan.fps * 1000;
+          if (seam.measuredResidualSilenceMs > quantizedMaximumMs + 1) errors.push(`${prefix} exceeds its frame-quantized residual-silence ceiling`);
+        }
+      }
+      removedDuration += (plan.remove[index]?.end ?? 0) - (plan.remove[index]?.start ?? 0);
     });
   }
 
   if (!verification || verification.everySeamAudited !== true || verification.contiguous !== true) {
     errors.push("verification must confirm every seam was audited and the timeline is contiguous");
+  }
+  if (mediaPath) {
+    const mediaAudit = verification?.mediaAudit;
+    if (!mediaAudit || mediaAudit.sha256 !== sha256File(path.resolve(mediaPath))) errors.push("verification.mediaAudit must match the final rough-cut media hash");
+    if (!Array.isArray(mediaAudit?.thresholdsDb) || ![-30, -35, -40].every((threshold) => mediaAudit.thresholdsDb.includes(threshold))) {
+      errors.push("verification.mediaAudit must use -30, -35, and -40 dB");
+    }
   }
 }
 

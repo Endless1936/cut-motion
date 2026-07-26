@@ -79,6 +79,7 @@ node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json status
 node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json advance --artifact <path> --note <summary>
 node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json approve --actor user --note <feedback>
 node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json revise --actor user --note <feedback>
+node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json reopen <rough-cut|motion-plan|composition|delivery> --actor user --note <feedback>
 ```
 
 The mandatory user review gates are:
@@ -93,6 +94,8 @@ In `review` mode, stop at every required gate, present the artifact, and wait fo
 Every creative round has a `revisionId`. Preserve prior decisions in `history` and mark invalidated downstream decisions `superseded`; never rewrite history. `currentState` and `pendingGate` alone identify the active position.
 
 Do not interpret silence as approval in `review` mode.
+
+Completed jobs stay in the same job directory when the user requests revision. Use `reopen`: editorial cuts return to `rough-cut`, MG structure or copy returns to `motion-plan`, parameter-only visual changes return to `composition`, and encoding-only changes return to `render`. Only affected gates become `superseded`; delivery-only revision retains final-preview approval. Render a delivery revision to `output/final.candidate.mp4`; successful `render` advancement atomically promotes it to `output/final.mp4`, so the last validated delivery remains available until replacement passes.
 
 The `final-preview` is a standard-quality review artifact: it exists to approve picture, timing, copy, and audio before spending time on delivery encoding. When presenting it, explicitly say that approval triggers a separate high-quality render with identical editorial content, stronger delivery encoding, and final media verification. After approval, state that the high-quality `output/final.mp4` has been generated and why this delivery step follows the preview.
 
@@ -175,7 +178,7 @@ For Claude Code, ChatCut's official install guide is `https://chatcut.io/claude`
 3. Remove clear false starts, duplicated takes, and long empty sections. Preserve complete meaning, natural breath, and intentional comic or rhetorical timing.
 4. Before rough-cut review, complete the precision-trim procedure below. Transcript meaning selects the take, multi-threshold acoustic evidence locates speech, and visible performance distinguishes a natural pause from a reading or reset pause.
 5. Verify every seam individually and write the audited `state/trim-plan.json`. There must be no clipped phoneme, unintended gaze or body reset, black gap, frozen item, overlap, or detached audio.
-6. Export the single locked review artifact to `roughcut/a-roll.mp4`. User approval locks this exact media and trim-plan fingerprint before HyperFrames work begins.
+6. Promote the explicit ChatCut export with `scripts/promote-job-media.mjs <job> roughcut <export> --consume-source`. It atomically replaces `roughcut/a-roll.mp4`, refreshes the HyperFrames input through a hard link when possible, and leaves only the canonical rough cut. User approval locks this exact media and trim-plan fingerprint.
 7. For `subtitles`, refresh ChatCut captions against the locked edited-audio timeline as raw timing and wording evidence, disable its render track, and inspect the clean export for residual pixels. Released wording is approved only in the creative confirmation package.
 
 The shared baseline for both caption modes is: protected regions take precedence over decoration; protect the face, PiP, product evidence, UI, and any active caption; check text wrapping, entrance/peak/hold/exit bounds, and audio continuity before adding decorative motion. Caption mode changes only how speech is represented and how much motion is appropriate, not the rough-cut, source-lock, safe-area, or QA discipline.
@@ -191,7 +194,7 @@ This procedure is an internal part of `rough-cut`; it is not a second production
 3. For the default `tight-talking-head` profile, retain about 20 ms after outgoing speech and 50 ms before incoming speech, quantized to source frames. These are safety handles, not a target pause duration.
 4. Preserve a pause when meaning and visible delivery remain continuous. Remove it when the speaker looks at a script, stops articulating, resets posture or gaze, or prepares a restart. A topic boundary alone does not justify keeping extra dead air.
 5. Apply a short audio transition, normally two frames at 30 fps, only after the physical cut is correct. The transition must not begin early enough to fade a final consonant or vowel.
-6. Run the structural trim-plan check, apply the plan with `scripts/apply-trim-plan.sh`, then record the picture/audio seam audit and run `node scripts/check-trim-plan.mjs jobs/<job-id>/state/trim-plan.json --require-audit` before entering `rough-cut-review`.
+6. Run the structural trim-plan check, apply the plan, and record the picture/audio seam audit. Advancing `rough-cut` automatically measures each seam against the final media at `-30`, `-35`, and `-40 dB`; removable resets and false starts may retain at most 80ms, quantized down to source frames. Natural pauses are exempt.
 7. Re-align every later transcript word and animation cue by the cumulative removed duration. Use `scripts/shift-timestamps.sh` when a late cut changes existing state files.
 
 Natural pauses inside continuous delivery remain at their performed length; they are not normalized to an arbitrary 80 ms. A cut is invalid if it clips a phoneme, removes a breath needed for comprehension, retains a visible reading/reset action, or creates a mismatched jump. A low-confidence boundary falls back to 50–120 ms of conservative padding and must be marked for review.
@@ -210,8 +213,9 @@ Every spoken sentence must be represented. Split long sentences into meaningful 
 - A-axis or B-axis treatment;
 - one primary motion recipe when motion is approved;
 - one `primaryFlowAxis` (`horizontal` or `vertical`) and `visualReference` when motion is approved;
+- one `semanticTopology` and word-level `entryAnchorWordId` when motion is approved;
 - motion family and transition family when motion is approved;
-- micro-event timestamps within the phrase when motion is approved;
+- micro-event timestamps and topology roles; connector/container events share a `revealGroup`;
 - supporting components;
 - entrance, hold, and exit timing;
 - measured typography and layout bounds;
@@ -249,6 +253,8 @@ Bind sample static checks to the independent sample HTML source and media checks
 8. Measure text in its final font before animation. Reserve room for outline, shadow, rotation, and overshoot at their peak values.
 9. Run `scripts/check-information-value.mjs`; visible text below the design-system floor and self-evident labels are blocking failures.
 10. Run `scripts/check-layout-constraints.mjs`; a one-character final line and any B-axis content that intrudes into the protected PIP zone are blocking failures.
+11. Preserve `data-motion-contract="enforced"` and the browser contract from the scaffold. Generic container borders, non-token connector colors, decorative labels, and caption-offset drift are blocking failures; HyperFrames remains responsible for computed peak-frame bounds.
+12. Put every authored visual inside one `data-motion-group` that declares axis, primary/auxiliary role, active time, face-cover policy, primary flow, and topology. Mark connectors with their reveal group and rendered flow axis; the existing browser contract enforces bounds, protected-region separation, A-axis replacement, group lifetime, and primary-flow continuity during timeline updates.
 
 ### 8. A/B-axis direction
 
@@ -270,10 +276,12 @@ Bind sample static checks to the independent sample HTML source and media checks
 ### 9. Timing and density
 
 - Phrase animation begins within three frames of its acoustic onset unless an intentional anticipation is documented.
+- The first meaningful event is word-anchored and appears within 400ms. Connector and downstream container events in one reveal group start within two frames.
 - In `motion-copy` mode, create a meaningful micro-event every 0.35–0.9 seconds and normally keep major layouts for 1.8–3.5 seconds.
 - In `subtitles` mode, only approved local-MG passages use the 0.8–1.8 second supplemental-motion cadence; caption-only passages require no animation.
 - A micro-event may reveal a clause, complete a diagram, strike a tool, move a playhead, change hierarchy, or trigger a semantic particle burst. Do not treat every micro-event as a new scene.
 - No more than two consecutive phrases may use the same transition family.
+- Reusing a complete visual signature requires one `reuseGroup` and a concrete `reuseReason`.
 - Use incremental composition only on the B-axis when meaning accumulates. On the A-axis, use the declared replacement cadence instead.
 - Hold important words long enough to read. Fleeting symbols and plus signs are defects.
 - Decorative loops must continue through their intended scene end; never freeze before the audio ends.
@@ -305,6 +313,8 @@ Run all gates in `docs/quality-gates.md`:
 8. Draft render, then final preview.
 9. High-quality render only after approval in `review` mode. It must preserve the approved preview's editorial content while using delivery-quality encoding.
 10. Verify output existence, duration, frame rate, dimensions, and audio stream.
+
+Only canonical large media persists: immutable `input/source.*`, `roughcut/a-roll.mp4`, current visual/final previews, HyperFrames input, and `output/final.mp4`. Use `promote-job-media.mjs` for explicit external exports; it must reject immutable input, escaped directories, and approved artifacts. Never scan download folders or delete unregistered user files.
 
 ## Gold-standard visual language
 

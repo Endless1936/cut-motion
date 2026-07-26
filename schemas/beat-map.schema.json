@@ -43,6 +43,10 @@
           "visualStyle": { "type": "string", "minLength": 1 },
           "primaryFlowAxis": { "enum": ["horizontal", "vertical"] },
           "visualReference": { "type": "string", "minLength": 1 },
+          "semanticTopology": { "enum": ["sequence", "comparison", "convergence", "branch", "mapping", "emphasis", "evidence"] },
+          "entryAnchorWordId": { "type": "string", "pattern": "^.+:word-[0-9]{3}$" },
+          "reuseGroup": { "type": "string", "minLength": 1 },
+          "reuseReason": { "type": "string", "minLength": 1 },
           "viewerQuestion": { "type": "string", "minLength": 1 },
           "supportRole": { "enum": ["evidence", "explanation", "calibration", "organization", "action", "consequence"] },
           "removalLoss": { "type": "string", "minLength": 1 },
@@ -86,7 +90,10 @@
               "properties": {
                 "time": { "type": "number", "minimum": 0 },
                 "type": { "type": "string" },
-                "semanticChange": { "type": "string", "minLength": 1 }
+                "semanticChange": { "type": "string", "minLength": 1 },
+                "revealGroup": { "type": "string", "minLength": 1 },
+                "visualRole": { "enum": ["connector", "container", "copy", "icon", "indicator"] },
+                "topologyRole": { "enum": ["node", "source", "input", "branch", "result", "comparison-a", "comparison-b"] }
               }
             }
           },
@@ -140,7 +147,7 @@
         "allOf": [
           {
             "if": { "properties": { "recipe": { "const": "caption-only" } }, "required": ["recipe"] },
-            "else": { "required": ["primaryFlowAxis", "visualReference"] }
+            "else": { "required": ["primaryFlowAxis", "visualReference", "semanticTopology", "entryAnchorWordId"] }
           }
         ]
       }

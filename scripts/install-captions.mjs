@@ -37,16 +37,20 @@ const customProperties = [
 const layers = captions.cues.map((cue, index) => {
   const duration = Number((cue.end - cue.start).toFixed(6));
   const lines = cue.lines
-    .map((line) => `          <p class="motion-caption-line">${escapeHtml(line)}</p>`)
+    .map((line) => `          <p class="motion-caption-line" data-layout-guard="canvas">${escapeHtml(line)}</p>`)
     .join("\n");
   return [
-    `      <section id="motion-caption-${String(index + 1).padStart(4, "0")}" class="clip motion-caption-layer" data-caption-id="${escapeHtml(cue.id)}" data-caption-page-id="${escapeHtml(cue.sourcePageId)}" data-caption-start-frame="${cue.startFrame}" data-caption-end-frame="${cue.endFrame}" data-start="${cue.start}" data-duration="${duration}" data-track-index="80" style="${customProperties}">`,
+    `      <section id="motion-caption-${String(index + 1).padStart(4, "0")}" class="clip motion-caption-layer" data-motion-protected="caption" data-caption-id="${escapeHtml(cue.id)}" data-caption-page-id="${escapeHtml(cue.sourcePageId)}" data-caption-start-frame="${cue.startFrame}" data-caption-end-frame="${cue.endFrame}" data-start="${cue.start}" data-duration="${duration}" data-track-index="80" style="${customProperties}">`,
     lines,
     "      </section>"
   ].join("\n");
 }).join("\n");
 
 const replacement = `${startMarker}\n${layers}${layers ? "\n      " : ""}${endMarker}`;
-const updated = source.replace(new RegExp(`${startMarker}[\\s\\S]*?${endMarker}`), replacement);
+let updated = source.replace(new RegExp(`${startMarker}[\\s\\S]*?${endMarker}`), replacement);
+if (Number.isFinite(style.bottomOffsetRatio)) {
+  updated = updated.replace(/data-caption-bottom-ratio=["'][0-9.]+["']/, `data-caption-bottom-ratio="${style.bottomOffsetRatio}"`);
+}
+updated = updated.replace(/data-caption-font-weight=["'][0-9]+["']/, `data-caption-font-weight="${style.fontWeight ?? 400}"`);
 fs.writeFileSync(compositionPath, updated);
 console.log(`Installed ${captions.cues.length} caption cue(s) into ${compositionPath}`);

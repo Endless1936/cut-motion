@@ -16,12 +16,16 @@
       "recipe": "b-axis-showcase",
       "primaryFlowAxis": "vertical",
       "visualReference": "proposal:showcase-module-stack",
+      "reuseGroup": "showcase-module-stack",
+      "reuseReason": "两句共同解释同一套模块栈，沿用已建立的层级结构。",
+      "semanticTopology": "sequence",
+      "entryAnchorWordId": "seg-001:word-001",
       "intent": "Introduce the effect showcase",
       "motionFamily": "technical",
       "transitionFamily": "module-build",
       "microEvents": [
-        { "time": 0.35, "type": "headline-reveal", "semanticChange": "看看这些 enters" },
-        { "time": 0.9, "type": "module-complete", "semanticChange": "特效 becomes the focal word" }
+        { "time": 0.35, "type": "headline-reveal", "semanticChange": "看看这些 enters", "topologyRole": "node" },
+        { "time": 0.9, "type": "module-complete", "semanticChange": "特效 becomes the focal word", "topologyRole": "node" }
       ],
       "layout": {
         "primaryOccupancyRatio": 0.42,
@@ -56,12 +60,16 @@
       "recipe": "b-axis-showcase",
       "primaryFlowAxis": "vertical",
       "visualReference": "proposal:showcase-module-stack",
+      "reuseGroup": "showcase-module-stack",
+      "reuseReason": "第二句延续同一模块栈，只改变同步状态与文案。",
+      "semanticTopology": "sequence",
+      "entryAnchorWordId": "seg-002:word-001",
       "intent": "Escalate from effects to animation systems",
       "motionFamily": "technical",
       "transitionFamily": "semantic-morph",
       "microEvents": [
-        { "time": 1.85, "type": "copy-morph", "semanticChange": "特效 morphs into 动画" },
-        { "time": 2.45, "type": "component-activate", "semanticChange": "keyframe and FPS modules animate" }
+        { "time": 1.85, "type": "copy-morph", "semanticChange": "特效 morphs into 动画", "topologyRole": "node" },
+        { "time": 2.45, "type": "component-activate", "semanticChange": "keyframe and FPS modules animate", "topologyRole": "node" }
       ],
       "layout": {
         "primaryOccupancyRatio": 0.46,

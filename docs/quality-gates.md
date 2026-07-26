@@ -7,7 +7,7 @@
 - The default `tight-talking-head` profile in `docs/talking-head-trim-standard.md` was applied before rough-cut review, unless a user-requested rhythm profile is recorded.
 - Every seam has transcript-semantic, multi-threshold acoustic, and visible-performance evidence, or an explicit documented exception.
 - Removed and deliberately retained pauses are documented in `trim-plan.json` with reasons and confidence.
-- `scripts/check-trim-plan.mjs state/trim-plan.json --require-audit` passes before delivery.
+- `scripts/check-trim-plan.mjs state/trim-plan.json --require-audit --media roughcut/a-roll.mp4` passes with a matching final-media hash and measured residual silence.
 - Default safety handles are about 20 ms after outgoing speech and 50 ms before incoming speech; low-confidence boundaries use documented conservative padding.
 - Every seam passes picture-and-sound inspection: no clipped or prematurely faded phoneme, comprehension-critical breath removal, reading/reset tail, black frame, gap, overlap, or detached audio.
 - Timeline transitions are normally two frames at 30 fps and never mask an incorrect physical cut.
@@ -41,6 +41,7 @@
 - Every MG keeps one horizontal or vertical primary flow; the main chain does not turn 90 degrees.
 - Copy, timing, and size-only revisions inherit the approved visual reference.
 - `scripts/check-layout-constraints.mjs` passes: Chinese copy has no one-character orphan line, and every B-axis PIP uses its declared exclusion zone.
+- HyperFrames runtime layout passes at sampled motion states; every authored visual belongs to a timed motion group, and bounds, protected regions, A-axis accumulation, face-cover duration, connector flow, borders, labels, caption weight, and caption bottom ratio match the browser contract.
 - Phrase entrances land within three frames of acoustic onset unless documented.
 - No caption wrapping, single-line overflow, or transformed-glyph clipping.
 - No empty component larger than 10% of the frame.

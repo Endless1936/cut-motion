@@ -28,6 +28,8 @@ These are planning zones, not rigid rows. Primary text should not default to the
 
 Record bounds for entrance, maximum overshoot, hold, and exit. Rotation, outline, shadow, blur, and scale all count toward occupied space. A scene fails when transformed glyphs clip even if the resting frame is clean.
 
+Runtime layout checks must use the rendered DOM, not only planned dimensions. They also enforce the caption safe-zone ratio, forbid generic outlined containers and decorative labels, and keep synchronized connector/container reveals within the design-system frame tolerance.
+
 ## Review matrix
 
 For every visual scene, inspect the states required by `docs/quality-gates.md`. Do not expand pure-caption beats into per-beat snapshot sets.

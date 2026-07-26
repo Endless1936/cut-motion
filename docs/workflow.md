@@ -18,7 +18,7 @@ Each invocation owns one isolated `jobs/<job-id>/` directory. Generated media, s
 | `qa` | composition, audio | QA report and final preview |
 | `final-preview` | final preview | user approval or revision request |
 | `render` | approved composition | final MP4 |
-| `complete` | final MP4 and state | terminal record |
+| `complete` | final MP4 and state | completed record that may be reopened for a scoped revision |
 
 ## Why the stages are separate
 
@@ -58,6 +58,10 @@ There is one state machine, not two parallel workflows. Both modes share ChatCut
 ## Agent state
 
 The Agent should be able to resume from the last completed state file. It must not infer that a stage completed merely because an output filename exists; the matching state record and validation result are required.
+
+Completed jobs remain editable. `reopen rough-cut|motion-plan|composition|delivery` returns the same job to the earliest affected stage, supersedes only dependent approvals, and preserves history plus the last known-good delivery until its replacement passes validation.
+
+Canonical large media uses fixed paths and atomic replacement. `scripts/promote-job-media.mjs` validates an explicitly named source, rejects immutable input and escaped directories, and never scans user download folders. Delivery revisions render to `output/final.candidate.mp4`; the state machine promotes that file only after final validation. A job retains one current rough cut, one current preview of each kind, one current final, and the immutable source.
 
 ## Review versus automatic mode
 

@@ -71,3 +71,7 @@ Required gates are marked `auto-approved`; inapplicable gates remain `skipped`. 
 ## State authority
 
 `state/workflow.json` is authoritative. `currentState` and `pendingGate` identify the active position. Every replan increments `revisionId`; invalidated decisions remain in `history` as `superseded`. Creative approval stores SHA-256 fingerprints; sample, composition and render stop on drift.
+
+## Completed-job revision
+
+`reopen rough-cut|motion-plan|composition|delivery` keeps revision work in the same job. It increments `revisionId` and supersedes only affected gates. Encoding-only revision preserves final-preview approval; every editorial or visual revision returns through final preview.

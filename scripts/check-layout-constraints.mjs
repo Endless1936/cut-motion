@@ -12,6 +12,7 @@ const designSystem = JSON.parse(fs.readFileSync(designSystemPath, "utf8"));
 const errors = [];
 const typography = designSystem.typography ?? {};
 const bAxisPolicy = designSystem.axisPolicies?.B ?? {};
+const motionContract = designSystem.motionContract ?? {};
 
 if (typography.orphanLineAllowed !== false || typography.minimumLastLineCharacters < 2) {
   errors.push("design system must forbid single-character orphan lines");
@@ -19,6 +20,60 @@ if (typography.orphanLineAllowed !== false || typography.minimumLastLineCharacte
 
 if (!/data-layout-constraints\s*=\s*["']enforced["']/i.test(composition)) {
   errors.push("composition must declare enforced layout constraints");
+}
+if (!/data-motion-contract\s*=\s*["']enforced["']/i.test(composition)) errors.push("composition must declare the motion contract");
+if (!/data-runtime-layout\s*=\s*["']hyperframes["']/i.test(composition)) errors.push("composition must delegate peak-frame layout checks to HyperFrames");
+if (!composition.includes("window.__motionContract")) errors.push("composition must execute the browser motion contract");
+if (!composition.includes('timeline.eventCallback("onUpdate", () => window.__motionContract(timeline.time()))')) errors.push("motion contract must run during timeline updates");
+if (motionContract.outerFrameAllowed !== false || motionContract.containerBorderPolicy !== "none") errors.push("design system must forbid generic outer frames and container borders");
+if (!composition.includes(`--${motionContract.connectorColorToken}:`)) errors.push("composition must define the connector color token");
+
+for (const match of composition.matchAll(/<[^>]+data-motion-surface=["']container["'][^>]*>/gi)) {
+  if (!/data-border-policy=["']none["']/i.test(match[0])) errors.push("motion containers must declare border-policy none");
+}
+for (const match of composition.matchAll(/<[^>]+data-motion-role=["']connector["'][^>]*>/gi)) {
+  if (!new RegExp(`data-color-token=["']${motionContract.connectorColorToken}["']`, "i").test(match[0])) errors.push("connectors must use the design-system connector token");
+  if (!/data-color-property=["'](color|background-color|border-color)["']/i.test(match[0])) errors.push("connectors must declare the computed color property");
+  if (!/data-reveal-group=["'][^"']+["']/i.test(match[0])) errors.push("connectors must declare a runtime reveal group");
+  if (!/data-flow-axis=["'](horizontal|vertical)["']/i.test(match[0])) errors.push("connectors must declare their rendered flow axis");
+}
+for (const match of composition.matchAll(/<[^>]+data-motion-role=["']label["'][^>]*>/gi)) {
+  if (!/data-information-role=["'](evidence|explanation|calibration|organization|action|consequence)["']/i.test(match[0])) errors.push("labels must declare an information role");
+}
+for (const match of composition.matchAll(/<[^>]+data-motion-group=["'][^"']+["'][^>]*>/gi)) {
+  for (const declaration of [
+    /data-axis=["'](A|B)["']/i,
+    /data-group-kind=["'](primary|auxiliary)["']/i,
+    /data-group-start=["'][0-9.]+["']/i,
+    /data-group-duration=["'][0-9.]+["']/i,
+    /data-face-cover=["'](none|partial|intentional)["']/i,
+    /data-primary-flow-axis=["'](horizontal|vertical)["']/i,
+    /data-semantic-topology=["'][^"']+["']/i
+  ]) {
+    if (!declaration.test(match[0])) errors.push("motion groups must declare axis, lifetime, face coverage, flow, and topology");
+  }
+}
+if (designSystem.captions) {
+  const expectedBottomPx = designSystem.canvas.height * designSystem.captions.bottomOffsetRatio;
+  if (Math.abs(designSystem.captions.bottomOffsetPx - expectedBottomPx) > 0.5) errors.push("caption bottom offset must equal its canvas ratio");
+  const ratio = Number(/data-caption-bottom-ratio=["']([0-9.]+)["']/i.exec(composition)?.[1]);
+  if (!Number.isFinite(ratio) || Math.abs(ratio - designSystem.captions.bottomOffsetRatio) > 0.0001) errors.push("composition caption-bottom ratio must match the design system");
+  const weight = Number(/data-caption-font-weight=["']([0-9]+)["']/i.exec(composition)?.[1]);
+  if (weight !== designSystem.captions.fontWeight || weight > 500) errors.push("composition caption weight must remain the approved normal weight");
+}
+
+for (const match of composition.matchAll(/<[^>]+class=["']([^"']+)["'][^>]*>/gi)) {
+  const classes = match[1].split(/\s+/);
+  if (classes.some((name) => /(?:^|-)(?:card|panel)$/.test(name)) && !/data-motion-surface=["']container["']/i.test(match[0])) {
+    errors.push("card and panel classes must declare a checked motion surface");
+  }
+  if (classes.some((name) => /(?:^|-)(?:label|tag|badge)$/.test(name)) && !/data-motion-role=["']label["']/i.test(match[0])) {
+    errors.push("label, tag, and badge classes must declare an information role");
+  }
+}
+for (const match of composition.matchAll(/\.motion-caption-line\s*\{([^}]*)\}/gi)) {
+  if (/font-weight\s*:\s*(?:bold|[6-9]00)\b/i.test(match[1])) errors.push("caption CSS cannot override the approved normal weight");
+  if (!/font-synthesis\s*:\s*none/i.test(match[1])) errors.push("caption CSS must disable synthetic bold");
 }
 
 for (const declaration of ["overflow-wrap: normal", "word-break: normal", "text-wrap: balance"]) {

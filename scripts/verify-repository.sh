@@ -55,13 +55,14 @@ cat > "$trim_audit_file" <<'EOF'
 {
   "source": "roughcut/a-roll.mp4",
   "fps": 30,
-  "remove": [],
+  "remove": [{"start":10,"end":11,"reason":"manual","confidence":0.9}],
   "trimProfile": {
     "name": "tight-talking-head",
     "acousticThresholdsDb": [-30, -35, -40],
     "outgoingHandleSeconds": 0.02,
     "incomingHandleSeconds": 0.05,
-    "audioTransitionFrames": 2
+    "audioTransitionFrames": 2,
+    "maximumResidualSilenceMs": 80
   },
   "seams": [{
     "id": "seam-001",
@@ -104,9 +105,105 @@ bash "$repository_root/scripts/apply-trim-plan.sh" "$trim_smoke_directory/input.
 trimmed_duration="$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$trim_smoke_directory/output.mp4")"
 awk "BEGIN { exit !($trimmed_duration > 1.4 && $trimmed_duration < 1.6) }" || { echo "Trimmed media duration is incorrect: $trimmed_duration" >&2; exit 1; }
 [[ "$(ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$trim_smoke_directory/output.mp4")" != "" ]] || { echo "Trimmed media lost audio" >&2; exit 1; }
+ffmpeg -loglevel error \
+  -f lavfi -i sine=frequency=440:sample_rate=48000:duration=0.95 \
+  -f lavfi -i anullsrc=r=48000:cl=mono:d=0.1 \
+  -f lavfi -i sine=frequency=440:sample_rate=48000:duration=0.95 \
+  -filter_complex '[0:a][1:a][2:a]concat=n=3:v=0:a=1[out]' -map '[out]' "$trim_smoke_directory/residual.wav"
+cat > "$trim_smoke_directory/residual-plan.json" <<'EOF'
+{
+  "source": "residual.wav",
+  "fps": 30,
+  "remove": [{"start":1,"end":1.1,"reason":"manual","confidence":1}],
+  "trimProfile": {
+    "name": "tight-talking-head",
+    "acousticThresholdsDb": [-30, -35, -40],
+    "outgoingHandleSeconds": 0.02,
+    "incomingHandleSeconds": 0.05,
+    "audioTransitionFrames": 2,
+    "maximumResidualSilenceMs": 80
+  },
+  "seams": [{
+    "id": "seam-residual",
+    "classification": "reading-reset",
+    "reason": "synthetic removable pause",
+    "semanticEvidence": "synthetic fixture",
+    "visualEvidence": "synthetic fixture",
+    "confidence": 1,
+    "acousticBoundaryFrames": [29, 30, 31],
+    "appliedFrame": 30,
+    "outputTime": 1,
+    "audioTransitionFrames": 2,
+    "pictureAudited": true,
+    "audioAudited": true
+  }],
+  "verification": { "everySeamAudited": true, "contiguous": true }
+}
+EOF
+if node "$repository_root/scripts/audit-roughcut-seams.mjs" "$trim_smoke_directory/residual-plan.json" "$trim_smoke_directory/residual.wav" >/dev/null 2>&1; then
+  echo "A removable 100ms residual pause unexpectedly passed" >&2
+  exit 1
+fi
+for mutation in \
+  '.seams[0].maximumResidualSilenceMs = 1000' \
+  '.seams[0].outputTime = 0.5' \
+  '.seams[0].classification = "unknown"'; do
+  bypass_plan="$(mktemp)"
+  jq "$mutation" "$trim_smoke_directory/residual-plan.json" > "$bypass_plan"
+  if node "$repository_root/scripts/audit-roughcut-seams.mjs" "$bypass_plan" "$trim_smoke_directory/residual.wav" >/dev/null 2>&1; then
+    echo "Residual-pause audit bypass unexpectedly passed: $mutation" >&2
+    exit 1
+  fi
+  rm -f "$bypass_plan"
+done
+missing_seam_plan="$(mktemp)"
+jq '.seams = []' "$trim_smoke_directory/residual-plan.json" > "$missing_seam_plan"
+if node "$repository_root/scripts/check-trim-plan.mjs" "$missing_seam_plan" --require-audit >/dev/null 2>&1; then
+  echo "Removed range without a seam unexpectedly passed" >&2
+  exit 1
+fi
+rm -f "$missing_seam_plan"
+jq '.seams[0].classification = "natural-pause"' "$trim_smoke_directory/residual-plan.json" > "$trim_smoke_directory/natural-plan.json"
+node "$repository_root/scripts/audit-roughcut-seams.mjs" "$trim_smoke_directory/natural-plan.json" "$trim_smoke_directory/residual.wav" >/dev/null
+node "$repository_root/scripts/check-trim-plan.mjs" "$trim_smoke_directory/natural-plan.json" --require-audit --media "$trim_smoke_directory/residual.wav" >/dev/null
 printf '{"duration":10,"start":1,"end":3,"audioAnchorTime":4,"microEvents":[{"time":8}]}\n' > "$trim_smoke_directory/times.json"
 bash "$repository_root/scripts/shift-timestamps.sh" "$trim_smoke_directory/times.json" 2 5 "$trim_smoke_directory/shifted.json"
 jq -e '.duration == 7 and .start == 1 and .end == 2 and .audioAnchorTime == 2 and .microEvents[0].time == 5' "$trim_smoke_directory/shifted.json" >/dev/null
+media_job="$trim_smoke_directory/media-job"
+"$repository_root/scripts/scaffold-project.sh" "$media_job" "$trim_smoke_directory/input.mp4" review subtitles >/dev/null
+for version in 1 2 3; do
+  cp "$trim_smoke_directory/input.mp4" "$trim_smoke_directory/chatcut-$version.mp4"
+  node "$repository_root/scripts/promote-job-media.mjs" "$media_job" roughcut "$trim_smoke_directory/chatcut-$version.mp4" --consume-source >/dev/null
+  [[ ! -e "$trim_smoke_directory/chatcut-$version.mp4" ]] || { echo "Consumed ChatCut export still exists" >&2; exit 1; }
+done
+[[ "$(find "$media_job/roughcut" -type f -name '*.mp4' | wc -l | tr -d ' ')" == "1" ]] || { echo "Roughcut directory contains multiple media versions" >&2; exit 1; }
+node -e 'const fs=require("fs"); if(fs.statSync(process.argv[1]).ino!==fs.statSync(process.argv[2]).ino) process.exit(1)' \
+  "$media_job/roughcut/a-roll.mp4" "$media_job/hyperframes/assets/input-video.mp4" \
+  || { echo "HyperFrames input did not reuse the rough cut through a hard link" >&2; exit 1; }
+known_good_sha="$(sha256_file "$media_job/roughcut/a-roll.mp4")"
+printf 'invalid media\n' > "$trim_smoke_directory/invalid-export.mp4"
+if node "$repository_root/scripts/promote-job-media.mjs" "$media_job" roughcut "$trim_smoke_directory/invalid-export.mp4" --consume-source >/dev/null 2>&1; then
+  echo "Invalid replacement media unexpectedly passed" >&2
+  exit 1
+fi
+[[ "$(sha256_file "$media_job/roughcut/a-roll.mp4")" == "$known_good_sha" ]] || { echo "Failed replacement destroyed the last known-good rough cut" >&2; exit 1; }
+immutable_source="$media_job/$(jq -r '.sourceVideo' "$media_job/state/project.json")"
+if node "$repository_root/scripts/promote-job-media.mjs" "$media_job" roughcut "$immutable_source" --consume-source >/dev/null 2>&1; then
+  echo "Immutable input media was unexpectedly consumed" >&2
+  exit 1
+fi
+[[ -f "$immutable_source" ]] || { echo "Immutable input media was deleted" >&2; exit 1; }
+escape_job="$trim_smoke_directory/escape-job"
+"$repository_root/scripts/scaffold-project.sh" "$escape_job" "$trim_smoke_directory/input.mp4" review subtitles >/dev/null
+escape_target="$trim_smoke_directory/escaped-roughcut"
+mkdir -p "$escape_target"
+rm -rf "$escape_job/roughcut"
+ln -s "$escape_target" "$escape_job/roughcut"
+if node "$repository_root/scripts/promote-job-media.mjs" "$escape_job" roughcut "$trim_smoke_directory/input.mp4" >/dev/null 2>&1; then
+  echo "Symlinked roughcut directory unexpectedly accepted media" >&2
+  exit 1
+fi
+[[ ! -e "$escape_target/a-roll.mp4" ]] || { echo "Media escaped the job directory" >&2; exit 1; }
 rm -rf "$trim_smoke_directory"
 
 node "$repository_root/scripts/check-visual-plan.mjs" \
@@ -124,6 +221,58 @@ node "$repository_root/scripts/check-information-value.mjs" \
 node "$repository_root/scripts/check-layout-constraints.mjs" \
   "$repository_root/templates/hyperframes/index.html" \
   "$repository_root/assets/design-system.default.json"
+
+invalid_topology_map="$(mktemp)"
+jq '.beats[0].semanticTopology = "convergence"' "$repository_root/examples/beat-map.example.json" > "$invalid_topology_map"
+if node "$repository_root/scripts/check-visual-plan.mjs" "$invalid_topology_map" "$repository_root/examples/transcript.example.json" "$repository_root/assets/design-system.default.json" >/dev/null 2>&1; then
+  echo "Invalid convergence topology unexpectedly passed" >&2
+  exit 1
+fi
+delayed_entry_map="$(mktemp)"
+jq '.beats[0].microEvents[0].time = 0.8' "$repository_root/examples/beat-map.example.json" > "$delayed_entry_map"
+if node "$repository_root/scripts/check-visual-plan.mjs" "$delayed_entry_map" "$repository_root/examples/transcript.example.json" "$repository_root/assets/design-system.default.json" >/dev/null 2>&1; then
+  echo "Delayed first meaningful event unexpectedly passed" >&2
+  exit 1
+fi
+skewed_reveal_map="$(mktemp)"
+jq '.beats[0].microEvents[1].time = 0.6' "$repository_root/examples/beat-map.subtitles.example.json" > "$skewed_reveal_map"
+if node "$repository_root/scripts/check-visual-plan.mjs" "$skewed_reveal_map" "$repository_root/examples/transcript.example.json" "$repository_root/assets/design-system.default.json" >/dev/null 2>&1; then
+  echo "Uncoordinated reveal group unexpectedly passed" >&2
+  exit 1
+fi
+repeated_signature_map="$(mktemp)"
+jq '.beats[1].semanticTopology = .beats[0].semanticTopology
+  | .beats[1].visualReference = .beats[0].visualReference
+  | .beats[1].primaryFlowAxis = .beats[0].primaryFlowAxis
+  | .beats[1].motionFamily = .beats[0].motionFamily
+  | .beats[1].transitionFamily = .beats[0].transitionFamily
+  | .beats[1].visualStyle = .beats[0].visualStyle
+  | .beats[1].layout.primaryOccupancyRatio = .beats[0].layout.primaryOccupancyRatio
+  | .beats[].reuseGroup = null
+  | .beats[].reuseReason = null' "$repository_root/examples/beat-map.example.json" > "$repeated_signature_map"
+if node "$repository_root/scripts/check-visual-plan.mjs" "$repeated_signature_map" "$repository_root/examples/transcript.example.json" "$repository_root/assets/design-system.default.json" >/dev/null 2>&1; then
+  echo "Undeclared repeated visual signature unexpectedly passed" >&2
+  exit 1
+fi
+invalid_surface_file="$(mktemp).html"
+sed 's/data-border-policy="none"/data-border-policy="solid"/' "$repository_root/templates/hyperframes/index.html" > "$invalid_surface_file"
+if node "$repository_root/scripts/check-layout-constraints.mjs" "$invalid_surface_file" "$repository_root/assets/design-system.default.json" >/dev/null 2>&1; then
+  echo "Outlined generic motion container unexpectedly passed" >&2
+  exit 1
+fi
+invalid_label_file="$(mktemp).html"
+sed 's#</body>#<div class="status-badge">TOOL 01</div></body>#' "$repository_root/templates/hyperframes/index.html" > "$invalid_label_file"
+if node "$repository_root/scripts/check-layout-constraints.mjs" "$invalid_label_file" "$repository_root/assets/design-system.default.json" >/dev/null 2>&1; then
+  echo "Unannotated decorative label unexpectedly passed" >&2
+  exit 1
+fi
+bold_caption_file="$(mktemp).html"
+sed 's#</head>#<style>.motion-caption-line { font-weight:700!important; font-synthesis:none; }</style></head>#' "$repository_root/templates/hyperframes/index.html" > "$bold_caption_file"
+if node "$repository_root/scripts/check-layout-constraints.mjs" "$bold_caption_file" "$repository_root/assets/design-system.default.json" >/dev/null 2>&1; then
+  echo "Bold caption override unexpectedly passed" >&2
+  exit 1
+fi
+rm -f "$invalid_topology_map" "$delayed_entry_map" "$skewed_reveal_map" "$repeated_signature_map" "$invalid_surface_file" "$invalid_label_file" "$bold_caption_file"
 node "$repository_root/scripts/test-workflow-contracts.mjs"
 
 invalid_information_file="$(mktemp).html"
@@ -241,7 +390,8 @@ cat > "$state_smoke_directory/state/trim-plan.json" <<'EOF'
     "acousticThresholdsDb": [-30, -35, -40],
     "outgoingHandleSeconds": 0.02,
     "incomingHandleSeconds": 0.05,
-    "audioTransitionFrames": 2
+    "audioTransitionFrames": 2,
+    "maximumResidualSilenceMs": 80
   },
   "seams": [],
   "verification": {
@@ -303,6 +453,8 @@ cp "$repository_root/examples/beat-map.subtitles.example.json" "$state_smoke_dir
     .visualStyle,
     .primaryFlowAxis,
     .visualReference,
+    .semanticTopology,
+    .entryAnchorWordId,
     (.onScreenCopy | join(" / "))
   ] | @tsv' "$state_smoke_directory/state/beat-map.json"
 } >> "$state_smoke_directory/docs/creative-confirmation.md"
@@ -441,6 +593,12 @@ cp "$smoke_video" "$state_smoke_directory/output/final.mp4"
 rm -f "$different_delivery"
 node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" advance --artifact output/final.mp4 >/dev/null
 jq -e '.currentState == "complete" and .completed == true and .gates["visual-sample-review"].status == "auto-approved" and .gates["final-preview"].status == "auto-approved"' "$state_smoke_directory/state/workflow.json" >/dev/null
+node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" reopen delivery --actor user --note "re-encode delivery" >/dev/null
+jq -e '.currentState == "render" and .completed == false and .revisionId == 2 and .gates["final-preview"].status == "auto-approved"' "$state_smoke_directory/state/workflow.json" >/dev/null
+cp "$state_smoke_directory/output/final.mp4" "$state_smoke_directory/output/final.candidate.mp4"
+node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" advance --artifact output/final.candidate.mp4 >/dev/null
+jq -e '.currentState == "complete" and .completed == true and .lastKnownGoodDelivery.path == "output/final.mp4" and .lastKnownGoodDelivery.sha256 != null' "$state_smoke_directory/state/workflow.json" >/dev/null
+[[ ! -e "$state_smoke_directory/output/final.candidate.mp4" ]] || { echo "Validated delivery candidate was not atomically promoted" >&2; exit 1; }
 rm -rf "$state_smoke_directory"
 rm -f "$smoke_video"
 fi
@@ -506,6 +664,7 @@ required_files=(
   "$repository_root/scripts/install-captions.mjs"
   "$repository_root/scripts/check-caption-layer.mjs"
   "$repository_root/scripts/check-environment.sh"
+  "$repository_root/scripts/audit-roughcut-seams.mjs"
   "$repository_root/scripts/check-trim-plan.mjs"
   "$repository_root/scripts/check-creative-confirmation.mjs"
   "$repository_root/scripts/check-creative-fingerprints.mjs"
@@ -521,6 +680,7 @@ required_files=(
   "$repository_root/scripts/remap-beat-caption-cues.mjs"
   "$repository_root/scripts/promote-caption-review-plan.mjs"
   "$repository_root/scripts/apply-mg-review-selection.mjs"
+  "$repository_root/scripts/promote-job-media.mjs"
   "$repository_root/scripts/check-layout-constraints.mjs"
   "$repository_root/templates/job/creative-confirmation.json"
   "$repository_root/templates/job/creative-confirmation.md"

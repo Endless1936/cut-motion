@@ -74,6 +74,8 @@ Do not reduce primary copy below these ranges to rescue a bad layout. Recompose 
 - Incremental sentences retain earlier clauses until the semantic unit completes.
 - Each MG has one horizontal or vertical primary flow; do not turn the main chain 90 degrees.
 - Copy, timing, and size-only revisions inherit their approved sample or component.
+- Generic outer frames and black container outlines are forbidden; connectors inherit the design-system connector token.
+- Repeating the same layout, topology, entry, and motion family requires an explicit semantic reuse reason.
 - Strike-through copy should physically strike the named tool, not appear as a detached caption.
 - Timeline playheads sit above tracks, use a thin line, and have a readable triangular head.
 - Picture-in-picture footage must continue playing and must not become a still image.

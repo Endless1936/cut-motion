@@ -76,6 +76,40 @@ try {
   assert.equal(simpleWorkflow.gates["visual-sample-review"].status, "superseded");
   assert.equal(simpleWorkflow.history.at(-1).action, "supersede-gates");
 
+  for (const [scope, expectedState, supersededGates] of [
+    ["rough-cut", "rough-cut", ["rough-cut-review", "motion-plan-review", "visual-sample-review", "final-preview"]],
+    ["motion-plan", "motion-plan", ["motion-plan-review", "visual-sample-review", "final-preview"]],
+    ["composition", "composition", ["final-preview"]],
+    ["delivery", "render", []]
+  ]) {
+    const reopenJob = scaffold(`reopen-${scope}`, true);
+    const reopenWorkflowPath = path.join(reopenJob, "state", "workflow.json");
+    const reopenWorkflow = readJson(reopenWorkflowPath);
+    reopenWorkflow.currentState = "complete";
+    reopenWorkflow.completed = true;
+    reopenWorkflow.referenceScriptStatus = "none";
+    reopenWorkflow.referenceScriptAcknowledged = true;
+    reopenWorkflow.intakeDecisionBlock = false;
+    reopenWorkflow.gates["rough-cut-review"] = { status: "approved", revisionId: 1 };
+    reopenWorkflow.gates["motion-plan-review"] = { status: "approved", revisionId: 1 };
+    reopenWorkflow.gates["visual-sample-review"] = { status: "approved", revisionId: 1 };
+    reopenWorkflow.gates["final-preview"] = { status: "approved", revisionId: 1 };
+    reopenWorkflow.visualPlanSha256 = "a".repeat(64);
+    reopenWorkflow.compositionArtifactPath = "hyperframes/index.html";
+    reopenWorkflow.compositionArtifactSha256 = "b".repeat(64);
+    writeJsonAtomic(reopenWorkflowPath, reopenWorkflow);
+    nodeScript("workflow-state.mjs", [reopenWorkflowPath, "reopen", scope, "--actor", "user", "--note", `revise ${scope}`]);
+    const reopened = readJson(reopenWorkflowPath);
+    assert.equal(reopened.currentState, expectedState);
+    assert.equal(reopened.completed, false);
+    assert.equal(reopened.revisionId, 2);
+    for (const gate of ["rough-cut-review", "motion-plan-review", "visual-sample-review", "final-preview"]) {
+      assert.equal(reopened.gates[gate].status, supersededGates.includes(gate) ? "superseded" : "approved");
+    }
+    assert.equal(reopened.visualPlanSha256, ["rough-cut", "motion-plan"].includes(scope) ? null : "a".repeat(64));
+    assert.equal(reopened.compositionArtifactSha256, scope === "delivery" ? "b".repeat(64) : null);
+  }
+
   const modeSwitchJob = scaffold("mode-switch");
   const modeSwitchWorkflow = path.join(modeSwitchJob, "state", "workflow.json");
   nodeScript("workflow-state.mjs", [modeSwitchWorkflow, "set-caption-mode", "motion-copy", "--actor", "user"]);
@@ -87,6 +121,15 @@ try {
   fs.copyFileSync(path.join(repositoryRoot, "examples", "beat-map.example.json"), path.join(modeSwitchJob, "state", "beat-map.json"));
   const motionCopyFingerprint = computeVisualSampleFingerprint(modeSwitchJob, "motion-copy");
   const motionCopyMap = readJson(path.join(modeSwitchJob, "state", "beat-map.json"));
+  motionCopyMap.beats[0].entryAnchorWordId = "seg-001:word-002";
+  writeJsonAtomic(path.join(modeSwitchJob, "state", "beat-map.json"), motionCopyMap);
+  assert.equal(computeVisualSampleFingerprint(modeSwitchJob, "motion-copy"), motionCopyFingerprint);
+  motionCopyMap.beats[0].attentionCost = "medium";
+  writeJsonAtomic(path.join(modeSwitchJob, "state", "beat-map.json"), motionCopyMap);
+  const costFingerprint = computeVisualSampleFingerprint(modeSwitchJob, "motion-copy");
+  motionCopyMap.beats[0].attentionCost = "low";
+  writeJsonAtomic(path.join(modeSwitchJob, "state", "beat-map.json"), motionCopyMap);
+  assert.equal(computeVisualSampleFingerprint(modeSwitchJob, "motion-copy"), costFingerprint);
   motionCopyMap.beats[0].transitionFamily = "changed-grammar";
   writeJsonAtomic(path.join(modeSwitchJob, "state", "beat-map.json"), motionCopyMap);
   assert.notEqual(computeVisualSampleFingerprint(modeSwitchJob, "motion-copy"), motionCopyFingerprint);

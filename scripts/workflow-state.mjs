@@ -28,7 +28,7 @@ import {
 const [workflowPath, command, ...rawArguments] = process.argv.slice(2);
 
 if (!workflowPath || !command) {
-  console.error("Usage: node workflow-state.mjs <workflow.json> <status|advance|approve|revise|replan|set-mode|set-caption-mode|set-axis-mode> [value] [--actor name] [--artifact path] [--note text]");
+  console.error("Usage: node workflow-state.mjs <workflow.json> <status|advance|approve|revise|replan|reopen|set-mode|set-caption-mode|set-axis-mode> [value] [--actor name] [--artifact path] [--note text]");
   process.exit(64);
 }
 
@@ -125,7 +125,7 @@ const assertJobArtifact = (relativePath, expectedDirectory) => {
 };
 
 const probeReviewVideo = (videoPath, label) => {
-  const probe = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-show_entries", "stream=codec_type,width,height,r_frame_rate", "-of", "json", videoPath], { encoding: "utf8" });
+  const probe = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-show_entries", "stream=codec_type,width,height,r_frame_rate,duration", "-of", "json", videoPath], { encoding: "utf8" });
   if (probe.status !== 0) throw new Error(`${label} is not a readable media file`);
   const result = JSON.parse(probe.stdout || "{}");
   const duration = Number(result.format?.duration);
@@ -134,8 +134,16 @@ const probeReviewVideo = (videoPath, label) => {
   const streamTypes = new Set((result.streams ?? []).map((stream) => stream.codec_type));
   if (!streamTypes.has("video") || !streamTypes.has("audio")) throw new Error(`${label} requires video and audio streams`);
   const video = result.streams.find((stream) => stream.codec_type === "video");
+  const audio = result.streams.find((stream) => stream.codec_type === "audio");
   const [numerator, denominator] = String(video?.r_frame_rate ?? "0/1").split("/").map(Number);
-  return { duration, width: video?.width, height: video?.height, fps: denominator ? numerator / denominator : 0 };
+  const fps = denominator ? numerator / denominator : 0;
+  const videoDuration = Number(video?.duration);
+  const audioDuration = Number(audio?.duration);
+  if (Number.isFinite(videoDuration) && Number.isFinite(audioDuration)
+    && Math.abs(videoDuration - audioDuration) > Math.max(0.1, 2 / Math.max(fps, 1))) {
+    throw new Error(`${label} audio and video durations differ`);
+  }
+  return { duration, width: video?.width, height: video?.height, fps };
 };
 
 const probeReviewSignal = (videoPath, duration, label) => {
@@ -625,6 +633,63 @@ if (command === "replan") {
   process.exit(0);
 }
 
+if (command === "reopen") {
+  const scope = positionals[0];
+  const configurations = {
+    "rough-cut": {
+      target: "rough-cut",
+      gates: ["rough-cut-review", "motion-plan-review", "visual-sample-review", "final-preview"]
+    },
+    "motion-plan": {
+      target: "motion-plan",
+      gates: ["motion-plan-review", "visual-sample-review", "final-preview"]
+    },
+    composition: {
+      target: "composition",
+      gates: ["final-preview"]
+    },
+    delivery: {
+      target: "render",
+      gates: []
+    }
+  };
+  const configuration = configurations[scope];
+  if (workflow.currentState !== "complete") throw new Error("Only a completed job can be reopened");
+  if (!configuration) throw new Error("Reopen scope must be rough-cut, motion-plan, composition, or delivery");
+  if (actor !== "user") throw new Error("Reopen requires --actor user");
+  if (!note) throw new Error("Reopen requires --note");
+  const previousState = workflow.currentState;
+  beginWorkflowRevision(workflow, now, note, {
+    gates: configuration.gates,
+    invalidateVisualPlan: ["rough-cut", "motion-plan"].includes(scope)
+  });
+  if (scope === "rough-cut") {
+    const project = readJson(path.join(jobRoot, "state", "project.json"));
+    workflow.authoritativeMediaPath = project.sourceVideo;
+    workflow.authoritativeMediaSha256 = null;
+    workflow.trimPlanSha256 = null;
+  }
+  if (["rough-cut", "motion-plan"].includes(scope)) {
+    invalidateCreativeConfirmation();
+    workflow.creativeConfirmationSha256 = null;
+    workflow.pendingCreativePackageSha256 = null;
+    workflow.creativeDocumentFingerprints = null;
+    workflow.visualPlanSha256 = null;
+  }
+  if (scope !== "delivery") {
+    workflow.compositionArtifactPath = null;
+    workflow.compositionArtifactSha256 = null;
+  }
+  workflow.currentState = configuration.target;
+  workflow.pendingGate = null;
+  workflow.completed = false;
+  appendHistory("reopen", previousState, configuration.target, actor);
+  workflow.history.at(-1).scope = scope;
+  save();
+  console.log(`Workflow reopened at ${configuration.target}: ${scope}`);
+  process.exit(0);
+}
+
 const currentStage = stages[workflow.currentState];
 if (!currentStage) throw new Error(`Unknown current state: ${workflow.currentState}`);
 
@@ -654,8 +719,11 @@ if (command === "advance") {
     }[workflow.currentState];
     const artifactPath = assertJobArtifact(artifact, expectedDirectory);
     if (workflow.currentState === "rough-cut") {
+      if (path.resolve(jobRoot, artifact) !== path.join(jobRoot, "roughcut", "a-roll.mp4")) throw new Error("Rough cut must use roughcut/a-roll.mp4");
       const trimPlanPath = path.join(jobRoot, "state", "trim-plan.json");
-      runCheck("check-trim-plan.mjs", [trimPlanPath, "--require-audit"], "Locked edit requires a complete seam audit");
+      probeReviewVideo(artifactPath, "Rough cut");
+      runCheck("audit-roughcut-seams.mjs", [trimPlanPath, artifactPath], "Locked edit failed final-media seam measurement");
+      runCheck("check-trim-plan.mjs", [trimPlanPath, "--require-audit", "--media", artifactPath], "Locked edit requires a complete seam audit");
       checkReconciliation(true, artifact);
       workflow.authoritativeMediaPath = artifact;
       workflow.authoritativeMediaSha256 = sha256File(artifactPath);
@@ -704,6 +772,12 @@ if (command === "advance") {
       validateFinalQa(artifact);
     }
     if (workflow.currentState === "render") {
+      const canonicalDeliveryPath = path.join(jobRoot, "output", "final.mp4");
+      if (workflow.lastKnownGoodDelivery
+        && artifactPath === canonicalDeliveryPath
+        && sha256File(artifactPath) !== workflow.lastKnownGoodDelivery.sha256) {
+        throw new Error("A delivery revision must render to output/final.candidate.mp4 before replacing the last known-good file");
+      }
       const delivery = probeReviewVideo(artifactPath, "Final delivery");
       probeReviewSignal(artifactPath, delivery.duration, "Final delivery");
       const previewRelativePath = workflow.gates?.["final-preview"]?.artifact;
@@ -716,6 +790,12 @@ if (command === "advance") {
       }
       verifyEditorialMatch(artifactPath, previewPath);
       validateFinalQa(workflow.gates?.["final-preview"]?.artifact);
+      if (artifactPath !== canonicalDeliveryPath) fs.renameSync(artifactPath, canonicalDeliveryPath);
+      workflow.lastKnownGoodDelivery = {
+        path: "output/final.mp4",
+        sha256: sha256File(canonicalDeliveryPath),
+        validatedAt: now
+      };
     }
     if (workflow.currentState === "composition") {
       workflow.compositionArtifactPath = artifact;

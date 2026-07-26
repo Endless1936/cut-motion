@@ -54,6 +54,8 @@ Each subtitle-mode beat with `mgScope: "local"` must record:
 - `captionCueIds`: the exact approved single-line caption cues that create the node;
 - `onScreenCopy`: the exact, exhaustive strings that may render in the MG;
 - `visualStyle`: the concrete visual metaphor and motion family proposed for review;
+- `semanticTopology`: the relationship being encoded, such as sequence, convergence, branch, comparison, or mapping;
+- `entryAnchorWordId`: the aligned spoken word that triggers the first meaningful visual event;
 - `primaryFlowAxis`: one horizontal or vertical main chain;
 - `visualReference`: the approved sample/component being inherited, or a clearly named new proposal;
 - `viewerQuestion`: the question created by the current spoken passage;
@@ -88,12 +90,14 @@ Do not introduce a technical term, formula, or benchmark that creates more unans
 ## Timing and information behavior
 
 - Trigger MG at a semantic boundary or when the viewer question arises, not on a fixed “visual change every N seconds” timer.
+- Start the first meaningful event within the design-system delay limit, and reveal a connector with its destination container within the shared frame tolerance.
 - Treat MG as punctuation, not a continuous layer. In a typical subtitle-mode talking-head video, most runtime should remain talking head plus captions.
 - One MG passage performs one cognitive job.
 - In A-axis overlay mode, use replacement cadence: a local information group normally remains for 1.8–3.0 seconds, exits completely, and is then replaced. Do not retain earlier cards while a later idea arrives.
 - Prefer a face-safe zone. A meaningful group may briefly cover the face for up to about three seconds, but never accumulates with the next group.
 - Declare one horizontal or vertical primary flow. Do not turn the main chain 90 degrees; branch on the secondary axis only at a terminal node.
 - Reuse the approved visual reference for copy, timing, or size-only changes.
+- Repeating a complete visual signature requires an explicit reuse group and semantic reason.
 - In B-axis stage mode, dependent elements may accumulate within one coherent page and exit together when that page resolves.
 - Reveal components in causal or reading order, then hold the resolved state long enough to inspect.
 - Keep labels adjacent to the element they describe; avoid detached legends and visual search.

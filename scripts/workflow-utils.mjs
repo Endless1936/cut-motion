@@ -59,6 +59,7 @@ export const ensureWorkflowDefaults = (workflow) => {
   workflow.visualPlanSha256 ??= null;
   workflow.compositionArtifactPath ??= null;
   workflow.compositionArtifactSha256 ??= null;
+  workflow.lastKnownGoodDelivery ??= null;
   workflow.history ??= [];
   const legacyRevisionCount = workflow.history.filter((entry) => entry.revisionId == null && (
     ["replan", "resolve-transcript-item"].includes(entry.action)
@@ -87,10 +88,14 @@ export const computeVisualSampleFingerprint = (jobRoot, captionMode) => {
   const visualBeats = (beatMap.beats ?? []).filter((beat) => captionMode === "motion-copy" || beat.mgScope === "local");
   const uniqueGrammar = [...new Set(visualBeats.map((beat) => JSON.stringify({
     axis: beat.axis,
-    attentionCost: beat.attentionCost,
     motionFamily: beat.motionFamily,
     transitionFamily: beat.transitionFamily,
     primaryFlowAxis: beat.primaryFlowAxis,
+    semanticTopology: beat.semanticTopology,
+    revealGroups: (beat.microEvents ?? []).map((event) => ({
+      visualRole: event.visualRole,
+      topologyRole: event.topologyRole
+    })),
     visualStyle: beat.visualStyle,
     typography: beat.typography,
     visualReference: beat.visualReference
@@ -102,6 +107,7 @@ export const computeVisualSampleFingerprint = (jobRoot, captionMode) => {
       motionFamily: beat.motionFamily,
       transitionFamily: beat.transitionFamily,
       primaryFlowAxis: beat.primaryFlowAxis,
+      semanticTopology: beat.semanticTopology,
       visualStyle: beat.visualStyle,
       typography: beat.typography,
       visualEncoding: beat.visualEncoding,
@@ -114,23 +120,23 @@ export const computeVisualSampleFingerprint = (jobRoot, captionMode) => {
     designSystem: {
       canvas: designSystem.canvas,
       typography: designSystem.typography,
-      captions: captionMode === "subtitles" ? designSystem.captions : undefined,
       palette: designSystem.palette,
       spacing: designSystem.spacing,
       density: designSystem.density,
       surface: designSystem.surface,
-      axisPolicies: designSystem.axisPolicies,
-      rhythmProfile: designSystem.rhythmProfiles?.[captionMode]
+      motionContract: designSystem.motionContract,
+      axisPolicies: designSystem.axisPolicies
     },
     uniqueGrammar,
     highAttention
   }));
 };
 
-export const beginWorkflowRevision = (workflow, now, reason) => {
+export const beginWorkflowRevision = (workflow, now, reason, options = {}) => {
   ensureWorkflowDefaults(workflow);
+  const gates = options.gates ?? ["motion-plan-review", "visual-sample-review", "final-preview"];
   const superseded = [];
-  for (const gate of ["motion-plan-review", "visual-sample-review", "final-preview"]) {
+  for (const gate of gates) {
     const record = workflow.gates?.[gate];
     if (!record || ["not-reached", "superseded"].includes(record.status)) continue;
     superseded.push({ gate, status: record.status, artifact: record.artifact ?? null });
@@ -147,7 +153,7 @@ export const beginWorkflowRevision = (workflow, now, reason) => {
     workflow.history.push({ at: now, action: "supersede-gates", actor: "agent", from: workflow.currentState, to: workflow.currentState, note: reason, revisionId: workflow.revisionId, gates: superseded });
   }
   workflow.revisionId += 1;
-  workflow.visualPlanSha256 = null;
+  if (options.invalidateVisualPlan !== false) workflow.visualPlanSha256 = null;
 };
 
 export const intakeResolved = (workflow) => workflow.captionModeAcknowledged === true
@@ -177,7 +183,8 @@ export const mirrorWorkflowToProject = (workflowPath, workflow) => {
     "intakeDecisionBlock",
     "authoritativeMediaPath",
     "authoritativeMediaSha256",
-    "revisionId"
+    "revisionId",
+    "lastKnownGoodDelivery"
   ]) project[field] = workflow[field];
   project.status = workflow.currentState;
   writeJsonAtomic(projectPath, project);

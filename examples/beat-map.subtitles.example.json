@@ -22,6 +22,8 @@
       "visualStyle": "两个依赖模块沿一条连接路径依次锁定。",
       "primaryFlowAxis": "horizontal",
       "visualReference": "proposal:linked-dependency-modules",
+      "semanticTopology": "sequence",
+      "entryAnchorWordId": "seg-001:word-002",
       "viewerQuestion": "How are the two animation systems related?",
       "supportRole": "organization",
       "removalLoss": "The viewer loses the relationship between the keyframe and runtime layers.",
@@ -36,7 +38,9 @@
       "motionFamily": "technical",
       "transitionFamily": "module-build",
       "microEvents": [
-        { "time": 0.8, "type": "module-activate", "semanticChange": "GSAP orbit activates" }
+        { "time": 0.4, "type": "dependency-line", "semanticChange": "dependency path starts", "revealGroup": "dependency-lock", "visualRole": "connector", "topologyRole": "node" },
+        { "time": 0.45, "type": "module-shell", "semanticChange": "dependent module appears", "revealGroup": "dependency-lock", "visualRole": "container", "topologyRole": "node" },
+        { "time": 0.8, "type": "module-activate", "semanticChange": "GSAP orbit activates", "visualRole": "indicator", "topologyRole": "node" }
       ],
       "layout": {
         "primaryOccupancyRatio": 0.38,
@@ -77,6 +81,8 @@
       "visualStyle": "帧尺与同步指针沿同一时间轴校准。",
       "primaryFlowAxis": "horizontal",
       "visualReference": "proposal:timeline-sync-indicator",
+      "semanticTopology": "sequence",
+      "entryAnchorWordId": "seg-002:word-002",
       "viewerQuestion": "What makes the playback stay synchronized?",
       "supportRole": "explanation",
       "removalLoss": "The viewer loses the causal link between frame cadence and synchronization.",
@@ -90,7 +96,9 @@
       "motionFamily": "technical",
       "transitionFamily": "semantic-morph",
       "microEvents": [
-        { "time": 2.35, "type": "status-update", "semanticChange": "frame-rate status resolves" }
+        { "time": 1.9, "type": "timeline-line", "semanticChange": "frame ruler starts", "revealGroup": "timeline-sync", "visualRole": "connector", "topologyRole": "node" },
+        { "time": 1.95, "type": "sync-shell", "semanticChange": "sync container appears", "revealGroup": "timeline-sync", "visualRole": "container", "topologyRole": "node" },
+        { "time": 2.35, "type": "status-update", "semanticChange": "frame-rate status resolves", "visualRole": "indicator", "topologyRole": "node" }
       ],
       "layout": {
         "primaryOccupancyRatio": 0.4,

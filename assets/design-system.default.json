@@ -38,14 +38,18 @@
       "majorSceneGapSeconds": [1.8, 3.5],
       "minimumBAxisRunSeconds": 2.5,
       "maximumRepeatedTransitionFamily": 2,
-      "syncToleranceFrames": 3
+      "syncToleranceFrames": 3,
+      "firstMeaningfulEventMaxMs": 400,
+      "revealGroupMaxSkewFrames": 2
     },
     "subtitles": {
       "microEventGapSeconds": [0.8, 1.8],
       "majorSceneGapSeconds": [2.5, 5.0],
       "minimumBAxisRunSeconds": 3.0,
       "maximumRepeatedTransitionFamily": 2,
-      "syncToleranceFrames": 3
+      "syncToleranceFrames": 3,
+      "firstMeaningfulEventMaxMs": 400,
+      "revealGroupMaxSkewFrames": 2
     }
   },
   "captions": {
@@ -58,7 +62,8 @@
     "maximumDisplayUnits": 11.8,
     "minimumFontSizePx": 88,
     "maximumLines": 1,
-    "bottomOffsetPx": 330,
+    "bottomOffsetRatio": 0.2,
+    "bottomOffsetPx": 384,
     "textAlign": "center",
     "opaqueBackground": false,
     "shadow": {
@@ -74,6 +79,12 @@
     "dominantAccentCount": 1,
     "supportingAccentMaximum": 1,
     "shadow": "broad-low-contrast"
+  },
+  "motionContract": {
+    "outerFrameAllowed": false,
+    "containerBorderPolicy": "none",
+    "connectorColorToken": "connector",
+    "decorativeLabelsAllowed": false
   },
   "axisPolicies": {
     "A": {
@@ -112,6 +123,7 @@
     "coral": "#EC544F",
     "green": "#20C77A",
     "yellow": "#F4C840",
-    "violet": "#8D68FF"
+    "violet": "#8D68FF",
+    "connector": "rgba(255, 255, 255, 0.72)"
   }
 }

@@ -99,6 +99,8 @@ Every job receives its own isolated workspace, workflow state, review checkpoint
 
 `review` always pauses at the locked edit and final preview. Creative confirmation appears only for MG, `motion-copy`, B-axis or hybrid treatment, transcript ambiguity, or an explicit request. A visual sample appears for first or changed motion language, or when a caption-layout precheck is explicitly requested; caption-only work otherwise proceeds to final preview. `auto` uses the same validated artifacts and never supplies missing intake decisions.
 
+Completed jobs can be reopened in place for a scoped rough-cut, motion-plan, composition, or delivery revision. Delivery revisions render to a candidate and replace `output/final.mp4` only after validation, while canonical media keeps only current large artifacts.
+
 ## Repository map
 
 - `AGENTS.md` — canonical Agent contract.

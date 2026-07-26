@@ -9,10 +9,10 @@
 
 ## MG 节点
 
-| 节点 | 对应字幕 |
-| --- | --- |
-| support-001 | caption-0001 |
-| support-002 | caption-0002 |
+| 节点 | 对应字幕 | 语义拓扑 | 进入锚点 |
+| --- | --- | --- | --- |
+| support-001 | caption-0001 | sequence | seg-001:word-002 |
+| support-002 | caption-0002 | sequence | seg-002:word-002 |
 
 ## 明确不加 MG 的段落
 

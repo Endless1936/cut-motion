@@ -99,6 +99,8 @@ cp /path/to/smiley-sans-oblique.woff2 jobs/<job-id>/hyperframes/assets/fonts/smi
 
 `review` 始终在剪辑锁定版和最终预览暂停。只有存在 MG、`motion-copy`、B 轴/混合轴、口播歧义或用户明确要求时才展示创意确认包；首次或动效语言变化时才生成视觉样片，纯字幕项目除非明确要求字幕布局预检，否则直接进入最终预览。`auto` 仍只处理已验证产物，也不会代替用户回答入口问题。
 
+已完成任务可在原任务内按粗剪、动效方案、合成或交付范围定向返修。交付返修先渲染候选文件，校验通过后才替换 `output/final.mp4`；大型媒体只保留当前版本。
+
 ## 仓库结构
 
 - `AGENTS.md`：Agent 的唯一工作契约。

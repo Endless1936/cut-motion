@@ -19,7 +19,7 @@
     },
     "style": {
       "type": "object",
-      "required": ["fontFamily", "color", "fontSizePx", "minimumFontSizePx", "lineHeight", "maximumDisplayUnits", "maximumLines", "bottomOffsetPx", "opaqueBackground", "shadow"],
+      "required": ["fontFamily", "color", "fontSizePx", "minimumFontSizePx", "lineHeight", "maximumDisplayUnits", "maximumLines", "bottomOffsetRatio", "bottomOffsetPx", "opaqueBackground", "shadow"],
       "properties": {
         "fontFamily": { "const": "Smiley Sans" },
         "fontWeight": { "const": 400 },
@@ -29,6 +29,7 @@
         "minimumFontSizePx": { "type": "number", "minimum": 42 },
         "maximumDisplayUnits": { "type": "number", "minimum": 4, "maximum": 16 },
         "maximumLines": { "const": 1 },
+        "bottomOffsetRatio": { "type": "number", "minimum": 0.1, "maximum": 0.35 },
         "bottomOffsetPx": { "type": "number", "minimum": 100 },
         "opaqueBackground": { "const": false },
         "shadow": {

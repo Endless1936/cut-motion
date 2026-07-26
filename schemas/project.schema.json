@@ -45,6 +45,22 @@
       "type": "array",
       "items": { "type": "string" },
       "default": []
+    },
+    "mediaArtifacts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["path", "sha256", "duration", "updatedAt"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "duration": { "type": "number", "exclusiveMinimum": 0 },
+          "width": { "type": "integer", "minimum": 1 },
+          "height": { "type": "integer", "minimum": 1 },
+          "fps": { "type": "string" },
+          "updatedAt": { "type": "string", "minLength": 1 }
+        }
+      }
     }
   },
   "additionalProperties": true

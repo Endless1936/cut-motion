@@ -20,6 +20,7 @@
         --violet: #8a67f6;
         --coral: #ef5d57;
         --green: #23c98a;
+        --connector: rgba(255, 255, 255, 0.72);
       }
 
       * { box-sizing: border-box; }
@@ -51,7 +52,7 @@
         top: 660px;
         min-height: 420px;
         padding: 72px;
-        border: 4px solid var(--ink);
+        border: 0;
         border-radius: 52px;
         background: color-mix(in srgb, var(--paper) 92%, transparent);
         box-shadow: 18px 22px 0 color-mix(in srgb, var(--ink) 82%, transparent);
@@ -75,13 +76,13 @@
     </style>
   </head>
   <body>
-    <div id="root" data-composition-id="main" data-start="0" data-width="1080" data-height="1920" data-fps="30" data-duration="10" data-layout-constraints="enforced">
+    <div id="root" data-composition-id="main" data-start="0" data-width="1080" data-height="1920" data-fps="30" data-duration="10" data-layout-constraints="enforced" data-motion-contract="enforced" data-runtime-layout="hyperframes" data-caption-bottom-ratio="0.2" data-caption-font-weight="400">
       <video id="a-roll" class="clip" src="./assets/input-video.mp4" data-start="0" data-duration="10" data-track-index="0" muted playsinline preload="auto"></video>
       <audio id="source-audio" src="./assets/input-video.mp4" data-start="0" data-duration="10" data-track-index="1" data-volume="1" preload="auto"></audio>
 
       <section id="hero" class="clip" data-start="0" data-duration="10" data-track-index="10">
         <div class="scene-inner">
-          <div class="hero-card">
+          <div class="hero-card" data-motion-surface="container" data-border-policy="none" data-layout-guard="canvas" data-motion-group="hero" data-axis="A" data-group-kind="primary" data-group-start="0" data-group-duration="10" data-face-cover="none" data-primary-flow-axis="vertical" data-semantic-topology="emphasis">
             <h1 id="hero-copy" class="no-orphan-line" data-no-orphan-line="true">一句话，<span class="accent">一个动作理由</span></h1>
           </div>
         </div>
@@ -91,7 +92,101 @@
     </div>
 
     <script>
+      window.__motionContract = (currentTime = null) => {
+        const root = document.querySelector("#root");
+        const rootRect = root.getBoundingClientRect();
+        const visible = (element) => {
+          const style = getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+          return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) > 0.01 && rect.width > 0 && rect.height > 0;
+        };
+        for (const element of document.querySelectorAll('[data-motion-surface="container"][data-border-policy="none"]')) {
+          const style = getComputedStyle(element);
+          const borderWidth = ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"]
+            .reduce((sum, property) => sum + Number.parseFloat(style[property] || "0"), 0);
+          if (borderWidth > 0) throw new Error("motion_contract_container_border");
+        }
+        for (const element of document.querySelectorAll('[data-motion-role="connector"]')) {
+          const token = element.dataset.colorToken;
+          const property = element.dataset.colorProperty;
+          const probe = document.createElement("span");
+          probe.style.color = `var(--${token})`;
+          document.body.appendChild(probe);
+          const expected = getComputedStyle(probe).color;
+          probe.remove();
+          const actual = getComputedStyle(element).getPropertyValue(property);
+          if (!expected || actual !== expected) throw new Error("motion_contract_connector_token");
+        }
+        const excludedLeaves = new Set(["VIDEO", "AUDIO", "SCRIPT", "STYLE", "SOURCE"]);
+        const visibleLeaves = [...root.querySelectorAll("*")].filter((element) => element.children.length === 0
+          && !excludedLeaves.has(element.tagName)
+          && visible(element));
+        for (const element of visibleLeaves) {
+          if (!element.closest("[data-motion-group]") && !element.closest("[data-motion-protected]")) {
+            throw new Error("motion_contract_ungrouped_visual");
+          }
+          if (!visible(element)) continue;
+          const rect = element.getBoundingClientRect();
+          if (rect.left < rootRect.left - 1 || rect.top < rootRect.top - 1 || rect.right > rootRect.right + 1 || rect.bottom > rootRect.bottom + 1) {
+            throw new Error("motion_contract_canvas_overflow");
+          }
+          const style = getComputedStyle(element);
+          const borderWidth = ["borderTopWidth", "borderRightWidth", "borderBottomWidth", "borderLeftWidth"]
+            .reduce((sum, property) => sum + Number.parseFloat(style[property] || "0"), 0);
+          if (borderWidth > 0 && element.dataset.borderPolicy !== "allowed") throw new Error("motion_contract_leaf_border");
+          if (element.textContent.trim() && Number.parseFloat(style.fontSize) < 42 && !element.dataset.informationRole) {
+            throw new Error("motion_contract_tiny_label");
+          }
+        }
+        for (const caption of document.querySelectorAll(".motion-caption-line")) {
+          if (Number(getComputedStyle(caption).fontWeight) !== Number(root.dataset.captionFontWeight)) {
+            throw new Error("motion_contract_caption_weight");
+          }
+        }
+        const protectedRects = [...document.querySelectorAll("[data-motion-protected]")].filter(visible).map((element) => element.getBoundingClientRect());
+        for (const element of visibleLeaves.filter((candidate) => !candidate.closest("[data-motion-protected]"))) {
+          const rect = element.getBoundingClientRect();
+          if (protectedRects.some((protectedRect) => rect.left < protectedRect.right && rect.right > protectedRect.left
+            && rect.top < protectedRect.bottom && rect.bottom > protectedRect.top)) {
+            throw new Error("motion_contract_protected_overlap");
+          }
+        }
+        const visibleGroups = [...document.querySelectorAll("[data-motion-group]")].filter(visible);
+        if (visibleGroups.filter((element) => element.dataset.axis === "A" && element.dataset.groupKind === "primary").length > 1
+          || visibleGroups.filter((element) => element.dataset.axis === "A" && element.dataset.groupKind === "auxiliary").length > 1) {
+          throw new Error("motion_contract_a_axis_accumulation");
+        }
+        for (const group of visibleGroups) {
+          const start = Number(group.dataset.groupStart);
+          const duration = Number(group.dataset.groupDuration);
+          if (group.dataset.axis === "A" && group.dataset.faceCover !== "none" && duration > 3) throw new Error("motion_contract_face_cover_duration");
+          if (currentTime !== null && (currentTime < start - 1 / 30 || currentTime > start + duration + 1 / 30)) {
+            throw new Error("motion_contract_group_lifetime");
+          }
+        }
+        const revealGroups = new Map();
+        for (const element of document.querySelectorAll("[data-reveal-group]")) {
+          const group = revealGroups.get(element.dataset.revealGroup) || [];
+          group.push(element);
+          revealGroups.set(element.dataset.revealGroup, group);
+        }
+        for (const elements of revealGroups.values()) {
+          const connectors = elements.filter((element) => element.dataset.motionRole === "connector");
+          const containers = elements.filter((element) => element.dataset.motionSurface === "container");
+          if (connectors.length && (!containers.length || connectors.some(visible) !== containers.some(visible))) {
+            throw new Error("motion_contract_reveal_group");
+          }
+        }
+        for (const connector of document.querySelectorAll('[data-motion-role="connector"]')) {
+          const group = connector.closest("[data-motion-group]");
+          if (group && connector.dataset.flowAxis !== group.dataset.primaryFlowAxis && connector.dataset.terminalBranch !== "true") {
+            throw new Error("motion_contract_primary_flow");
+          }
+        }
+      };
+      window.__motionContract();
       const timeline = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
+      timeline.eventCallback("onUpdate", () => window.__motionContract(timeline.time()));
       timeline.set(".hero-card", { y: 180, rotation: 2, opacity: 0 }, 0);
       timeline.to(".hero-card", { y: 0, rotation: 0, opacity: 1, duration: 0.55, ease: "back.out(1.3)" }, 0.2);
       timeline.from("#hero-copy", { y: 70, opacity: 0, duration: 0.4 }, 0.42);
