@@ -8,9 +8,9 @@ if [[ "$verification_mode" != "--static" && "$verification_mode" != "--runtime" 
   echo "Usage: scripts/verify-repository.sh [--static|--runtime]" >&2
   exit 64
 fi
-runtime_font="${MOTIONSCRIPT_FONT:-}"
+runtime_font="${CUT_MOTION_FONT:-${MOTIONSCRIPT_FONT:-}}"
 if [[ "$verification_mode" == "--runtime" && (! -f "$runtime_font" || ! -r "$runtime_font") ]]; then
-  echo "Runtime verification requires MOTIONSCRIPT_FONT=/absolute/path/to/smiley-sans-oblique.woff2" >&2
+  echo "Runtime verification requires CUT_MOTION_FONT=/absolute/path/to/smiley-sans-oblique.woff2" >&2
   exit 66
 fi
 
@@ -644,7 +644,8 @@ required_files=(
   "$repository_root/LICENSE"
   "$repository_root/NOTICE"
   "$repository_root/README.md"
-  "$repository_root/README.zh-CN.md"
+  "$repository_root/README-EN.md"
+  "$repository_root/docs/agent-setup.md"
   "$repository_root/docs/visual-language.md"
   "$repository_root/docs/density-and-layout.md"
   "$repository_root/docs/talking-head-trim-standard.md"
@@ -705,4 +706,4 @@ for required_file in "${required_files[@]}"; do
   [[ -s "$required_file" ]] || { echo "Missing required file: $required_file" >&2; exit 1; }
 done
 
-echo "MotionScript repository verification passed."
+echo "cut-motion repository verification passed."

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "MotionScript Workflow State",
+  "title": "cut-motion Workflow State",
   "type": "object",
   "required": ["schemaVersion", "jobId", "mode", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "reconciliationReturnState", "creativeConfirmationSha256", "pendingCreativePackageSha256", "creativeDocumentFingerprints", "authoritativeMediaPath", "authoritativeMediaSha256", "trimPlanSha256", "visualPlanSha256", "compositionArtifactPath", "compositionArtifactSha256", "revisionId", "approvedVisualSampleFingerprint", "currentState", "pendingGate", "completed", "gates", "history"],
   "properties": {

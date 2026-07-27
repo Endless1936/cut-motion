@@ -1,6 +1,6 @@
-# MotionScript Agent Protocol
+# cut-motion Agent Protocol
 
-MotionScript turns a talking-head video and an optional reference script into a tightly cut, motion-designed video. This repository is an Agent workflow, not a LangGraph, LlamaIndex, or fixed-template application.
+cut-motion turns a talking-head video and an optional reference script into a tightly cut, motion-designed video. This repository is an Agent workflow, not a LangGraph, LlamaIndex, or fixed-template application.
 
 `AGENTS.md` is the canonical operating contract. Codex, Claude Code, and compatible coding agents must follow it before editing media or authoring motion.
 
@@ -45,7 +45,7 @@ jobs/<job-id>/
 
 Never overwrite the original source video. Every destructive-looking operation must produce a new artifact and update `state/project.json`.
 
-Each job directory is an isolated working directory. Do not place job media, generated state, previews, or logs in the MotionScript repository root.
+Each job directory is an isolated working directory. Do not place job media, generated state, previews, or logs in the cut-motion repository root.
 
 ## Toolchain
 
@@ -136,6 +136,8 @@ Infer the axis recommendation from the locked edit, content-display needs, and a
 ## Canonical workflow
 
 ### 0. Environment preflight
+
+Detailed host setup, job installation, render, and repository-maintenance commands are collected in `docs/agent-setup.md`.
 
 Before creating a job, inspect the active Agent tool surface for ChatCut, then run:
 

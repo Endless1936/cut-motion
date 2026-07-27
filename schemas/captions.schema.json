@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "MotionScript Captions",
+  "title": "cut-motion Captions",
   "type": "object",
   "required": ["source", "style", "cues"],
   "properties": {

@@ -7,7 +7,7 @@ Usage:
   scripts/check-environment.sh check
   scripts/check-environment.sh install-job <job-directory> --yes
 
-check verifies local MotionScript runtime dependencies. ChatCut is checked by the
+check verifies local cut-motion runtime dependencies. ChatCut is checked by the
 active Agent session because it cannot be reliably discovered from a shell.
 
 install-job first reuses exact-version modules from the local npx cache through

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "MotionScript QA Report",
+  "title": "cut-motion QA Report",
   "type": "object",
   "required": ["passed", "checkedAt", "artifacts", "checks"],
   "properties": {

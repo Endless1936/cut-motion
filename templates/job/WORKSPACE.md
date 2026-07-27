@@ -1,4 +1,4 @@
-# MotionScript Job Workspace
+# cut-motion Job Workspace
 
 This directory belongs to one video job.
 

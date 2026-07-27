@@ -8,10 +8,14 @@ if (!captionsPath || !compositionPath) {
 
 const captions = JSON.parse(fs.readFileSync(captionsPath, "utf8"));
 const source = fs.readFileSync(compositionPath, "utf8");
-const startMarker = "<!-- MOTIONSCRIPT_CAPTIONS_START -->";
-const endMarker = "<!-- MOTIONSCRIPT_CAPTIONS_END -->";
+const startMarker = "<!-- CUT_MOTION_CAPTIONS_START -->";
+const endMarker = "<!-- CUT_MOTION_CAPTIONS_END -->";
+const markerPair = [
+  [startMarker, endMarker],
+  ["<!-- MOTIONSCRIPT_CAPTIONS_START -->", "<!-- MOTIONSCRIPT_CAPTIONS_END -->"]
+].find(([start, end]) => source.includes(start) && source.includes(end));
 
-if (!source.includes(startMarker) || !source.includes(endMarker)) {
+if (!markerPair) {
   throw new Error(`Caption markers are missing from ${compositionPath}`);
 }
 
@@ -47,7 +51,7 @@ const layers = captions.cues.map((cue, index) => {
 }).join("\n");
 
 const replacement = `${startMarker}\n${layers}${layers ? "\n      " : ""}${endMarker}`;
-let updated = source.replace(new RegExp(`${startMarker}[\\s\\S]*?${endMarker}`), replacement);
+let updated = source.replace(new RegExp(`${markerPair[0]}[\\s\\S]*?${markerPair[1]}`), replacement);
 if (Number.isFinite(style.bottomOffsetRatio)) {
   updated = updated.replace(/data-caption-bottom-ratio=["'][0-9.]+["']/, `data-caption-bottom-ratio="${style.bottomOffsetRatio}"`);
 }

@@ -1,5 +1,5 @@
 {
-  "name": "motionscript-hyperframes-job",
+  "name": "cut-motion-hyperframes-job",
   "private": true,
   "scripts": {
     "prepare:assets": "cp node_modules/gsap/dist/gsap.min.js assets/gsap.min.js",

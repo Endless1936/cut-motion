@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "MotionScript Creative Confirmation",
+  "title": "cut-motion Creative Confirmation",
   "type": "object",
   "required": ["schemaVersion", "captionMode", "captionModeDecision", "visualAxisMode", "visualAxisModeDecision", "storyboard", "authorities", "changeControl", "axisPolicy", "visualSample", "review"],
   "properties": {

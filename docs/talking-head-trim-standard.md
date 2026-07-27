@@ -1,6 +1,6 @@
 # Talking-Head Precision Trim Standard
 
-This is MotionScript's default first-pass standard for direct-to-camera talking-head videos. It is designed to produce a reviewable cut without waiting for the user to identify long seam pauses.
+This is cut-motion's default first-pass standard for direct-to-camera talking-head videos. It is designed to produce a reviewable cut without waiting for the user to identify long seam pauses.
 
 ## Default profile
 

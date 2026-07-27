@@ -66,4 +66,4 @@ mv "$job_directory/state/creative-confirmation.json.tmp" "$job_directory/state/c
 cp -p "$repository_root/assets/design-system.default.json" "$job_directory/state/design-system.json"
 printf '{"source":"roughcut/a-roll.mp4","fps":30,"remove":[]}\n' > "$job_directory/state/trim-plan.json"
 
-echo "Created MotionScript job: $job_directory ($workflow_mode, $caption_mode)"
+echo "Created cut-motion job: $job_directory ($workflow_mode, $caption_mode)"

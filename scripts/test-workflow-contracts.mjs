@@ -19,7 +19,7 @@ import {
 } from "./workflow-utils.mjs";
 
 const repositoryRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "motionscript-workflow-"));
+const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-workflow-"));
 const run = (command, argumentsList, expectSuccess = true, expectedFailure = null) => {
   const result = spawnSync(command, argumentsList, { encoding: "utf8" });
   if (expectSuccess && result.status !== 0) throw new Error(result.stderr || result.stdout);

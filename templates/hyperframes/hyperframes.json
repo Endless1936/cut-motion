@@ -1,5 +1,5 @@
 {
   "$schema": "https://hyperframes.heygen.com/schema/hyperframes.json",
-  "name": "MotionScript Job",
+  "name": "cut-motion Job",
   "entry": "index.html"
 }

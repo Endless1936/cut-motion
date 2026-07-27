@@ -1,5 +1,5 @@
 {
-  "name": "motionscript-gold-standard",
+  "name": "cut-motion-gold-standard",
   "private": true,
   "scripts": {
     "prepare:assets": "mkdir -p assets/fonts && cp node_modules/gsap/dist/gsap.min.js assets/gsap.min.js",

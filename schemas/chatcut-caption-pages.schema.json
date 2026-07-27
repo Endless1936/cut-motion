@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "MotionScript ChatCut Caption Pages",
+  "title": "cut-motion ChatCut Caption Pages",
   "type": "object",
   "required": ["source", "fps", "cleanExport", "roughCutLocked", "captionRenderDisabled", "pages"],
   "properties": {

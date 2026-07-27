@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "MotionScript Project",
+  "title": "cut-motion Project",
   "type": "object",
   "required": ["schemaVersion", "id", "mode", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "authoritativeMediaPath", "sourceVideo", "language", "width", "height", "fps", "designSystem", "status"],
   "properties": {

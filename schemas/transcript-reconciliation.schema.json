@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "MotionScript Transcript Reconciliation",
+  "title": "cut-motion Transcript Reconciliation",
   "type": "object",
   "required": ["schemaVersion", "mediaFingerprint", "transcriptRevision", "referenceScript", "items", "verification"],
   "properties": {

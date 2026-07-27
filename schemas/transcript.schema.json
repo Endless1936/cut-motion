@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "MotionScript Transcript",
+  "title": "cut-motion Transcript",
   "type": "object",
   "required": ["language", "duration", "segments"],
   "properties": {

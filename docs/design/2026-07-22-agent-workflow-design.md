@@ -1,4 +1,4 @@
-# MotionScript Agent Workflow Design
+# cut-motion Agent Workflow Design
 
 > Historical design record. `AGENTS.md` and the top-level workflow documentation define current behavior.
 
