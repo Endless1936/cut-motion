@@ -1,6 +1,5 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://motionscript.dev/schemas/qa-report.schema.json",
   "title": "MotionScript QA Report",
   "type": "object",
   "required": ["passed", "checkedAt", "artifacts", "checks"],

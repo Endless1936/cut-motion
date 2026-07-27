@@ -7,8 +7,8 @@ Usage:
   scripts/check-environment.sh check
   scripts/check-environment.sh install-job <job-directory> --yes
 
-check verifies local MotionScript runtime dependencies. Agent plugins are checked by
-the active Agent session because they cannot be reliably discovered from a shell.
+check verifies local MotionScript runtime dependencies. ChatCut is checked by the
+active Agent session because it cannot be reliably discovered from a shell.
 
 install-job first reuses exact-version modules from the local npx cache through
 job-local symlinks. It downloads only dependencies that are still missing.
@@ -66,8 +66,7 @@ check_environment() {
     missing_count=$((missing_count + 1))
   fi
 
-  printf '%s\n' 'manual  ChatCut plugin — confirm it is enabled and authenticated in the active Agent session'
-  printf '%s\n' 'manual  HyperFrames plugin — confirm it is enabled in the active Agent session'
+  printf '%s\n' 'manual  ChatCut plugin — confirm it is enabled and authenticated when the selected workflow requires it'
   printf '%s\n' 'manual  Licensed WOFF2 font — add it to each job before composition rendering'
 
   if (( missing_count > 0 )); then
@@ -75,7 +74,7 @@ check_environment() {
     return 1
   fi
 
-  printf '\nLocal preflight passed. Verify Agent plugins and font availability before starting a job.\n'
+  printf '\nLocal preflight passed. Verify ChatCut when required and add the font before rendering.\n'
 }
 
 install_job() {

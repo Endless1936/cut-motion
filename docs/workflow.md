@@ -6,10 +6,10 @@ Each invocation owns one isolated `jobs/<job-id>/` directory. Generated media, s
 
 | State | Reads | Writes or decision |
 | --- | --- | --- | --- |
-| `intake` | source video, two user decisions | media probe, acknowledged caption mode and reference-script status |
+| `intake` | source video, optional preferences | media probe and recorded or deferred preferences |
 | `transcription` | source audio, optional reference script | timestamped transcript and reconciliation evidence |
 | `rough-cut` | source, transcript | semantically selected ChatCut timeline, audited precision trim, and locked A-roll |
-| `rough-cut-review` | A-roll | user approval or revision request |
+| `rough-cut-review` | A-roll and deferred recommendations | edit lock plus one-step preference acceptance, or revision |
 | `motion-plan` | approved wording, aligned word timestamps, design tokens, raw ChatCut timing evidence | beat map, motion plan, creative package, and a semantic caption plan only for `subtitles` |
 | `motion-plan-review` | creative confirmation package | conditional user approval or recorded skip |
 | `visual-sample` | approved plan, recipes | conditional 3–5 second selected-MG or approved-axis preview |
@@ -24,13 +24,16 @@ Each invocation owns one isolated `jobs/<job-id>/` directory. Generated media, s
 
 Structural editing changes every later timestamp. ChatCut selection, precision trimming, seam audit, and final A-roll export therefore complete before one locked-edit review. If another cut is made later, the Agent must migrate the transcript and every later animation cue by the removed duration.
 
-`final-preview` is intentionally not the delivery file. It is a standard-quality review artifact that lets the user approve the finished picture, timing, copy, and audio without waiting for the more expensive delivery encode. Approval moves the job to `render`, which produces the editorially identical high-quality `output/final.mp4`, then verifies its media streams. The Agent must explain this handoff both when presenting the preview and when delivering the final file.
+Material understanding remains inside transcription and edit lock. At ambiguous cuts, take choices, supporting-media decisions, or axis recommendations, the Agent may generate a small filmstrip-plus-waveform view under `checkpoints/diagnostics/`; routine passages are not scanned and no extra user gate is added.
+
+`final-preview` is intentionally not the delivery file. `npm run render:preview` uses HyperFrames `standard` quality so the user can approve picture, timing, copy, and audio; after approval, `npm run render` uses `high` quality for the editorially identical `output/final.mp4`. Resolution, frame rate, timeline and audio remain unchanged, and the state machine verifies the media match. The Agent must explain this handoff both when presenting the preview and when delivering the final file.
 
 ## Caption-mode route
 
 | Boundary | User interaction | Durable state | Result |
 | --- | --- | --- | --- |
-| Intake | Agent asks caption mode and reference-script status together | Workflow records both explicit decisions; provided text is copied by SHA-256 | The job cannot enter transcription while either answer is unresolved. |
+| Intake | Agent asks once for optional caption, script, and axis preferences | Supplied choices are recorded; omitted choices remain deferred | Resolved source media is the only blocker. |
+| Locked-edit review | Agent presents the rough cut with reasoned recommendations for deferred choices | Approval locks the media and accepts the stated choices | No separate preference gate is added. |
 | Creative confirmation | Shown for MG, `motion-copy`, B-axis or hybrid treatment, release-impact ambiguity, or explicit request | One package fingerprints every authoritative plan | Required approval or recorded conditional skip authorizes that exact package. |
 | Visual sample | Shown for first or changed motion language, or an explicit caption-layout precheck | Source HTML and rendered video are independently fingerprinted | Caption-only or unchanged approved visual language proceeds directly to composition. |
 | Late change | User switches mode before composition | State machine returns to `motion-plan` | Storyboard, density, and sample are rebuilt only when they actually depend on the mode. |
@@ -65,7 +68,7 @@ Canonical large media uses fixed paths and atomic replacement. `scripts/promote-
 
 ## Review versus automatic mode
 
-Both modes execute the same pipeline. `review` always waits at locked-edit and final-preview review, plus only the conditional gates triggered by the plan. `auto` may approve only existing validated artifacts and never supplies missing intake decisions.
+Both modes execute the same pipeline. `review` always waits at locked-edit and final-preview review, plus only the conditional gates triggered by the plan. `auto` may accept recorded Agent recommendations but still validates every artifact.
 
 In `review`, implementation permission is scoped to the approved package. Caption segmentation, MG node selection or count, on-screen copy, support role, visual style, and axis mode are plan fields. Changing any of them requires `replan` and a regenerated package; user reapproval occurs only when the new package still triggers creative review. Small parameter corrections that preserve those fields may return directly to the producing stage.
 

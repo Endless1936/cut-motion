@@ -38,17 +38,20 @@ export const assertRegularContainedFile = (parent, candidate, label = "File") =>
 };
 
 export const ensureWorkflowDefaults = (workflow) => {
-  const legacyIntakeMissing = workflow.referenceScriptStatus == null
-    || workflow.referenceScriptAcknowledged == null;
   workflow.captionModeSource ??= "default";
   workflow.captionModeAcknowledged ??= false;
   workflow.visualAxisMode ??= "a-axis-overlay";
   workflow.visualAxisModeSource ??= "default";
   workflow.visualAxisModeAcknowledged ??= false;
-  workflow.referenceScriptStatus ??= "unknown";
+  workflow.referenceScriptStatus ??= "none";
   workflow.referenceScriptAcknowledged ??= false;
   workflow.referenceScriptPath ??= null;
   workflow.referenceScriptSha256 ??= null;
+  if (workflow.referenceScriptStatus === "unknown"
+    && workflow.referenceScriptPath === null
+    && workflow.referenceScriptSha256 === null) {
+    workflow.referenceScriptStatus = "none";
+  }
   workflow.reconciliationReturnState ??= null;
   workflow.creativeConfirmationSha256 ??= null;
   workflow.pendingCreativePackageSha256 ??= null;
@@ -71,8 +74,7 @@ export const ensureWorkflowDefaults = (workflow) => {
     workflow.revisionId = 1 + legacyRevisionCount;
   }
   workflow.approvedVisualSampleFingerprint ??= null;
-  for (const legacyField of ["gateHistory", "creativeReviewRequested", "creativeReviewRequired", "creativeReviewReasons", "visualSampleRequested", "visualSampleRequired", "visualSampleReasons", "pendingVisualSampleFingerprint"]) delete workflow[legacyField];
-  workflow.intakeDecisionBlock ??= legacyIntakeMissing && workflow.currentState !== "intake";
+  for (const legacyField of ["gateHistory", "creativeReviewRequested", "creativeReviewRequired", "creativeReviewReasons", "visualSampleRequested", "visualSampleRequired", "visualSampleReasons", "pendingVisualSampleFingerprint", "intakeDecisionBlock"]) delete workflow[legacyField];
   workflow.gates ??= {};
   if (workflow.pendingGate && workflow.gates[workflow.pendingGate]) {
     workflow.gates[workflow.pendingGate].revisionId ??= workflow.revisionId;
@@ -156,14 +158,6 @@ export const beginWorkflowRevision = (workflow, now, reason, options = {}) => {
   if (options.invalidateVisualPlan !== false) workflow.visualPlanSha256 = null;
 };
 
-export const intakeResolved = (workflow) => workflow.captionModeAcknowledged === true
-  && workflow.referenceScriptAcknowledged === true
-  && ["none", "provided"].includes(workflow.referenceScriptStatus);
-
-export const refreshIntakeBlock = (workflow) => {
-  workflow.intakeDecisionBlock = workflow.currentState === "intake" ? false : !intakeResolved(workflow);
-};
-
 export const mirrorWorkflowToProject = (workflowPath, workflow) => {
   const projectPath = path.join(path.dirname(workflowPath), "project.json");
   if (!fs.existsSync(projectPath)) return;
@@ -180,7 +174,6 @@ export const mirrorWorkflowToProject = (workflowPath, workflow) => {
     "referenceScriptAcknowledged",
     "referenceScriptPath",
     "referenceScriptSha256",
-    "intakeDecisionBlock",
     "authoritativeMediaPath",
     "authoritativeMediaSha256",
     "revisionId",

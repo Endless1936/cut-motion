@@ -180,6 +180,18 @@ done
 node -e 'const fs=require("fs"); if(fs.statSync(process.argv[1]).ino!==fs.statSync(process.argv[2]).ino) process.exit(1)' \
   "$media_job/roughcut/a-roll.mp4" "$media_job/hyperframes/assets/input-video.mp4" \
   || { echo "HyperFrames input did not reuse the rough cut through a hard link" >&2; exit 1; }
+diagnostic_path="$(node "$repository_root/scripts/inspect-media-window.mjs" "$media_job" roughcut/a-roll.mp4 0.2 1.8 --frames 6 --label seam-smoke 2>/dev/null)"
+[[ -f "$media_job/$diagnostic_path" ]] || { echo "Filmstrip-waveform diagnostic was not created" >&2; exit 1; }
+diagnostic_size="$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0:s=x "$media_job/$diagnostic_path")"
+[[ "$diagnostic_size" == "1440x400" ]] || { echo "Diagnostic dimensions are incorrect: $diagnostic_size" >&2; exit 1; }
+if node "$repository_root/scripts/inspect-media-window.mjs" "$media_job" ../input.mp4 0 1 >/dev/null 2>&1; then
+  echo "Diagnostic unexpectedly accepted media outside the job" >&2
+  exit 1
+fi
+if node "$repository_root/scripts/inspect-media-window.mjs" "$media_job" roughcut/a-roll.mp4 0 9 >/dev/null 2>&1; then
+  echo "Diagnostic unexpectedly accepted an oversized scan window" >&2
+  exit 1
+fi
 known_good_sha="$(sha256_file "$media_job/roughcut/a-roll.mp4")"
 printf 'invalid media\n' > "$trim_smoke_directory/invalid-export.mp4"
 if node "$repository_root/scripts/promote-job-media.mjs" "$media_job" roughcut "$trim_smoke_directory/invalid-export.mp4" --consume-source >/dev/null 2>&1; then
@@ -401,8 +413,6 @@ cat > "$state_smoke_directory/state/trim-plan.json" <<'EOF'
 }
 EOF
 printf '# Motion Plan\n\n| Time | Audio phrase |\n| --- | --- |\n| 0–1.5 | 关键帧 / GSAP |\n| 1.5–3 | 30 FPS / 实时同步 |\n\n- Caption mode: subtitles\n' > "$state_smoke_directory/docs/motion-plan.md"
-node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" set-caption-mode subtitles --actor user >/dev/null
-node "$repository_root/scripts/register-reference-script.mjs" "$state_smoke_directory/state/workflow.json" none --actor user >/dev/null
 node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" advance >/dev/null
 jq '[.segments | to_entries[] | {
   id: ("speech-" + ((.key + 1) | tostring)),
@@ -422,8 +432,10 @@ node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state
 node "$repository_root/scripts/create-transcript-reconciliation.mjs" "$state_smoke_directory" roughcut/a-roll.mp4 "$state_smoke_directory/state/reconciliation-items.json" >/dev/null
 node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" advance --artifact roughcut/a-roll.mp4 >/dev/null
 jq -e '.currentState == "rough-cut-review" and .pendingGate == "rough-cut-review" and .gates["rough-cut-review"].artifact == "roughcut/a-roll.mp4"' "$state_smoke_directory/state/workflow.json" >/dev/null
+node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" set-caption-mode subtitles --actor agent --note "Talking-head release benefits from readable captions" >/dev/null
+node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" set-axis-mode a-axis-overlay --actor agent --note "No supporting B-axis media was supplied" >/dev/null
 node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" approve --actor user --note approved >/dev/null
-jq -e '.currentState == "motion-plan" and .gates["rough-cut-review"].status == "approved" and .gates["rough-cut-review"].artifact == "roughcut/a-roll.mp4"' "$state_smoke_directory/state/workflow.json" >/dev/null
+jq -e '.currentState == "motion-plan" and .captionModeAcknowledged == true and .visualAxisModeAcknowledged == true and .referenceScriptAcknowledged == true and .gates["rough-cut-review"].status == "approved" and .gates["rough-cut-review"].artifact == "roughcut/a-roll.mp4"' "$state_smoke_directory/state/workflow.json" >/dev/null
 if node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" advance --artifact docs/motion-plan.md >/dev/null 2>&1; then
   echo "Motion-plan advancement unexpectedly bypassed creative confirmation" >&2
   exit 1
@@ -434,6 +446,7 @@ cp "$repository_root/examples/caption-reference.example.txt" "$state_smoke_direc
 cp "$repository_root/templates/job/caption-lexicon.json" "$state_smoke_directory/captions/caption-lexicon.json"
 cp "$repository_root/examples/caption-review-plan.example.json" "$state_smoke_directory/captions/caption-review-plan.json"
 jq '.storyboard.beatCount = 2 | .review.status = "ready" | .visualAxisMode = "b-axis-stage" | .captionModeDecision = {"status":"acknowledged","source":"user"}' "$repository_root/templates/job/creative-confirmation.json" > "$state_smoke_directory/state/creative-confirmation.json"
+node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" set-axis-mode b-axis-stage --actor user --note "Approve the fixture B-axis stage" >/dev/null
 node "$repository_root/scripts/build-caption-review-plan.mjs" "$state_smoke_directory" >/dev/null
 invalid_state_smoke_map="$(mktemp)"
 jq 'del(.beats[0].stillFrameValue)' "$state_smoke_directory/state/beat-map.json" > "$invalid_state_smoke_map"
@@ -460,7 +473,6 @@ cp "$repository_root/examples/beat-map.subtitles.example.json" "$state_smoke_dir
 } >> "$state_smoke_directory/docs/creative-confirmation.md"
 node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" advance --artifact docs/motion-plan.md >/dev/null
 jq -e '.currentState == "motion-plan-review" and .pendingGate == "motion-plan-review"' "$state_smoke_directory/state/workflow.json" >/dev/null
-node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" set-axis-mode b-axis-stage --actor user >/dev/null
 node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" set-mode auto --actor user >/dev/null
 jq -e '.currentState == "visual-sample" and .captionModeAcknowledged == true and .gates["motion-plan-review"].status == "auto-approved" and .gates["motion-plan-review"].artifact == "docs/motion-plan.md"' "$state_smoke_directory/state/workflow.json" >/dev/null
 black_video="$(mktemp).mp4"
@@ -611,13 +623,8 @@ for required_directory in input state roughcut docs captions hyperframes preview
   [[ -d "$scaffold_job/$required_directory" ]] || { echo "Missing scaffold directory: $required_directory" >&2; exit 1; }
 done
 jq -e '.mode == "auto" and .captionMode == "subtitles" and .captionModeSource == "user" and .captionModeAcknowledged == true and .currentState == "intake"' "$scaffold_job/state/workflow.json" >/dev/null
-if node "$repository_root/scripts/workflow-state.mjs" "$scaffold_job/state/workflow.json" advance >/dev/null 2>&1; then
-  echo "Intake unexpectedly advanced without a reference-script decision" >&2
-  exit 1
-fi
-node "$repository_root/scripts/register-reference-script.mjs" "$scaffold_job/state/workflow.json" none --actor user >/dev/null
 node "$repository_root/scripts/workflow-state.mjs" "$scaffold_job/state/workflow.json" advance >/dev/null
-jq -e '.currentState == "transcription" and .referenceScriptStatus == "none" and .referenceScriptAcknowledged == true' "$scaffold_job/state/workflow.json" >/dev/null
+jq -e '.currentState == "transcription" and .referenceScriptStatus == "none" and .referenceScriptAcknowledged == false' "$scaffold_job/state/workflow.json" >/dev/null
 if "$repository_root/scripts/scaffold-project.sh" "$scaffold_job" "$scaffold_source" review motion-copy >/dev/null 2>&1; then
   echo "Scaffold unexpectedly overwrote a non-empty job directory" >&2
   exit 1

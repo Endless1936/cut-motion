@@ -7,11 +7,9 @@ MotionScript turns a talking-head video and an optional reference script into a 
 ## Minimum input
 
 - A local talking-head video.
-- An explicit caption-mode decision: `subtitles` (recommended default) or `motion-copy`.
-- An explicit reference-script decision: supplied text/Markdown or none.
-- Optional output aspect, style references, and autonomy mode.
+- Optional preferences: caption mode, reference script, visual-axis strategy, output aspect, style references, and autonomy mode.
 
-Ask both intake questions together after receiving the media. A supplied script is a high-priority reference, never ground truth; the recording remains authoritative.
+If media is missing, ask for its local path and stop. After receiving it, ask once for any known preferences without blocking progress when the user has none. A supplied script is a high-priority reference, never ground truth; the recording remains authoritative.
 
 ## Required outputs
 
@@ -97,7 +95,7 @@ Do not interpret silence as approval in `review` mode.
 
 Completed jobs stay in the same job directory when the user requests revision. Use `reopen`: editorial cuts return to `rough-cut`, MG structure or copy returns to `motion-plan`, parameter-only visual changes return to `composition`, and encoding-only changes return to `render`. Only affected gates become `superseded`; delivery-only revision retains final-preview approval. Render a delivery revision to `output/final.candidate.mp4`; successful `render` advancement atomically promotes it to `output/final.mp4`, so the last validated delivery remains available until replacement passes.
 
-The `final-preview` is a standard-quality review artifact: it exists to approve picture, timing, copy, and audio before spending time on delivery encoding. When presenting it, explicitly say that approval triggers a separate high-quality render with identical editorial content, stronger delivery encoding, and final media verification. After approval, state that the high-quality `output/final.mp4` has been generated and why this delivery step follows the preview.
+The `final-preview` is rendered with HyperFrames `standard` quality; the final delivery uses `high` quality. Both use the same composition, resolution, frame rate, timing, and audio. When presenting the preview, explicitly say that approval triggers the stronger delivery encode and final media verification. After approval, state that the high-quality `output/final.mp4` has been generated and why this delivery step follows the preview.
 
 ## Caption modes
 
@@ -106,7 +104,7 @@ The `final-preview` is a standard-quality review artifact: it exists to approve 
 - `motion-copy` is the no-subtitle mode. Every spoken phrase appears inside the designed motion; there is no separate subtitle layer.
 - `subtitles` is the default release path. Captions carry the spoken transcript; motion graphics carry only supplemental meaning such as diagrams, tool labels, counters, comparisons, icons, and semantic emphasis.
 
-Propose `subtitles`, but never infer either intake answer from silence. The job cannot leave `intake` until caption mode and reference-script status are acknowledged. A late caption-mode change at or after planning returns to `motion-plan`.
+If the user has no caption preference, analyze the locked edit and recommend `subtitles` or `motion-copy` before rough-cut approval. Accepting that review also accepts the stated caption, reference-script, and visual-axis recommendations. A late caption-mode change at or after planning returns to `motion-plan`.
 
 For `subtitles` mode:
 
@@ -133,34 +131,34 @@ Use these user-facing names; do not call them A-roll and B-roll:
 - **A-axis overlay mode:** the talking-head video remains full-frame and localized MG appears above it.
 - **B-axis stage mode:** motion design owns the full frame and the speaker may remain in a protected live PiP.
 
-The creative-confirmation package must state the active axis mode and briefly define both modes. In `subtitles`, propose A-axis overlay mode by default and continue without a separate choice only when no B-axis scene is recommended. If any B-axis stage is proposed, or the visual treatment would materially change speaker visibility, ask the user to choose `A-axis`, `B-axis`, or a documented hybrid before approval. Record the decision in `state/project.json` and `state/creative-confirmation.json`.
+Infer the axis recommendation from the locked edit, content-display needs, and available supporting media. The rough-cut review states the recommendation and its reason; approval records it without another prompt. The creative-confirmation package still defines both modes. Any later B-axis stage or material speaker-visibility change requires explicit user approval. Record decisions in `state/project.json` and `state/creative-confirmation.json`.
 
 ## Canonical workflow
 
 ### 0. Environment preflight
 
-Before creating a job, inspect the active Agent tool surface for ChatCut and HyperFrames, then run:
+Before creating a job, inspect the active Agent tool surface for ChatCut, then run:
 
 ```bash
 ./scripts/check-environment.sh check
 ```
 
-ChatCut and HyperFrames plugins are Agent integrations. The shell preflight checks only the local runtime; it cannot reliably discover plugins loaded into the current Agent session.
+ChatCut is an Agent integration and cannot be reliably discovered from the shell. HyperFrames Agent integration is optional authoring guidance; the required renderer is the exact job-local CLI resolved below.
 
-If any required plugin or local dependency is unavailable:
+If required ChatCut or a local dependency is unavailable:
 
 1. Explain the missing items, their purpose, and the exact installation scope in one concise prompt.
 2. Wait for explicit user approval. Do not install packages, alter global Agent configuration, or start OAuth before approval.
-3. After approval, install the approved local dependencies, install or authenticate the approved Agent plugin using its official host-specific method, and run the preflight again.
+3. For ChatCut, after approval instruct the active Agent with `Read https://chatcut.io/chatgpt to install and use the ChatCut plugin` in Codex or `Read https://chatcut.io/claude to install and use the ChatCut plugin` in Claude Code. Do not add a deterministic ChatCut installer to this repository.
 4. After a job is scaffolded, run `./scripts/check-environment.sh install-job jobs/<job-id> --yes` only after approval. It must first search the configured npm `_npx` cache for the exact declared HyperFrames version and reuse it through a job-local package symlink. Download HyperFrames only when no exact cache exists. Resolve GSAP independently so a missing GSAP package never forces a second HyperFrames download.
 
-For Claude Code, ChatCut's official install guide is `https://chatcut.io/claude`. For Codex and other Agent hosts, use the host's ChatCut and HyperFrames plugin installation flow. The `subtitles` mode cannot proceed past rough cut without ChatCut; `motion-copy` may use the recorded FFmpeg fallback. HyperFrames plugin availability does not replace the task-local CLI resolution performed by `install-job`; that resolution may be a cache symlink rather than a fresh npm download.
+The `subtitles` mode cannot proceed past rough cut without ChatCut; `motion-copy` may use the recorded FFmpeg fallback. HyperFrames requires no global install: `install-job` reuses an exact `_npx` cache entry when available and otherwise installs the pinned npm dependency inside the job.
 
 ### 1. Intake and probe
 
 1. Create a job with `scripts/scaffold-project.sh`.
 2. Copy or link the source into `input/`; never modify it.
-3. Ask together: `subtitles` or `motion-copy`, and reference script or none. Record the first with `set-caption-mode` and the second with `scripts/register-reference-script.mjs`.
+3. Ask once for optional caption, reference-script, and visual-axis preferences. Record supplied choices; otherwise keep them deferred and continue.
 4. Probe duration, dimensions, frame rate, codecs, sample rate, and rotation with FFprobe.
 5. Normalize the project timeline to the source frame rate unless the user specifies another rate, then save the resolved inputs and defaults.
 
@@ -175,11 +173,14 @@ For Claude Code, ChatCut's official install guide is `https://chatcut.io/claude`
 
 1. Create or target a ChatCut project and import the source.
 2. Build an editable talking-head timeline before effects.
-3. Remove clear false starts, duplicated takes, and long empty sections. Preserve complete meaning, natural breath, and intentional comic or rhetorical timing.
+3. Remove clear false starts, duplicated takes, and long empty sections. Use the non-blocking editorial heuristics in `docs/talking-head-trim-standard.md`; preserve complete meaning, intentional repetition or self-correction, natural breath, and comic or rhetorical timing.
 4. Before rough-cut review, complete the precision-trim procedure below. Transcript meaning selects the take, multi-threshold acoustic evidence locates speech, and visible performance distinguishes a natural pause from a reading or reset pause.
-5. Verify every seam individually and write the audited `state/trim-plan.json`. There must be no clipped phoneme, unintended gaze or body reset, black gap, frozen item, overlap, or detached audio.
-6. Promote the explicit ChatCut export with `scripts/promote-job-media.mjs <job> roughcut <export> --consume-source`. It atomically replaces `roughcut/a-roll.mp4`, refreshes the HyperFrames input through a hard link when possible, and leaves only the canonical rough cut. User approval locks this exact media and trim-plan fingerprint.
-7. For `subtitles`, refresh ChatCut captions against the locked edited-audio timeline as raw timing and wording evidence, disable its render track, and inspect the clean export for residual pixels. Released wording is approved only in the creative confirmation package.
+5. When a cut, take, supporting visual, or axis recommendation remains ambiguous, run `node scripts/inspect-media-window.mjs <job> <job-relative-media> <start> <end>` on the smallest useful window, normally one to two seconds around the decision. It creates a filmstrip-plus-waveform diagnostic under `checkpoints/diagnostics/`. Never batch-scan every utterance.
+6. Verify every seam individually and write the audited `state/trim-plan.json`. There must be no clipped phoneme, unintended gaze or body reset, black gap, frozen item, overlap, or detached audio.
+7. Promote the explicit ChatCut export with `scripts/promote-job-media.mjs <job> roughcut <export> --consume-source`. It atomically replaces `roughcut/a-roll.mp4`, refreshes the HyperFrames input through a hard link when possible, and leaves only the canonical rough cut. User approval locks this exact media and trim-plan fingerprint.
+8. Before presenting the rough cut, record any deferred caption and axis recommendations with `set-caption-mode` and `set-axis-mode` using `--actor agent --note <reason>`. Base axis choice on speaking-versus-demonstration content and usable supporting media; use an on-demand diagnostic when visual value or face continuity is uncertain.
+9. Present the locked edit and recommendations together. Approval locks the edit and accepts the stated caption mode, reference-script status, and axis strategy in one interaction.
+10. For `subtitles`, refresh ChatCut captions against the locked edited-audio timeline as raw timing and wording evidence, disable its render track, and inspect the clean export for residual pixels. Released wording is approved only in the creative confirmation package.
 
 The shared baseline for both caption modes is: protected regions take precedence over decoration; protect the face, PiP, product evidence, UI, and any active caption; check text wrapping, entrance/peak/hold/exit bounds, and audio continuity before adding decorative motion. Caption mode changes only how speech is represented and how much motion is appropriate, not the rough-cut, source-lock, safe-area, or QA discipline.
 
@@ -310,8 +311,8 @@ Run all gates in `docs/quality-gates.md`:
 5. Review-grid inspection against `examples/gold-standard/reference-frames` for density, scale, surface cleanliness, and hierarchy.
 6. Audio inspection for new silence, clipped syllables, and accumulated sync drift.
 7. Run `scripts/run-validation-check.mjs` for every check declared by `config/validation-evidence-contracts.json`; only its implementation-bound, hash-bound receipts are accepted. The reviewed media cannot serve as its own evidence.
-8. Draft render, then final preview.
-9. High-quality render only after approval in `review` mode. It must preserve the approved preview's editorial content while using delivery-quality encoding.
+8. Render the final preview with `npm run render:preview`, which uses HyperFrames `standard` quality.
+9. After approval in `review` mode, render with `npm run render`, which uses HyperFrames `high` quality. It must preserve the approved preview's editorial content.
 10. Verify output existence, duration, frame rate, dimensions, and audio stream.
 
 Only canonical large media persists: immutable `input/source.*`, `roughcut/a-roll.mp4`, current visual/final previews, HyperFrames input, and `output/final.mp4`. Use `promote-job-media.mjs` for explicit external exports; it must reject immutable input, escaped directories, and approved artifacts. Never scan download folders or delete unregistered user files.

@@ -24,6 +24,14 @@ Convert milliseconds to the source frame grid only after calculating the boundar
 
 Cut to the acoustic boundary when the speaker has stopped delivering and entered a reset. Do not retain 180–400 ms merely because it falls at a sentence or topic boundary. Conversely, do not compress an intentional pause to 80 ms when eye contact, pose, breath, and meaning remain continuous.
 
+## Editorial heuristics
+
+These guide ChatCut selection and Agent judgment. They do not add schema fields, validator failures, or review gates.
+
+- **Repeated expression:** remove repetitions that add no information. Choose the take with the best completeness, accuracy, fluency, performance, and visual continuity; prefer the later take only when quality is otherwise comparable. Preserve intentional emphasis, recap, and comic repetition.
+- **Correction and restart:** remove confirmed slips, failed openings, and production chatter such as requests to restart, then keep the successful delivery. Preserve meaningful negation, contrast, and rhetorical self-correction.
+- **Breath and pacing:** remove reading, searching, restart preparation, and empty delay while retaining natural breath and pauses needed for comprehension or emphasis. Prefer a conservative boundary when a tighter cut creates a distracting gaze, mouth, or posture jump.
+
 ## Seam classification
 
 Preserve a pause when at least one of these is true and no reset signal is present:
@@ -41,6 +49,8 @@ Remove a pause when one or more of these is visible or audible:
 - room tone or breath noise extends well beyond the last spoken phoneme.
 
 When evidence conflicts, protect speech with 50–120 ms of padding, record low confidence, and surface only that seam for review.
+
+Use `scripts/inspect-media-window.mjs` only for conflicting or low-confidence evidence. Its aligned filmstrip and waveform help classify gaze, mouth, posture, and audio continuity around the decision; it is internal diagnostic evidence, not a required artifact for every seam or a new review gate.
 
 ## Required trim-plan record
 

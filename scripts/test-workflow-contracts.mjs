@@ -89,7 +89,6 @@ try {
     reopenWorkflow.completed = true;
     reopenWorkflow.referenceScriptStatus = "none";
     reopenWorkflow.referenceScriptAcknowledged = true;
-    reopenWorkflow.intakeDecisionBlock = false;
     reopenWorkflow.gates["rough-cut-review"] = { status: "approved", revisionId: 1 };
     reopenWorkflow.gates["motion-plan-review"] = { status: "approved", revisionId: 1 };
     reopenWorkflow.gates["visual-sample-review"] = { status: "approved", revisionId: 1 };
@@ -180,17 +179,28 @@ try {
 
   const intakeJob = scaffold("intake");
   const intakeWorkflow = path.join(intakeJob, "state", "workflow.json");
-  nodeScript("workflow-state.mjs", [intakeWorkflow, "advance"], false);
-  nodeScript("workflow-state.mjs", [intakeWorkflow, "set-caption-mode", "subtitles", "--actor", "user"]);
-  nodeScript("workflow-state.mjs", [intakeWorkflow, "advance"], false);
+  nodeScript("workflow-state.mjs", [intakeWorkflow, "advance"]);
+  const deferredIntake = readJson(intakeWorkflow);
+  assert.equal(deferredIntake.currentState, "transcription");
+  assert.equal(deferredIntake.captionModeAcknowledged, false);
+  assert.equal(deferredIntake.referenceScriptStatus, "none");
+  assert.equal(deferredIntake.referenceScriptAcknowledged, false);
+  nodeScript("workflow-state.mjs", [intakeWorkflow, "set-caption-mode", "subtitles", "--actor", "agent"], false, /require --note/);
+  nodeScript("workflow-state.mjs", [intakeWorkflow, "set-caption-mode", "subtitles", "--actor", "agent", "--note", "Talking-head release benefits from readable captions"]);
+  nodeScript("workflow-state.mjs", [intakeWorkflow, "set-axis-mode", "a-axis-overlay", "--actor", "agent", "--note", "No supporting B-axis media was supplied"]);
+  assert.equal(readJson(intakeWorkflow).captionModeSource, "auto");
+  assert.equal(readJson(intakeWorkflow).visualAxisModeSource, "auto");
+
+  const referenceJob = scaffold("reference");
+  const referenceWorkflow = path.join(referenceJob, "state", "workflow.json");
   const referenceSource = path.join(temporaryRoot, "reference.md");
   fs.writeFileSync(referenceSource, "参考稿\n");
-  nodeScript("register-reference-script.mjs", [intakeWorkflow, "provided", referenceSource, "--actor", "user"]);
-  const registered = readJson(intakeWorkflow);
+  nodeScript("register-reference-script.mjs", [referenceWorkflow, "provided", referenceSource, "--actor", "user"]);
+  const registered = readJson(referenceWorkflow);
   assert.equal(registered.referenceScriptStatus, "provided");
   assert.match(registered.referenceScriptPath, /^input\/reference-scripts\/[a-f0-9]{64}\.txt$/);
-  fs.appendFileSync(path.join(intakeJob, registered.referenceScriptPath), "tampered");
-  nodeScript("workflow-state.mjs", [intakeWorkflow, "advance"], false);
+  fs.appendFileSync(path.join(referenceJob, registered.referenceScriptPath), "tampered");
+  nodeScript("workflow-state.mjs", [referenceWorkflow, "advance"], false);
   const binaryReference = path.join(temporaryRoot, "binary.txt");
   fs.writeFileSync(binaryReference, Buffer.from([0, 1, 2]));
   nodeScript("register-reference-script.mjs", [intakeWorkflow, "provided", binaryReference], false);
@@ -215,10 +225,9 @@ try {
   delete legacy.referenceScriptAcknowledged;
   delete legacy.referenceScriptPath;
   delete legacy.referenceScriptSha256;
-  delete legacy.intakeDecisionBlock;
   writeJsonAtomic(legacyWorkflowPath, legacy);
   nodeScript("workflow-state.mjs", [legacyWorkflowPath, "status"]);
-  assert.equal(readJson(legacyWorkflowPath).intakeDecisionBlock, true);
+  assert.equal("intakeDecisionBlock" in readJson(legacyWorkflowPath), false);
   nodeScript("workflow-state.mjs", [legacyWorkflowPath, "set-mode", "auto"], false);
   fs.mkdirSync(path.join(legacyJob, "previews"), { recursive: true });
   fs.writeFileSync(path.join(legacyJob, "previews", "visual-sample.mp4"), "not video");
@@ -274,7 +283,6 @@ try {
   nodeScript("workflow-state.mjs", [legacyWorkflowPath, "set-caption-mode", "subtitles", "--actor", "user"]);
   nodeScript("register-reference-script.mjs", [legacyWorkflowPath, "none", "--actor", "user"]);
   assert.equal(readJson(legacyWorkflowPath).currentState, "visual-sample-review");
-  assert.equal(readJson(legacyWorkflowPath).intakeDecisionBlock, false);
   nodeScript("workflow-state.mjs", [legacyWorkflowPath, "set-mode", "auto"], false);
 
   const lateJob = scaffold("late", true);

@@ -12,13 +12,11 @@ import {
   computeValidationBundleSha256,
   computeVisualSampleFingerprint,
   ensureWorkflowDefaults,
-  intakeResolved,
   invalidateCreativeArtifacts,
   isPathInside,
   jobRootForWorkflow,
   readJson,
   recoverTranscriptTransaction,
-  refreshIntakeBlock,
   saveWorkflow,
   sha256File,
   validateActiveReference,
@@ -427,6 +425,7 @@ const autoApproveGate = () => {
   const gate = workflow.currentState;
   const gateStage = stages[gate];
   validateGateArtifact(gate);
+  if (gate === "rough-cut-review") acceptDeferredPreferences("auto");
   if (gate === "motion-plan-review") approveCreativePackage(note ?? "Validated recommended creative package", "agent");
   workflow.gates[gate] = {
     ...workflow.gates[gate],
@@ -453,14 +452,22 @@ const invalidateCreativeConfirmation = () => {
   invalidateCreativeArtifacts(jobRoot);
 };
 
-const syncCaptionModeArtifacts = (captionMode, resetDocuments) => {
+const syncPreferenceArtifacts = (resetDocuments = false) => {
   const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
   if (!fs.existsSync(confirmationPath)) return;
   const confirmation = readJson(confirmationPath);
-  confirmation.captionMode = captionMode;
-  confirmation.captionModeDecision = { status: "acknowledged", source: "user" };
+  confirmation.captionMode = workflow.captionMode;
+  confirmation.captionModeDecision = {
+    status: workflow.captionModeAcknowledged ? "acknowledged" : "default-proposed",
+    source: workflow.captionModeSource
+  };
+  confirmation.visualAxisMode = workflow.visualAxisMode;
+  confirmation.visualAxisModeDecision = {
+    status: workflow.visualAxisModeAcknowledged ? "acknowledged" : "default-proposed",
+    source: workflow.visualAxisModeSource
+  };
   confirmation.storyboard ??= {};
-  if (captionMode === "subtitles") {
+  if (workflow.captionMode === "subtitles") {
     confirmation.storyboard.captionPlan = "docs/caption-plan.md";
     confirmation.visualSample = { required: false, scope: "caption-only", requiredAxes: [], purpose: "verify-caption-layout" };
   } else {
@@ -472,12 +479,44 @@ const syncCaptionModeArtifacts = (captionMode, resetDocuments) => {
   if (!resetDocuments) return;
   const templates = path.join(scriptDirectory, "..", "templates", "job");
   fs.copyFileSync(
-    path.join(templates, captionMode === "subtitles" ? "creative-confirmation.md" : "creative-confirmation.motion-copy.md"),
+    path.join(templates, workflow.captionMode === "subtitles" ? "creative-confirmation.md" : "creative-confirmation.motion-copy.md"),
     path.join(jobRoot, "docs", "creative-confirmation.md")
   );
   const captionPlanPath = path.join(jobRoot, "docs", "caption-plan.md");
-  if (captionMode === "subtitles") fs.copyFileSync(path.join(templates, "caption-plan.md"), captionPlanPath);
+  if (workflow.captionMode === "subtitles") fs.copyFileSync(path.join(templates, "caption-plan.md"), captionPlanPath);
   else if (fs.existsSync(captionPlanPath)) fs.unlinkSync(captionPlanPath);
+};
+
+const acceptDeferredPreferences = (decisionSource) => {
+  if (!workflow.captionModeAcknowledged && workflow.captionModeSource !== "auto") {
+    throw new Error("Rough-cut approval requires an agent caption-mode recommendation with --note");
+  }
+  if (!workflow.visualAxisModeAcknowledged && workflow.visualAxisModeSource !== "auto") {
+    throw new Error("Rough-cut approval requires an agent visual-axis recommendation with --note");
+  }
+  let changed = false;
+  if (!workflow.captionModeAcknowledged) {
+    workflow.captionModeAcknowledged = true;
+    workflow.captionModeSource = decisionSource;
+    changed = true;
+  }
+  if (!workflow.visualAxisModeAcknowledged) {
+    workflow.visualAxisModeAcknowledged = true;
+    workflow.visualAxisModeSource = decisionSource;
+    changed = true;
+  }
+  if (!workflow.referenceScriptAcknowledged) {
+    workflow.referenceScriptAcknowledged = true;
+    changed = true;
+  }
+  if (!changed) return;
+  syncPreferenceArtifacts();
+  appendHistory(
+    "accept-deferred-preferences",
+    workflow.currentState,
+    workflow.currentState,
+    decisionSource === "user" ? "user" : "agent"
+  );
 };
 
 const approveCaptionReviewPlan = (approvalNote) => {
@@ -499,11 +538,6 @@ if (command === "status") {
   process.exit(0);
 }
 
-if ((workflow.intakeDecisionBlock || (workflow.currentState !== "intake" && !intakeResolved(workflow)))
-  && command !== "set-caption-mode") {
-  throw new Error("Legacy intake decisions are unresolved; only caption-mode and reference-script decisions are allowed");
-}
-
 if (command === "set-mode") {
   const mode = positionals[0];
   if (!['review', 'auto'].includes(mode)) throw new Error(`Invalid mode: ${mode}`);
@@ -521,12 +555,14 @@ if (command === "set-caption-mode") {
   if (!["motion-copy", "subtitles"].includes(captionMode)) throw new Error(`Invalid caption mode: ${captionMode}`);
   const previousCaptionMode = workflow.captionMode;
   const previousState = workflow.currentState;
+  const isRecommendation = actor === "agent";
+  if (isRecommendation && !note) throw new Error("Agent caption-mode recommendations require --note");
   workflow.captionMode = captionMode;
-  workflow.captionModeSource = "user";
-  workflow.captionModeAcknowledged = true;
+  workflow.captionModeSource = isRecommendation ? "auto" : "user";
+  workflow.captionModeAcknowledged = !isRecommendation;
   const planningOrLater = ["motion-plan", "motion-plan-review", "visual-sample", "visual-sample-review", "composition", "qa", "final-preview", "render", "complete"].includes(previousState);
   const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
-  syncCaptionModeArtifacts(captionMode, !planningOrLater);
+  syncPreferenceArtifacts(!planningOrLater);
   const requiresReplan = previousCaptionMode !== captionMode && planningOrLater;
   if (requiresReplan) {
     if (stages[previousState]?.gate) {
@@ -554,8 +590,6 @@ if (command === "set-caption-mode") {
       workflow.pendingCreativePackageSha256 = computePendingCreativePackageSha256(jobRoot, workflow.captionMode);
     }
   }
-  refreshIntakeBlock(workflow);
-  if (intakeResolved(workflow)) workflow.intakeDecisionBlock = false;
   save();
   console.log(`Caption mode changed: ${previousCaptionMode} → ${workflow.captionMode}; current state: ${workflow.currentState}`);
   process.exit(0);
@@ -566,19 +600,13 @@ if (command === "set-axis-mode") {
   if (!["a-axis-overlay", "b-axis-stage", "hybrid"].includes(axisMode)) throw new Error(`Invalid visual axis mode: ${axisMode}`);
   const previousAxisMode = workflow.visualAxisMode;
   const previousState = workflow.currentState;
+  const isRecommendation = actor === "agent";
+  if (isRecommendation && !note) throw new Error("Agent visual-axis recommendations require --note");
   workflow.visualAxisMode = axisMode;
-  workflow.visualAxisModeSource = "user";
-  workflow.visualAxisModeAcknowledged = true;
+  workflow.visualAxisModeSource = isRecommendation ? "auto" : "user";
+  workflow.visualAxisModeAcknowledged = !isRecommendation;
   const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
-  if (fs.existsSync(confirmationPath)) {
-    const confirmation = readJson(confirmationPath);
-    confirmation.visualAxisMode = axisMode;
-    confirmation.visualAxisModeDecision = { status: "acknowledged", source: "user" };
-    if (confirmation.captionMode === "motion-copy" && confirmation.visualSample?.scope === "axis-behavior") {
-      confirmation.visualSample.requiredAxes = axisMode === "b-axis-stage" ? ["B"] : axisMode === "hybrid" ? ["A", "B"] : ["A"];
-    }
-    writeJsonAtomic(confirmationPath, confirmation);
-  }
+  syncPreferenceArtifacts();
   const planningOrLater = ["motion-plan-review", "visual-sample", "visual-sample-review", "composition", "qa", "final-preview", "render", "complete"].includes(previousState);
   if (previousAxisMode !== axisMode && planningOrLater) {
     if (stages[previousState]?.gate) {
@@ -697,7 +725,6 @@ if (command === "advance") {
   if (currentStage.terminal) throw new Error("Workflow is already complete");
   if (currentStage.gate) throw new Error(`Gate ${workflow.currentState} requires approve or revise`);
   if (workflow.currentState === "intake") {
-    if (!intakeResolved(workflow)) throw new Error("Intake requires explicit caption-mode and reference-script decisions");
     const projectPath = path.join(jobRoot, "state", "project.json");
     if (!fs.existsSync(projectPath)) throw new Error("Project state is missing");
     const project = readJson(projectPath);
@@ -731,6 +758,9 @@ if (command === "advance") {
     }
     if (workflow.currentState === "transcription") checkReconciliation(true);
     if (workflow.currentState === "motion-plan") {
+      if (!workflow.captionModeAcknowledged || !workflow.visualAxisModeAcknowledged || !workflow.referenceScriptAcknowledged) {
+        throw new Error("Motion planning requires preferences accepted with the locked rough cut");
+      }
       const motionPlan = fs.readFileSync(artifactPath, "utf8");
       const tableRows = motionPlan.split("\n").filter((line) => /^\s*\|.*\|\s*$/.test(line));
       const hasCaptionMode = /(?:Caption mode|当前字幕模式).*?(?:motion-copy|subtitles)/i.test(motionPlan);
@@ -821,6 +851,7 @@ if (command === "advance") {
   if (!note) throw new Error(`Gate ${workflow.currentState} approval requires --note`);
   if (workflow.mode === "review" && actor !== "user") throw new Error("Review-mode approval requires actor user");
   validateGateArtifact(workflow.currentState);
+  if (workflow.currentState === "rough-cut-review") acceptDeferredPreferences("user");
   if (workflow.currentState === "motion-plan-review" && !workflow.captionModeAcknowledged) {
     throw new Error("Caption mode must be explicitly acknowledged before motion-plan approval");
   }

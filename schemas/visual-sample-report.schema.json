@@ -1,6 +1,5 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://motionscript.dev/schemas/visual-sample-report.schema.json",
   "type": "object",
   "required": ["passed", "checkedAt", "artifact", "source", "creativePackageSha256", "checks"],
   "properties": {

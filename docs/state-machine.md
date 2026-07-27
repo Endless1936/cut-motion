@@ -28,13 +28,14 @@ For subtitles, the plan gate validates recording-backed reconciled wording and s
 
 ## Intake control
 
-The Agent asks caption mode and reference-script status together. `intake → transcription` requires both explicit acknowledgements, resolved source media, and a matching SHA-256 for any provided job-local script. Legacy jobs beyond intake receive `intakeDecisionBlock` until both decisions are recorded.
+Resolved local source media is the only `intake → transcription` blocker. The Agent asks once for optional caption, reference-script, and axis preferences; missing choices remain deferred. A provided script still requires a matching SHA-256 in job-local `input/`.
 
-Creative confirmation must name and define A-axis overlay mode and B-axis stage mode. Subtitle projects default to A-axis overlay mode. If the plan introduces any B-axis stage or materially reduces speaker visibility, the gate waits for an explicit A-axis, B-axis, or hybrid choice; otherwise the stated A-axis default is sufficient.
+Before rough-cut approval, the Agent records reasoned recommendations for every deferred caption and axis choice. The same approval locks the edit and accepts those recommendations; it is not a new gate. Creative confirmation still requires explicit approval for any later B-axis stage or material reduction in speaker visibility.
 
 Record axis choices through the state machine so history, mirrors, and invalidation stay consistent:
 
 ```bash
+node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-axis-mode a-axis-overlay --actor agent --note "Talking head dominates and no usable B-axis media was supplied"
 node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-axis-mode a-axis-overlay --actor user --note "Keep the speaker full-frame"
 node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-axis-mode b-axis-stage --actor user --note "Approve the full MG stage"
 node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-axis-mode hybrid --actor user --note "Approve the named B-axis passages"
@@ -44,7 +45,13 @@ node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-axis-mode 
 
 ## Caption-mode control
 
-Caption mode is selected at intake through the scaffold argument or the user request; omitted input proposes `subtitles` and leaves `captionModeAcknowledged` false. The agent records an explicit choice with:
+Caption mode may be selected at intake. If omitted, the Agent records a recommendation after content analysis:
+
+```bash
+node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-caption-mode subtitles --actor agent --note "Readable captions fit this information-dense talking head"
+```
+
+The user may choose directly with:
 
 ```bash
 node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-caption-mode subtitles --actor user --note "Use recording-backed semantic captions"

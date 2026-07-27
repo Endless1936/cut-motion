@@ -1,6 +1,5 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://motionscript.dev/schemas/creative-confirmation.schema.json",
   "title": "MotionScript Creative Confirmation",
   "type": "object",
   "required": ["schemaVersion", "captionMode", "captionModeDecision", "visualAxisMode", "visualAxisModeDecision", "storyboard", "authorities", "changeControl", "axisPolicy", "visualSample", "review"],

@@ -14,5 +14,5 @@ jobs:
           node-version: 22
       - name: Install media tools
         run: sudo apt-get update && sudo apt-get install -y ffmpeg jq
-      - name: Verify schemas and scripts
+      - name: Verify repository
         run: bash scripts/verify-repository.sh

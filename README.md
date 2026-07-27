@@ -9,7 +9,7 @@ It is designed for Codex, Claude Code, and similar coding agents. It is not a no
 ## What it does
 
 ```text
-Talking-head video + two explicit intake decisions
+Talking-head video + optional production preferences
   → recording-backed transcription and optional script reconciliation
   → editable ChatCut rough cut + FFmpeg precision edit lock
   → phrase-level beat map
@@ -20,14 +20,19 @@ Talking-head video + two explicit intake decisions
 
 ## Requirements
 
-MotionScript has two dependency layers. Agent plugins provide editing and authoring capabilities; local tools execute the repository scripts and render the final video. Both are required for the default release path.
+MotionScript has two dependency layers. ChatCut provides the Agent-side editing integration; local tools and the job-local HyperFrames CLI execute repository scripts and render the final video.
 
-### Agent plugins
+### Agent integration
 
 - **ChatCut** — required for the default `subtitles` flow: it creates the editable rough cut and raw caption timing evidence. In `motion-copy`, it is preferred and the workflow can use a conservative FFmpeg fallback when unavailable.
-- **HyperFrames** — the Agent plugin supplies composition-authoring guidance and tools. It does **not** replace the local HyperFrames CLI used by this repository to validate, preview, snapshot, and render HTML compositions.
+- **HyperFrames Agent integration** — optional but recommended authoring guidance. Rendering and validation use the exact job-local HyperFrames CLI version declared by this repository.
 
-For Claude Code, install ChatCut using ChatCut's [official guide](https://chatcut.io/claude), or paste this prompt into a new Claude Code chat: `Read https://chatcut.io/claude to install and use the ChatCut plugin`. In Codex or another Agent host, install and authenticate the corresponding ChatCut and HyperFrames plugins through that host. The workflow checks the active Agent tool surface before it begins a job.
+When ChatCut is unavailable, the Agent must ask once before installation and then follow the official host prompt rather than running a repository installer:
+
+- Codex: `Read https://chatcut.io/chatgpt to install and use the ChatCut plugin`
+- Claude Code: `Read https://chatcut.io/claude to install and use the ChatCut plugin`
+
+After installation or authentication, verify that ChatCut is visible in the active Agent session.
 
 ### Required local tools
 
@@ -35,7 +40,7 @@ For Claude Code, install ChatCut using ChatCut's [official guide](https://chatcu
 - Node.js 22 or newer with `npm` and `npx`.
 - FFmpeg and FFprobe with H.264/AAC support.
 - `jq` for trim-plan processing.
-- A properly licensed local display font in WOFF2 format. The default workflow expects `smiley-sans-oblique.woff2`; it is intentionally not bundled with this repository.
+- [Smiley Sans](https://github.com/atelier-anchor/smiley-sans/releases) in WOFF2 format. It is released under SIL Open Font License 1.1 but is not bundled; copy the downloaded WOFF2 file into the job using the expected `smiley-sans-oblique.woff2` filename.
 
 Run the local preflight at any time:
 
@@ -56,7 +61,7 @@ If anything is missing, the Agent must explain the required change and ask for o
 
 ### Per-job render runtime
 
-HyperFrames and GSAP are job-resolved dependencies, not global tools. After creating a job and approving dependency setup, run:
+HyperFrames and GSAP are job-resolved npm dependencies, not global tools or required global plugins. After creating a job and approving dependency setup, run:
 
 ```bash
 ./scripts/check-environment.sh install-job jobs/<job-id> --yes
@@ -64,12 +69,22 @@ mkdir -p jobs/<job-id>/hyperframes/assets/fonts
 cp /path/to/smiley-sans-oblique.woff2 jobs/<job-id>/hyperframes/assets/fonts/smiley-sans-oblique.woff2
 ```
 
-`install-job` first searches npm's local `_npx` cache for the exact declared HyperFrames version. When found, it creates a job-local symlink and does not download HyperFrames again. GSAP is reused separately or installed alone when missing. A full `npm install` is only the fallback when no matching HyperFrames cache exists. The font remains a separately supplied, licensed input asset.
+`install-job` first searches npm's local `_npx` cache for the exact declared HyperFrames version. When found, it creates a job-local symlink and does not download HyperFrames again. GSAP is reused separately or installed alone when missing. A job-local `npm install` is the fallback when no exact cache exists; no global HyperFrames installation is required.
+
+The review and delivery renders use the same composition, resolution, frame rate, timing, and audio:
+
+```bash
+cd jobs/<job-id>/hyperframes
+npm run render:preview  # HyperFrames standard quality
+npm run render          # HyperFrames high quality
+```
+
+The quality profile is the only intended encoding difference. The state machine verifies that the final delivery remains editorially identical to the approved preview.
 
 ### Required input assets
 
 - One local talking-head video.
-- An explicit choice of caption mode and whether a reference script is supplied. The recording is always transcribed; a script only assists reconciliation.
+- Optional caption-mode, reference-script, and visual-axis preferences. The Agent recommends omitted choices after analyzing the locked edit.
 - The licensed local font above; style references and aspect ratio are optional.
 
 ## Start a job
@@ -88,7 +103,7 @@ Reference script: /path/to/script.txt (or none)
 Mode: review
 ```
 
-If either intake decision is omitted, the Agent asks for the missing caption-mode or reference-script decision before transcription.
+If preferences are omitted, transcription and rough cutting continue. The locked-edit review includes reasoned caption and axis recommendations, and one approval accepts both the edit and those choices.
 
 The final two arguments are optional:
 
@@ -97,7 +112,7 @@ The final two arguments are optional:
 
 Every job receives its own isolated workspace, workflow state, review checkpoints, logs, captions directory, creative-confirmation package, motion-plan document, HyperFrames project, previews, and output directory.
 
-`review` always pauses at the locked edit and final preview. Creative confirmation appears only for MG, `motion-copy`, B-axis or hybrid treatment, transcript ambiguity, or an explicit request. A visual sample appears for first or changed motion language, or when a caption-layout precheck is explicitly requested; caption-only work otherwise proceeds to final preview. `auto` uses the same validated artifacts and never supplies missing intake decisions.
+`review` always pauses at the locked edit and final preview. Creative confirmation appears only for MG, `motion-copy`, B-axis or hybrid treatment, transcript ambiguity, or an explicit request. A visual sample appears for first or changed motion language, or when a caption-layout precheck is explicitly requested; caption-only work otherwise proceeds to final preview. `auto` uses the same validated artifacts and recorded Agent recommendations.
 
 Completed jobs can be reopened in place for a scoped rough-cut, motion-plan, composition, or delivery revision. Delivery revisions render to a candidate and replace `output/final.mp4` only after validation, while canonical media keeps only current large artifacts.
 

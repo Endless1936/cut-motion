@@ -1,9 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://motionscript.dev/schemas/workflow.schema.json",
   "title": "MotionScript Workflow State",
   "type": "object",
-  "required": ["schemaVersion", "jobId", "mode", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "intakeDecisionBlock", "reconciliationReturnState", "creativeConfirmationSha256", "pendingCreativePackageSha256", "creativeDocumentFingerprints", "authoritativeMediaPath", "authoritativeMediaSha256", "trimPlanSha256", "visualPlanSha256", "compositionArtifactPath", "compositionArtifactSha256", "revisionId", "approvedVisualSampleFingerprint", "currentState", "pendingGate", "completed", "gates", "history"],
+  "required": ["schemaVersion", "jobId", "mode", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "reconciliationReturnState", "creativeConfirmationSha256", "pendingCreativePackageSha256", "creativeDocumentFingerprints", "authoritativeMediaPath", "authoritativeMediaSha256", "trimPlanSha256", "visualPlanSha256", "compositionArtifactPath", "compositionArtifactSha256", "revisionId", "approvedVisualSampleFingerprint", "currentState", "pendingGate", "completed", "gates", "history"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": "1.0.0" },
@@ -19,7 +18,6 @@
     "referenceScriptAcknowledged": { "type": "boolean" },
     "referenceScriptPath": { "type": ["string", "null"] },
     "referenceScriptSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
-    "intakeDecisionBlock": { "type": "boolean" },
     "reconciliationReturnState": { "enum": [null, "rough-cut", "motion-plan"] },
     "creativeConfirmationSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
     "pendingCreativePackageSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },

@@ -1,6 +1,5 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://motionscript.dev/schemas/transcript-reconciliation.schema.json",
   "title": "MotionScript Transcript Reconciliation",
   "type": "object",
   "required": ["schemaVersion", "mediaFingerprint", "transcriptRevision", "referenceScript", "items", "verification"],

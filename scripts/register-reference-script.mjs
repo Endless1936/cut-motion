@@ -3,13 +3,11 @@ import path from "node:path";
 import {
   beginWorkflowRevision,
   ensureWorkflowDefaults,
-  intakeResolved,
   invalidateCreativeArtifacts,
   isPathInside,
   jobRootForWorkflow,
   readJson,
   recoverTranscriptTransaction,
-  refreshIntakeBlock,
   saveWorkflow,
   sha256Text,
   validateActiveReference
@@ -31,7 +29,6 @@ const workflowPath = path.resolve(workflowArgument);
 const jobRoot = jobRootForWorkflow(workflowPath);
 recoverTranscriptTransaction(jobRoot);
 const workflow = ensureWorkflowDefaults(readJson(workflowPath));
-const wasLegacyBlocked = workflow.intakeDecisionBlock === true;
 const now = new Date().toISOString();
 const previous = {
   status: workflow.referenceScriptStatus,
@@ -90,8 +87,7 @@ const changed = previous.status !== workflow.referenceScriptStatus
   || previous.sha256 !== workflow.referenceScriptSha256;
 const previousState = workflow.currentState;
 let invalidated = [];
-const legacyNoneResolution = wasLegacyBlocked && previous.status === "unknown" && decision === "none";
-if (changed && previousState !== "intake" && !legacyNoneResolution) {
+if (changed && previousState !== "intake") {
   const existingReturnState = previousState === "transcription" ? workflow.reconciliationReturnState : null;
   const beforeRoughCutApproval = ["transcription", "rough-cut", "rough-cut-review"].includes(previousState)
     && workflow.gates?.["rough-cut-review"]?.status !== "approved";
@@ -117,8 +113,6 @@ if (changed && previousState !== "intake" && !legacyNoneResolution) {
   workflow.pendingCreativePackageSha256 = null;
   workflow.creativeDocumentFingerprints = null;
 }
-refreshIntakeBlock(workflow);
-if (intakeResolved(workflow)) workflow.intakeDecisionBlock = false;
 workflow.history.push({
   at: now,
   action: "register-reference-script",

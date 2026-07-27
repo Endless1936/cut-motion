@@ -1,6 +1,5 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://motionscript.dev/schemas/validation-receipt.schema.json",
   "type": "object",
   "required": [
     "schemaVersion",

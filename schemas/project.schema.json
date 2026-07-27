@@ -1,9 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://motionscript.dev/schemas/project.schema.json",
   "title": "MotionScript Project",
   "type": "object",
-  "required": ["schemaVersion", "id", "mode", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "intakeDecisionBlock", "authoritativeMediaPath", "sourceVideo", "language", "width", "height", "fps", "designSystem", "status"],
+  "required": ["schemaVersion", "id", "mode", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "authoritativeMediaPath", "sourceVideo", "language", "width", "height", "fps", "designSystem", "status"],
   "properties": {
     "schemaVersion": { "const": "1.0.0" },
     "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
@@ -18,7 +17,6 @@
     "referenceScriptAcknowledged": { "type": "boolean" },
     "referenceScriptPath": { "type": ["string", "null"] },
     "referenceScriptSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
-    "intakeDecisionBlock": { "type": "boolean" },
     "authoritativeMediaPath": { "type": ["string", "null"] },
     "sourceVideo": { "type": "string", "minLength": 1 },
     "transcript": { "type": ["string", "null"] },

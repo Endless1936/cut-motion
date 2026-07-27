@@ -6,7 +6,8 @@
     "lint": "hyperframes lint",
     "check": "hyperframes check",
     "preview": "hyperframes preview",
-    "render": "hyperframes render --quality high"
+    "render:preview": "hyperframes render --quality standard --output ../previews/final-preview.mp4",
+    "render": "hyperframes render --quality high --output ../output/final.mp4"
   },
   "devDependencies": {
     "gsap": "3.13.0",
