@@ -90,13 +90,22 @@ if node "$repository_root/scripts/check-trim-plan.mjs" "$invalid_trim_audit_file
   echo "Incomplete seam audit unexpectedly passed" >&2
   exit 1
 fi
+zero_transition_trim_audit_file="$(mktemp)"
+jq '.seams[0].audioTransitionFrames = 0' "$trim_audit_file" > "$zero_transition_trim_audit_file"
+node "$repository_root/scripts/check-trim-plan.mjs" "$zero_transition_trim_audit_file" --require-audit >/dev/null
+excessive_transition_trim_audit_file="$(mktemp)"
+jq '.seams[0].audioTransitionFrames = 3' "$trim_audit_file" > "$excessive_transition_trim_audit_file"
+if node "$repository_root/scripts/check-trim-plan.mjs" "$excessive_transition_trim_audit_file" --require-audit >/dev/null 2>&1; then
+  echo "An excessive seam transition unexpectedly passed" >&2
+  exit 1
+fi
 invalid_trim_range_file="$(mktemp)"
 jq '.remove = [{"start":2,"end":3},{"start":1,"end":1.5}]' "$trim_audit_file" > "$invalid_trim_range_file"
 if node "$repository_root/scripts/check-trim-plan.mjs" "$invalid_trim_range_file" >/dev/null 2>&1; then
   echo "Out-of-order trim ranges unexpectedly passed" >&2
   exit 1
 fi
-rm -f "$trim_audit_file" "$invalid_trim_audit_file" "$invalid_trim_range_file"
+rm -f "$trim_audit_file" "$invalid_trim_audit_file" "$zero_transition_trim_audit_file" "$excessive_transition_trim_audit_file" "$invalid_trim_range_file"
 
 trim_smoke_directory="$(mktemp -d)"
 ffmpeg -loglevel error -f lavfi -i testsrc2=s=160x284:r=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 2 -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac "$trim_smoke_directory/input.mp4"
@@ -105,6 +114,23 @@ bash "$repository_root/scripts/apply-trim-plan.sh" "$trim_smoke_directory/input.
 trimmed_duration="$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$trim_smoke_directory/output.mp4")"
 awk "BEGIN { exit !($trimmed_duration > 1.4 && $trimmed_duration < 1.6) }" || { echo "Trimmed media duration is incorrect: $trimmed_duration" >&2; exit 1; }
 [[ "$(ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$trim_smoke_directory/output.mp4")" != "" ]] || { echo "Trimmed media lost audio" >&2; exit 1; }
+cat > "$trim_smoke_directory/mixed-transition-plan.json" <<'EOF'
+{
+  "source": "input.mp4",
+  "fps": 30,
+  "remove": [
+    {"start":0.4,"end":0.6,"reason":"manual","confidence":1},
+    {"start":1.2,"end":1.4,"reason":"manual","confidence":1}
+  ],
+  "trimProfile": {"audioTransitionFrames":2},
+  "seams": [
+    {"audioTransitionFrames":0},
+    {"audioTransitionFrames":2}
+  ]
+}
+EOF
+bash "$repository_root/scripts/apply-trim-plan.sh" "$trim_smoke_directory/input.mp4" "$trim_smoke_directory/mixed-transition-plan.json" "$trim_smoke_directory/mixed-transition-output.mp4" >/dev/null 2>&1
+[[ "$(ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 "$trim_smoke_directory/mixed-transition-output.mp4")" != "" ]] || { echo "Mixed seam transitions lost audio" >&2; exit 1; }
 ffmpeg -loglevel error \
   -f lavfi -i sine=frequency=440:sample_rate=48000:duration=0.95 \
   -f lavfi -i anullsrc=r=48000:cl=mono:d=0.1 \
@@ -266,25 +292,28 @@ if node "$repository_root/scripts/check-visual-plan.mjs" "$repeated_signature_ma
   echo "Undeclared repeated visual signature unexpectedly passed" >&2
   exit 1
 fi
-invalid_surface_file="$(mktemp).html"
+invalid_layout_directory="$(mktemp -d)"
+cp "$repository_root/templates/hyperframes/caption.css" "$invalid_layout_directory/caption.css"
+invalid_surface_file="$invalid_layout_directory/invalid-surface.html"
 sed 's/data-border-policy="none"/data-border-policy="solid"/' "$repository_root/templates/hyperframes/index.html" > "$invalid_surface_file"
 if node "$repository_root/scripts/check-layout-constraints.mjs" "$invalid_surface_file" "$repository_root/assets/design-system.default.json" >/dev/null 2>&1; then
   echo "Outlined generic motion container unexpectedly passed" >&2
   exit 1
 fi
-invalid_label_file="$(mktemp).html"
+invalid_label_file="$invalid_layout_directory/invalid-label.html"
 sed 's#</body>#<div class="status-badge">TOOL 01</div></body>#' "$repository_root/templates/hyperframes/index.html" > "$invalid_label_file"
 if node "$repository_root/scripts/check-layout-constraints.mjs" "$invalid_label_file" "$repository_root/assets/design-system.default.json" >/dev/null 2>&1; then
   echo "Unannotated decorative label unexpectedly passed" >&2
   exit 1
 fi
-bold_caption_file="$(mktemp).html"
+bold_caption_file="$invalid_layout_directory/bold-caption.html"
 sed 's#</head>#<style>.motion-caption-line { font-weight:700!important; font-synthesis:none; }</style></head>#' "$repository_root/templates/hyperframes/index.html" > "$bold_caption_file"
 if node "$repository_root/scripts/check-layout-constraints.mjs" "$bold_caption_file" "$repository_root/assets/design-system.default.json" >/dev/null 2>&1; then
   echo "Bold caption override unexpectedly passed" >&2
   exit 1
 fi
-rm -f "$invalid_topology_map" "$delayed_entry_map" "$skewed_reveal_map" "$repeated_signature_map" "$invalid_surface_file" "$invalid_label_file" "$bold_caption_file"
+rm -f "$invalid_topology_map" "$delayed_entry_map" "$skewed_reveal_map" "$repeated_signature_map"
+rm -rf "$invalid_layout_directory"
 node "$repository_root/scripts/test-workflow-contracts.mjs"
 
 invalid_information_file="$(mktemp).html"
@@ -380,6 +409,7 @@ cp "$repository_root/examples/transcript.example.json" "$state_smoke_directory/s
 cp "$repository_root/assets/design-system.default.json" "$state_smoke_directory/state/design-system.json"
 cp "$repository_root/templates/job/visual-sample-report.json" "$state_smoke_directory/state/visual-sample-report.json"
 cp "$repository_root/templates/job/qa-report.json" "$state_smoke_directory/state/qa-report.json"
+cp "$repository_root/templates/job/reference-script-annotations.json" "$state_smoke_directory/state/reference-script-annotations.json"
 smoke_video="$(mktemp).mp4"
 ffmpeg -loglevel error -f lavfi -i testsrc2=s=160x284:r=30 -f lavfi -i sine=frequency=440:sample_rate=48000 -t 3.2 -shortest -c:v libx264 -pix_fmt yuv420p -c:a aac "$smoke_video"
 cp "$smoke_video" "$state_smoke_directory/input/source.mov"
@@ -666,6 +696,7 @@ required_files=(
   "$repository_root/scripts/build-captions.mjs"
   "$repository_root/scripts/check-captions.mjs"
   "$repository_root/schemas/creative-confirmation.schema.json"
+  "$repository_root/schemas/reference-script-annotations.schema.json"
   "$repository_root/schemas/transcript-reconciliation.schema.json"
   "$repository_root/schemas/visual-sample-report.schema.json"
   "$repository_root/schemas/validation-receipt.schema.json"
@@ -679,6 +710,7 @@ required_files=(
   "$repository_root/scripts/check-transcript-reconciliation.mjs"
   "$repository_root/scripts/create-transcript-reconciliation.mjs"
   "$repository_root/scripts/register-reference-script.mjs"
+  "$repository_root/scripts/reference-script-annotations.mjs"
   "$repository_root/scripts/resolve-transcript-item.mjs"
   "$repository_root/scripts/run-validation-check.mjs"
   "$repository_root/scripts/test-workflow-contracts.mjs"
@@ -694,6 +726,7 @@ required_files=(
   "$repository_root/templates/job/creative-confirmation.md"
   "$repository_root/templates/job/creative-confirmation.motion-copy.md"
   "$repository_root/templates/job/transcript-reconciliation.json"
+  "$repository_root/templates/job/reference-script-annotations.json"
   "$repository_root/templates/job/visual-sample-report.json"
   "$repository_root/templates/job/qa-report.json"
   "$repository_root/templates/job/caption-plan.md"

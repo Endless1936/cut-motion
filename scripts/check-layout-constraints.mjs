@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 
 const [compositionPath, designSystemPath] = process.argv.slice(2);
 
@@ -54,6 +55,17 @@ for (const match of composition.matchAll(/<[^>]+data-motion-group=["'][^"']+["']
   }
 }
 if (designSystem.captions) {
+  const captionStylesheetPath = path.join(path.dirname(compositionPath), "caption.css");
+  if (!fs.existsSync(captionStylesheetPath)) {
+    errors.push("composition requires a sibling caption.css");
+  } else {
+    const captionStylesheet = fs.readFileSync(captionStylesheetPath, "utf8");
+    const captionLayerRule = /\.clip\.motion-caption-layer\s*\{([^}]*)\}/i.exec(captionStylesheet)?.[1] ?? "";
+    if (!/top\s*:\s*auto\s*;/i.test(captionLayerRule)
+      || !/bottom\s*:\s*var\(--caption-bottom\b/i.test(captionLayerRule)) {
+      errors.push("caption layer must override generic clip inset and preserve the configured bottom offset");
+    }
+  }
   const expectedBottomPx = designSystem.canvas.height * designSystem.captions.bottomOffsetRatio;
   if (Math.abs(designSystem.captions.bottomOffsetPx - expectedBottomPx) > 0.5) errors.push("caption bottom offset must equal its canvas ratio");
   const ratio = Number(/data-caption-bottom-ratio=["']([0-9.]+)["']/i.exec(composition)?.[1]);

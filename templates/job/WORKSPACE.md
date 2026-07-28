@@ -6,6 +6,7 @@ This directory belongs to one video job.
 - `state/workflow.json` controls progression and approvals.
 - `state/` contains machine-readable decisions.
 - `state/creative-confirmation.json` records the user-facing creative contract.
+- `state/reference-script-annotations.json` separates local `【】` visual notes from spoken reference wording.
 - `docs/creative-confirmation.md` bundles caption mode, A/B-axis rules, the storyboard, and sample scope for review.
 - `docs/motion-plan.md` is the user-reviewable animation proposal.
 - `roughcut/` contains clean A-roll exports.

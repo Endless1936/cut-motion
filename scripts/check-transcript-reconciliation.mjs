@@ -9,6 +9,7 @@ import {
   sha256File,
   validateActiveReference
 } from "./workflow-utils.mjs";
+import { buildReferenceScriptAnnotations } from "./reference-script-annotations.mjs";
 
 const argumentsList = process.argv.slice(2);
 const reconciliationArgument = argumentsList.find((argument) => !argument.startsWith("--"));
@@ -115,8 +116,25 @@ const transcriptText = transcript.segments.map((segment) => segment.text).join("
 if (normalize(classifiedSpeech) !== normalize(transcriptText)) errors.push("recorded speech is not exhaustively classified");
 if (workflow.referenceScriptStatus === "provided") {
   const referenceText = fs.readFileSync(path.resolve(jobRoot, workflow.referenceScriptPath), "utf8");
+  const expectedAnnotations = buildReferenceScriptAnnotations({
+    status: "provided",
+    path: workflow.referenceScriptPath,
+    sha256: workflow.referenceScriptSha256,
+    text: referenceText
+  });
+  const annotationsPath = path.join(jobRoot, "state", "reference-script-annotations.json");
+  if (!fs.existsSync(annotationsPath)) {
+    errors.push("reference-script visual annotations are missing; register the reference script again");
+  } else {
+    const actualAnnotations = readJson(annotationsPath);
+    if (JSON.stringify(actualAnnotations) !== JSON.stringify(expectedAnnotations)) {
+      errors.push("reference-script visual annotations are stale or do not match the immutable source");
+    }
+  }
   const classifiedReference = (reconciliation.items ?? []).map((item) => item.referenceText ?? "").join("");
-  if (normalize(classifiedReference) !== normalize(referenceText)) errors.push("reference script is not exhaustively classified");
+  if (normalize(classifiedReference) !== normalize(expectedAnnotations.speechText)) {
+    errors.push("reference-script spoken text is not exhaustively classified");
+  }
 }
 if (reconciliation.verification?.unresolvedReleaseImpactCount !== unresolvedReleaseImpactCount) {
   errors.push("unresolved release-impact count is stale");

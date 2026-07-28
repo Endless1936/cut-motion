@@ -11,10 +11,18 @@ Use `tight-talking-head` unless the user requests a slower conversational, drama
 | Boundary evidence | median of `-30`, `-35`, and `-40 dB` speech boundaries |
 | Outgoing safety handle | 20 ms after the last acoustic speech boundary |
 | Incoming safety handle | 50 ms before the first acoustic speech boundary |
-| Seam audio transition | 2 frames at 30 fps; shorten if it touches a phoneme |
+| Seam audio transition | 0–2 frames at 30 fps; use only when it survives onset/tail audit |
 | Review coverage | every seam, in picture and sound |
 
 Convert milliseconds to the source frame grid only after calculating the boundary. At 30 fps, the handles normally become 0–1 outgoing frame and 1–2 incoming frames. The handles protect speech; they are not silence that must be manufactured between clips.
+
+Finish every removable seam asymmetrically:
+
+1. Tighten the outgoing side to remove weak decay, breath, room tone, and visible reset without clipping the final phoneme.
+2. Inspect the first two to three frames of the incoming phrase. If its onset sounds shaved, restore one or two source frames; never restore the whole discarded pause by default.
+3. Add at most two transition frames only after the physical boundaries are correct. Use zero when a transition attenuates the onset or pulls discarded tail audio back into the cut.
+
+Do not create a separate trim profile for this behavior. It is the default meaning of `tight-talking-head`.
 
 ## Three-layer decision
 
@@ -65,11 +73,12 @@ Use `scripts/inspect-media-window.mjs` only for conflicting or low-confidence ev
 
 - Every seam has acoustic evidence or an explicit documented exception.
 - No cut is based only on a transcript or ASR word endpoint.
-- No phoneme or comprehension-critical breath is clipped or faded early.
+- No outgoing phoneme or comprehension-critical breath is clipped, and no incoming onset is shaved or faded early.
 - No invalid reading, searching, or body-reset tail remains after speech.
+- No audio transition restores discarded tail noise or weak decay.
 - The timeline is contiguous, source order is correct, and there are no black frames, overlaps, frozen items, or detached audio.
 - Every seam has been listened to and inspected at the frame before and after the cut.
 
 The rough-cut review artifact must already pass these checks. Review is for editorial judgment, not for discovering routine boundary cleanup.
 
-Before review, `audit-roughcut-seams.mjs` measures the final export around every seam at `-30`, `-35`, and `-40 dB` and records its SHA-256. Removed reset, false-start, restart, body-reset, and duplicate-take seams use an 80ms ceiling quantized down to source frames. Natural or intentional pauses remain exempt. Automated measurement supplements rather than replaces picture and phoneme review.
+Before review, `audit-roughcut-seams.mjs` measures the final export around every seam at `-30`, `-35`, and `-40 dB` and records its SHA-256. Removed reset, false-start, restart, body-reset, and duplicate-take seams use an 80ms ceiling quantized down to source frames. Natural or intentional pauses remain exempt. `audioAudited: true` means both edges and the applied transition were heard: the outgoing phoneme is complete, the incoming onset is intact, and discarded audio was not restored. Automated measurement supplements rather than replaces picture and phoneme review.

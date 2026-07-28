@@ -17,6 +17,7 @@ const workflow = JSON.parse(fs.readFileSync(workflowPath, "utf8"));
 const document = fs.readFileSync(confirmationDocPath, "utf8");
 const errors = [];
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const jobRoot = path.dirname(path.dirname(confirmationPath));
 const normalize = (value) => value.replace(/[\s，。！？、,.!?]/g, "").toLowerCase();
 
 if (confirmation.schemaVersion !== "1.0.0") errors.push("schemaVersion must be 1.0.0");
@@ -53,8 +54,44 @@ if (workflow.captionMode === "subtitles" && confirmation.storyboard?.captionPlan
 if (workflow.captionMode === "motion-copy" && confirmation.storyboard?.captionPlan !== undefined) errors.push("motion-copy must not declare a caption plan");
 if (confirmation.storyboard?.beatCount !== beatMap.beats.length) errors.push("storyboard beat count must match beat map");
 if (beatMap.captionMode !== workflow.captionMode) errors.push("beat map caption mode must match workflow state");
+const annotationContract = confirmation.scriptAnnotations;
+if (annotationContract?.source !== "state/reference-script-annotations.json"
+  || annotationContract?.role !== "advisory"
+  || annotationContract?.exhaustiveVisualPlan !== false
+  || !Array.isArray(annotationContract?.decisions)) {
+  errors.push("script annotations must remain advisory, non-exhaustive visual references");
+}
+const annotationsPath = path.join(jobRoot, "state", "reference-script-annotations.json");
+if (!fs.existsSync(annotationsPath)) {
+  errors.push("creative confirmation requires reference-script annotation state");
+} else {
+  const annotationState = JSON.parse(fs.readFileSync(annotationsPath, "utf8"));
+  const annotations = annotationState.annotations ?? [];
+  const decisions = annotationContract?.decisions ?? [];
+  const annotationIds = new Set(annotations.map((annotation) => annotation.id));
+  const decisionIds = new Set();
+  const beatIds = new Set(beatMap.beats.map((beat) => beat.id));
+  for (const decision of decisions) {
+    if (!annotationIds.has(decision.id)) errors.push(`${decision.id}: decision references an unknown script annotation`);
+    if (decisionIds.has(decision.id)) errors.push(`${decision.id}: script annotation decision is duplicated`);
+    decisionIds.add(decision.id);
+    if (!["adopted", "adjusted", "rejected"].includes(decision.disposition)) errors.push(`${decision.id}: invalid annotation disposition`);
+    if (![decision.resolvedScope, decision.finalTreatment, decision.reason].every((value) => typeof value === "string" && value.trim())) {
+      errors.push(`${decision.id}: annotation decision requires scope, final treatment, and reason`);
+    }
+    if (!Array.isArray(decision.beatIds) || decision.beatIds.some((beatId) => !beatIds.has(beatId))) {
+      errors.push(`${decision.id}: annotation decision references an unknown beat`);
+    }
+  }
+  for (const annotation of annotations) {
+    if (!decisionIds.has(annotation.id)) errors.push(`${annotation.id}: script annotation is missing a creative decision`);
+    if (!document.includes(annotation.id) || !document.includes(annotation.instruction)) {
+      errors.push(`${annotation.id}: script annotation and its original instruction must appear in the creative package`);
+    }
+  }
+}
 try {
-  const expectedAuthorities = computeCreativeAuthorities(path.dirname(path.dirname(confirmationPath)), workflow.captionMode);
+  const expectedAuthorities = computeCreativeAuthorities(jobRoot, workflow.captionMode);
   for (const [name, authority] of Object.entries(expectedAuthorities)) {
     if (confirmation.authorities?.[name]?.path !== authority.path || confirmation.authorities?.[name]?.sha256 !== authority.sha256) {
       errors.push(`${name} authority fingerprint is missing or stale`);
@@ -114,7 +151,7 @@ if (confirmation.captionMode === "subtitles") {
 if (!["ready", "approved"].includes(confirmation.review?.status)) errors.push("creative confirmation must be ready before plan review");
 
 if (!document.includes("# 创意确认包")) errors.push("creative confirmation document is missing its title");
-if (!document.includes("## 用户选择") || !document.includes("## 逐字稿对齐") || !document.includes("## A/B 轴执行规则") || !document.includes("## 分镜动画方案")) {
+if (!document.includes("## 用户选择") || !document.includes("## 逐字稿对齐") || !document.includes("## 逐字稿画面批注") || !document.includes("## A/B 轴执行规则") || !document.includes("## 分镜动画方案")) {
   errors.push("creative confirmation document is missing a required review section");
 }
 if (confirmation.captionMode === "subtitles" && beatMap.beats.some((beat) => beat.mgScope === "local")) {
@@ -126,7 +163,7 @@ if (confirmation.captionMode === "subtitles" && beatMap.beats.some((beat) => bea
 }
 if (!/(?:字幕模式|Caption mode).*?(?:motion-copy|subtitles)/is.test(document)) errors.push("creative confirmation document must state caption mode");
 if ((document.match(/^\s*\|.*\|\s*$/gm) ?? []).length < 5) errors.push("creative confirmation document must include review tables");
-const reconciliationPath = path.join(path.dirname(path.dirname(confirmationPath)), "state", "transcript-reconciliation.json");
+const reconciliationPath = path.join(jobRoot, "state", "transcript-reconciliation.json");
 if (!fs.existsSync(reconciliationPath)) {
   errors.push("creative confirmation requires transcript reconciliation");
 } else {
@@ -136,8 +173,8 @@ if (!fs.existsSync(reconciliationPath)) {
   }
 }
 
-const motionPlanPath = path.resolve(path.dirname(path.dirname(confirmationPath)), confirmation.storyboard?.motionPlan ?? "");
-const captionPlanPath = path.resolve(path.dirname(path.dirname(confirmationPath)), confirmation.storyboard?.captionPlan ?? "");
+const motionPlanPath = path.resolve(jobRoot, confirmation.storyboard?.motionPlan ?? "");
+const captionPlanPath = path.resolve(jobRoot, confirmation.storyboard?.captionPlan ?? "");
 if (!fs.existsSync(motionPlanPath)) {
   errors.push("motion plan referenced by creative confirmation does not exist");
 } else {
@@ -153,7 +190,7 @@ if (confirmation.captionMode === "subtitles" && !fs.existsSync(captionPlanPath))
   for (const heading of ["# 字幕与 MG 审核方案", "## 完整字幕切分", "## MG 节点", "## 明确不加 MG 的段落"]) {
     if (!captionPlan.includes(heading)) errors.push(`caption plan is missing ${heading}`);
   }
-  const reviewPlanPath = path.join(path.dirname(path.dirname(confirmationPath)), "captions", "caption-review-plan.json");
+  const reviewPlanPath = path.join(jobRoot, "captions", "caption-review-plan.json");
   if (fs.existsSync(reviewPlanPath)) {
     const semanticCaptionCheck = spawnSync(process.execPath, [path.join(scriptDirectory, "check-caption-review-plan.mjs"), reviewPlanPath], { encoding: "utf8" });
     if (semanticCaptionCheck.status !== 0) {

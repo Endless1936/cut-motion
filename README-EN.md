@@ -45,6 +45,8 @@ Only the video path is required. You may also provide:
 
 Missing preferences do not block the workflow. The Agent analyzes the footage and makes a recommendation.
 
+A reference script may add local visual preferences after a phrase with full-width `【】`, for example `using only AI【MG: cross out AE, Premiere, and CapCut】`. These notes stay out of captions and remain advisory; the Agent still analyzes every unannotated passage for editing and motion opportunities.
+
 ## Example requests
 
 - “Edit this talking-head video and keep the pacing natural.”

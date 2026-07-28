@@ -53,7 +53,7 @@ if (requireAudit) {
     if (profile.name === "tight-talking-head") {
       if (profile.outgoingHandleSeconds !== 0.02) errors.push("tight-talking-head requires a 20 ms outgoing handle");
       if (profile.incomingHandleSeconds !== 0.05) errors.push("tight-talking-head requires a 50 ms incoming handle");
-      if (profile.audioTransitionFrames !== 2) errors.push("tight-talking-head requires a two-frame audio transition");
+      if (profile.audioTransitionFrames !== 2) errors.push("tight-talking-head requires a two-frame audio-transition ceiling");
       if (profile.maximumResidualSilenceMs !== 80) errors.push("tight-talking-head requires an 80 ms removable-pause ceiling");
     }
   }
@@ -80,7 +80,9 @@ if (requireAudit) {
       }
       if (!Number.isInteger(seam.appliedFrame) || seam.appliedFrame < 0) errors.push(`${prefix}.appliedFrame must be a non-negative integer`);
       if (!Number.isInteger(seam.audioTransitionFrames) || seam.audioTransitionFrames < 0) errors.push(`${prefix}.audioTransitionFrames is required`);
-      if (profile?.name === "tight-talking-head" && seam.audioTransitionFrames !== 2) errors.push(`${prefix}.audioTransitionFrames must be two for tight-talking-head`);
+      if (profile?.name === "tight-talking-head" && seam.audioTransitionFrames > profile.audioTransitionFrames) {
+        errors.push(`${prefix}.audioTransitionFrames must stay between zero and the tight-talking-head ceiling`);
+      }
       if (seam.pictureAudited !== true || seam.audioAudited !== true) errors.push(`${prefix} must record pictureAudited and audioAudited as true`);
       if (mediaPath) {
         const expectedOutputTime = plan.remove[index]?.start - removedDuration;

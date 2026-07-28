@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "cut-motion Creative Confirmation",
   "type": "object",
-  "required": ["schemaVersion", "captionMode", "captionModeDecision", "visualAxisMode", "visualAxisModeDecision", "storyboard", "authorities", "changeControl", "axisPolicy", "visualSample", "review"],
+  "required": ["schemaVersion", "captionMode", "captionModeDecision", "visualAxisMode", "visualAxisModeDecision", "storyboard", "scriptAnnotations", "authorities", "changeControl", "axisPolicy", "visualSample", "review"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": "1.0.0" },
@@ -34,6 +34,36 @@
         "captionPlan": { "const": "docs/caption-plan.md" },
         "beatMap": { "const": "state/beat-map.json" },
         "beatCount": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "scriptAnnotations": {
+      "type": "object",
+      "required": ["source", "role", "exhaustiveVisualPlan", "decisions"],
+      "properties": {
+        "source": { "const": "state/reference-script-annotations.json" },
+        "role": { "const": "advisory" },
+        "exhaustiveVisualPlan": { "const": false },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "resolvedScope", "disposition", "finalTreatment", "reason", "beatIds"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^annotation-[0-9]{3,}$" },
+              "resolvedScope": { "type": "string", "minLength": 1 },
+              "disposition": { "enum": ["adopted", "adjusted", "rejected"] },
+              "finalTreatment": { "type": "string", "minLength": 1 },
+              "reason": { "type": "string", "minLength": 1 },
+              "beatIds": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": { "type": "string", "minLength": 1 }
+              }
+            },
+            "additionalProperties": false
+          }
+        }
       },
       "additionalProperties": false
     },

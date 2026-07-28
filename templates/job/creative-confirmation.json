@@ -17,6 +17,12 @@
     "beatMap": "state/beat-map.json",
     "beatCount": 0
   },
+  "scriptAnnotations": {
+    "source": "state/reference-script-annotations.json",
+    "role": "advisory",
+    "exhaustiveVisualPlan": false,
+    "decisions": []
+  },
   "authorities": {},
   "changeControl": {
     "implementationMayStartAfter": "creative-package-approved",

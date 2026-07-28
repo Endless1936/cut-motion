@@ -10,8 +10,10 @@ import {
   recoverTranscriptTransaction,
   saveWorkflow,
   sha256Text,
-  validateActiveReference
+  validateActiveReference,
+  writeJsonAtomic
 } from "./workflow-utils.mjs";
+import { buildReferenceScriptAnnotations } from "./reference-script-annotations.mjs";
 
 const [workflowArgument, decision, ...decisionArguments] = process.argv.slice(2);
 if (!workflowArgument || !["none", "provided"].includes(decision)) {
@@ -35,6 +37,7 @@ const previous = {
   path: workflow.referenceScriptPath,
   sha256: workflow.referenceScriptSha256
 };
+let annotationState;
 
 if (decision === "provided") {
   if (!sourceArgument) throw new Error("provided requires a source path");
@@ -48,6 +51,12 @@ if (decision === "provided") {
   const text = new TextDecoder("utf-8", { fatal: true }).decode(bytes).replace(/\r\n?/g, "\n");
   const sha256 = sha256Text(text);
   const relativePath = `input/reference-scripts/${sha256}.txt`;
+  annotationState = buildReferenceScriptAnnotations({
+    status: "provided",
+    path: relativePath,
+    sha256,
+    text
+  });
   const destination = path.join(jobRoot, relativePath);
   const inputDirectory = path.join(jobRoot, "input");
   const referenceDirectory = path.dirname(destination);
@@ -78,13 +87,31 @@ if (decision === "provided") {
   workflow.referenceScriptStatus = "none";
   workflow.referenceScriptPath = null;
   workflow.referenceScriptSha256 = null;
+  annotationState = buildReferenceScriptAnnotations({
+    status: "none",
+    path: null,
+    sha256: null
+  });
 }
 workflow.referenceScriptAcknowledged = true;
 validateActiveReference(workflowPath, workflow);
+writeJsonAtomic(path.join(jobRoot, "state", "reference-script-annotations.json"), annotationState);
 
 const changed = previous.status !== workflow.referenceScriptStatus
   || previous.path !== workflow.referenceScriptPath
   || previous.sha256 !== workflow.referenceScriptSha256;
+const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
+if (fs.existsSync(confirmationPath)) {
+  const confirmation = readJson(confirmationPath);
+  confirmation.scriptAnnotations ??= {
+    source: "state/reference-script-annotations.json",
+    role: "advisory",
+    exhaustiveVisualPlan: false,
+    decisions: []
+  };
+  if (changed) confirmation.scriptAnnotations.decisions = [];
+  writeJsonAtomic(confirmationPath, confirmation);
+}
 const previousState = workflow.currentState;
 let invalidated = [];
 if (changed && previousState !== "intake") {
@@ -130,4 +157,4 @@ workflow.history.push({
   invalidated
 });
 saveWorkflow(workflowPath, workflow, now);
-console.log(`Reference script: ${workflow.referenceScriptStatus}; current state: ${workflow.currentState}`);
+console.log(`Reference script: ${workflow.referenceScriptStatus}; ${annotationState.annotations.length} visual annotation(s); current state: ${workflow.currentState}`);

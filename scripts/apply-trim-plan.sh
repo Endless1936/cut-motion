@@ -23,8 +23,6 @@ node "$script_directory/check-trim-plan.mjs" "$trim_plan" >/dev/null
 duration_seconds="$(ffprobe -v error -show_entries format=duration -of default=nk=1:nw=1 "$input_media")"
 fps="$(jq -r '.fps // 30' "$trim_plan")"
 remove_count="$(jq '.remove | length' "$trim_plan")"
-audio_transition_frames="$(jq -r '.trimProfile.audioTransitionFrames // .audioTransitionFrames // 0' "$trim_plan")"
-audio_transition_seconds="$(awk "BEGIN { printf \"%.9f\", $audio_transition_frames / $fps }")"
 
 if [[ "$remove_count" -eq 0 ]]; then
   ffmpeg -hide_banner -y -i "$input_media" -c:v libx264 -r "$fps" -g "${fps%.*}" -keyint_min "${fps%.*}" -movflags +faststart -c:a aac -b:a 192k "$output_media"
@@ -36,6 +34,7 @@ video_concat_inputs=""
 cursor_seconds="0"
 segment_starts=()
 segment_ends=()
+segment_transition_frames=()
 
 for ((remove_index=0; remove_index<remove_count; remove_index++)); do
   remove_start="$(jq -r ".remove[$remove_index].start" "$trim_plan")"
@@ -44,6 +43,7 @@ for ((remove_index=0; remove_index<remove_count; remove_index++)); do
   if awk "BEGIN { exit !($remove_start > $cursor_seconds) }"; then
     segment_starts+=("$cursor_seconds")
     segment_ends+=("$remove_start")
+    segment_transition_frames+=("$(jq -r ".seams[$remove_index].audioTransitionFrames // .trimProfile.audioTransitionFrames // .audioTransitionFrames // 0" "$trim_plan")")
   fi
 
   cursor_seconds="$remove_end"
@@ -64,7 +64,8 @@ audio_transition_seconds_by_seam=()
 for ((segment_index=0; segment_index<segment_count-1; segment_index++)); do
   segment_duration="$(awk "BEGIN { printf \"%.9f\", ${segment_ends[$segment_index]} - ${segment_starts[$segment_index]} }")"
   next_segment_duration="$(awk "BEGIN { printf \"%.9f\", ${segment_ends[$((segment_index + 1))]} - ${segment_starts[$((segment_index + 1))]} }")"
-  audio_transition_seconds_by_seam+=("$(awk "BEGIN { value=$audio_transition_seconds; if (value > $segment_duration / 2) value=$segment_duration / 2; if (value > $next_segment_duration / 2) value=$next_segment_duration / 2; printf \"%.9f\", value }")")
+  transition_frames="${segment_transition_frames[$segment_index]:-0}"
+  audio_transition_seconds_by_seam+=("$(awk "BEGIN { value=$transition_frames / $fps; if (value > $segment_duration / 2) value=$segment_duration / 2; if (value > $next_segment_duration / 2) value=$next_segment_duration / 2; printf \"%.9f\", value }")")
 done
 
 for ((segment_index=0; segment_index<segment_count; segment_index++)); do
@@ -83,18 +84,16 @@ done
 filter_graph+="${video_concat_inputs}concat=n=${segment_count}:v=1:a=0[vout];"
 if [[ "$segment_count" -eq 1 ]]; then
   filter_graph+="[a0]anull[aout]"
-elif [[ "$audio_transition_frames" -eq 0 ]]; then
-  audio_concat_inputs=""
-  for ((segment_index=0; segment_index<segment_count; segment_index++)); do
-    audio_concat_inputs+="[a${segment_index}]"
-  done
-  filter_graph+="${audio_concat_inputs}concat=n=${segment_count}:v=0:a=1[aout]"
 else
   audio_chain="a0"
   for ((segment_index=1; segment_index<segment_count; segment_index++)); do
     transition_seconds="${audio_transition_seconds_by_seam[$((segment_index - 1))]}"
     audio_output="ax${segment_index}"
-    filter_graph+="[${audio_chain}][a${segment_index}]acrossfade=d=${transition_seconds}:c1=tri:c2=tri[${audio_output}];"
+    if awk "BEGIN { exit !($transition_seconds > 0) }"; then
+      filter_graph+="[${audio_chain}][a${segment_index}]acrossfade=d=${transition_seconds}:c1=tri:c2=tri[${audio_output}];"
+    else
+      filter_graph+="[${audio_chain}][a${segment_index}]concat=n=2:v=0:a=1[${audio_output}];"
+    fi
     audio_chain="$audio_output"
   done
   filter_graph+="[${audio_chain}]anull[aout]"

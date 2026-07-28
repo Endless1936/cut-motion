@@ -50,6 +50,7 @@ fi
 cp -p "$repository_root/templates/job/caption-lexicon.json" "$job_directory/captions/caption-lexicon.json"
 cp -p "$repository_root/templates/job/creative-confirmation.json" "$job_directory/state/creative-confirmation.json"
 cp -p "$repository_root/templates/job/transcript-reconciliation.json" "$job_directory/state/transcript-reconciliation.json"
+cp -p "$repository_root/templates/job/reference-script-annotations.json" "$job_directory/state/reference-script-annotations.json"
 cp -p "$repository_root/templates/job/qa-report.json" "$job_directory/state/qa-report.json"
 cp -p "$repository_root/templates/job/visual-sample-report.json" "$job_directory/state/visual-sample-report.json"
 cp -p "$source_video" "$job_directory/$source_relative_path"

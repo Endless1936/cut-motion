@@ -1,5 +1,6 @@
-.motion-caption-layer {
+.clip.motion-caption-layer {
   position: absolute;
+  top: auto;
   left: 54px;
   right: 54px;
   bottom: var(--caption-bottom, 160px);

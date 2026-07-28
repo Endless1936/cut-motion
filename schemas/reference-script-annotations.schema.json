@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cut-motion Reference Script Annotations",
+  "type": "object",
+  "required": ["schemaVersion", "source", "speechText", "speechSha256", "annotations", "verification"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": "1.0.0" },
+    "source": {
+      "type": "object",
+      "required": ["status", "path", "sha256"],
+      "properties": {
+        "status": { "enum": ["none", "provided"] },
+        "path": { "type": ["string", "null"] },
+        "sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "speechText": { "type": "string" },
+    "speechSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "annotations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "instruction", "sourceStart", "sourceEnd", "insertionOffset", "scopeMode", "defaultScope"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^annotation-[0-9]{3,}$" },
+          "instruction": { "type": "string", "minLength": 1 },
+          "sourceStart": { "type": "integer", "minimum": 0 },
+          "sourceEnd": { "type": "integer", "minimum": 1 },
+          "insertionOffset": { "type": "integer", "minimum": 0 },
+          "scopeMode": { "enum": ["preceding-clause", "explicit-range"] },
+          "defaultScope": {
+            "type": "object",
+            "required": ["start", "end", "text"],
+            "properties": {
+              "start": { "type": "integer", "minimum": 0 },
+              "end": { "type": "integer", "minimum": 0 },
+              "text": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": ["parsed", "annotationCount"],
+      "properties": {
+        "parsed": { "const": true },
+        "annotationCount": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

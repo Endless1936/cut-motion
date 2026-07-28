@@ -11,6 +11,8 @@ cut-motion turns a talking-head video and an optional reference script into a ti
 
 If media is missing, ask for its local path and stop. After receiving it, ask once for any known preferences without blocking progress when the user has none. A supplied script is a high-priority reference, never ground truth; the recording remains authoritative.
 
+A reference script may contain local visual notes in full-width `【】`. These are medium-strength, non-exhaustive references for the immediately preceding semantic clause unless a note explicitly names another local range. They never enter released wording, replace whole-video MG and edit analysis, or count as final axis or motion approval. Ordinary `[]` remains spoken text. Reject empty, nested, unclosed, or unmatched `【】` during intake.
+
 ## Required outputs
 
 Each run creates a job directory containing:
@@ -22,6 +24,7 @@ jobs/<job-id>/
 │   ├── project.json
 │   ├── transcript.json
 │   ├── transcript-reconciliation.json
+│   ├── reference-script-annotations.json
 │   ├── trim-plan.json
 │   ├── design-system.json
 │   ├── creative-confirmation.json
@@ -168,8 +171,9 @@ The `subtitles` mode cannot proceed past rough cut without ChatCut; `motion-copy
 
 1. Transcribe the recording through ChatCut when available; use local ASR only as fallback.
 2. Reconcile that result with the optional reference script: remove unspoken script text, restore spoken omissions, and accept reference wording only when audio supports it.
-3. Store timestamps in `state/transcript.json` and evidence in `state/transcript-reconciliation.json`; run the reconciliation checker.
-4. Preserve uncertainty. Release-impact ambiguity is shown in the creative package and must be resolved before its approval.
+3. When the reference contains `【】`, preserve the immutable original, use only `speechText` from `state/reference-script-annotations.json` for wording reconciliation, and retain every visual note separately.
+4. Store timestamps in `state/transcript.json` and evidence in `state/transcript-reconciliation.json`; run the reconciliation checker.
+5. Preserve uncertainty. Release-impact ambiguity is shown in the creative package and must be resolved before its approval.
 
 ### 3. Shared edit lock
 
@@ -194,9 +198,9 @@ This procedure is an internal part of `rough-cut`; it is not a second production
 
 1. Run `scripts/detect-silence.sh` at `-30`, `-35`, and `-40 dB`; use the median detected speech boundary instead of trusting one threshold or an ASR word endpoint.
 2. Convert candidates into `state/trim-plan.json`; record `trimProfile`, a `seams` entry for every actual edit boundary, and `verification`. Each seam must include semantic and visual evidence, the three acoustic boundary frames, applied frame, classification, reason, confidence, actual audio-transition frames, and completed picture/audio audit.
-3. For the default `tight-talking-head` profile, retain about 20 ms after outgoing speech and 50 ms before incoming speech, quantized to source frames. These are safety handles, not a target pause duration.
+3. For the default `tight-talking-head` profile, trim asymmetrically: retain about 20 ms after outgoing speech and 50 ms before incoming speech, quantized to source frames. Tighten the outgoing decay independently; never move the incoming boundary later merely to make both sides equally tight. These are safety handles, not a target pause duration.
 4. Preserve a pause when meaning and visible delivery remain continuous. Remove it when the speaker looks at a script, stops articulating, resets posture or gaze, or prepares a restart. A topic boundary alone does not justify keeping extra dead air.
-5. Apply a short audio transition, normally two frames at 30 fps, only after the physical cut is correct. The transition must not begin early enough to fade a final consonant or vowel.
+5. After the physical cut is correct, inspect the first two to three incoming frames and restore one or two source frames when the onset sounds shaved; do not restore the whole discarded pause. Then apply zero to two frames of audio transition only when it neither attenuates the incoming onset nor restores discarded tail noise. Two frames is a ceiling, not a requirement.
 6. Run the structural trim-plan check, apply the plan, and record the picture/audio seam audit. Advancing `rough-cut` automatically measures each seam against the final media at `-30`, `-35`, and `-40 dB`; removable resets and false starts may retain at most 80ms, quantized down to source frames. Natural pauses are exempt.
 7. Re-align every later transcript word and animation cue by the cumulative removed duration. Use `scripts/shift-timestamps.sh` when a late cut changes existing state files.
 
@@ -227,6 +231,8 @@ Every spoken sentence must be represented. Split long sentences into meaningful 
 Run `scripts/check-visual-plan.mjs` before authoring. A beat map that fails is incomplete even if it is valid JSON.
 
 For `subtitles`, write exact one-line segmentation to `docs/caption-plan.md`; for `motion-copy`, review complete designed-speech coverage in the beat map and motion plan without a caption plan. Bundle the applicable artifacts with reconciliation, MG mappings, copy, information gain, style, timing, axis, and intentional no-MG passages in one creative confirmation package.
+
+If `state/reference-script-annotations.json` contains visual notes, bind each note to the locked recording timeline and list it in the creative confirmation package as `adopted`, `adjusted`, or `rejected`, with its resolved local scope, final treatment, reason, and relevant beat IDs. Plan every unannotated passage normally. Correct or reject a note that conflicts with the recording, available evidence, visual-value rules, protected regions, or coherent axis behavior.
 
 Any later change to caption segmentation, the MG node set or count, on-screen copy, support role, visual style, or axis mode is a plan change. Use `replan` to return to `motion-plan` and regenerate the package. Require renewed user approval only when the regenerated package still meets a creative-review trigger. Only parameter-only corrections that preserve the approved nodes, copy, meaning, style family, and axis—such as a small position, size, or easing adjustment—may return directly to implementation.
 

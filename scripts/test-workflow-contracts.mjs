@@ -17,6 +17,7 @@ import {
   sha256Text,
   writeJsonAtomic
 } from "./workflow-utils.mjs";
+import { parseReferenceScript } from "./reference-script-annotations.mjs";
 
 const repositoryRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-workflow-"));
@@ -63,6 +64,31 @@ const writeSpeechOnlyItems = (job, name, transform = (items) => items) => {
 };
 
 try {
+  const parsedReference = parseReferenceScript(
+    "第一句[普通方括号保留]【MG：关键词卡片】；第二句【从前面的分号到此，使用B轴】"
+  );
+  assert.equal(parsedReference.speechText, "第一句[普通方括号保留]；第二句");
+  assert.equal(parsedReference.annotations.length, 2);
+  assert.equal(parsedReference.annotations[0].defaultScope.text, "第一句[普通方括号保留]");
+  assert.equal(parsedReference.annotations[0].scopeMode, "preceding-clause");
+  assert.equal(parsedReference.annotations[1].scopeMode, "explicit-range");
+  const sentenceEndAnnotation = parseReferenceScript("这是第一句。\n【MG：关键词卡片】");
+  assert.equal(sentenceEndAnnotation.speechText, "这是第一句。\n");
+  assert.equal(sentenceEndAnnotation.annotations[0].defaultScope.text, "这是第一句");
+  assert.equal(
+    parseReferenceScript("甲，乙【从甲到乙使用B轴】").annotations[0].scopeMode,
+    "explicit-range"
+  );
+  assert.equal(
+    parseReferenceScript("甲，乙【接下来两句保持A轴】").annotations[0].scopeMode,
+    "explicit-range"
+  );
+  assert.throws(() => parseReferenceScript("【MG】正文"), /must follow spoken text/);
+  assert.throws(() => parseReferenceScript("正文【】"), /Empty/);
+  assert.throws(() => parseReferenceScript("正文【外层【内层】】"), /Nested/);
+  assert.throws(() => parseReferenceScript("正文【未闭合"), /Unclosed/);
+  assert.throws(() => parseReferenceScript("正文】"), /Unexpected closing/);
+
   const simpleWorkflow = ensureWorkflowDefaults({
     captionMode: "subtitles",
     visualAxisMode: "a-axis-overlay",
@@ -205,6 +231,30 @@ try {
   fs.writeFileSync(binaryReference, Buffer.from([0, 1, 2]));
   nodeScript("register-reference-script.mjs", [intakeWorkflow, "provided", binaryReference], false);
   nodeScript("register-reference-script.mjs", [intakeWorkflow, "provided", temporaryRoot], false);
+
+  const annotatedJob = scaffold("annotated-reference", true);
+  const annotatedWorkflow = path.join(annotatedJob, "state", "workflow.json");
+  const annotatedSource = path.join(temporaryRoot, "annotated-reference.md");
+  fs.writeFileSync(
+    annotatedSource,
+    "看看这些特效【MG：强调“特效”】看看这些动画【这句话过程中切回A轴叠加模式】"
+  );
+  nodeScript("register-reference-script.mjs", [annotatedWorkflow, "provided", annotatedSource, "--actor", "user"]);
+  const annotationState = readJson(path.join(annotatedJob, "state", "reference-script-annotations.json"));
+  assert.equal(annotationState.speechText, "看看这些特效看看这些动画");
+  assert.equal(annotationState.annotations.length, 2);
+  assert.equal(annotationState.annotations[1].scopeMode, "explicit-range");
+  fs.copyFileSync(path.join(repositoryRoot, "examples", "transcript.example.json"), path.join(annotatedJob, "state", "transcript.json"));
+  const annotatedItems = writeSpeechOnlyItems(annotatedJob, "annotated-items", (items) => items.map((item) => ({
+    ...item,
+    type: "matched",
+    referenceText: item.heardText
+  })));
+  nodeScript("create-transcript-reconciliation.mjs", [annotatedJob, "input/source.mov", annotatedItems]);
+  nodeScript("check-transcript-reconciliation.mjs", [path.join(annotatedJob, "state", "transcript-reconciliation.json")]);
+  const malformedReference = path.join(temporaryRoot, "malformed-reference.txt");
+  fs.writeFileSync(malformedReference, "正文【未闭合");
+  nodeScript("register-reference-script.mjs", [annotatedWorkflow, "provided", malformedReference], false, /Unclosed/);
 
   const symlinkJob = scaffold("symlink", true);
   const symlinkWorkflow = path.join(symlinkJob, "state", "workflow.json");
