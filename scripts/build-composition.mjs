@@ -65,24 +65,23 @@ const rewriteRelativeResources = (source, assetPrefix) => source
   .replaceAll("href='./caption.css'", `href='${assetPrefix}/caption.css'`);
 
 const transformCaptionLayers = (source, windowStart, windowEnd) => source.replace(
-  /<section\b([^>]*\bmotion-caption-layer\b[^>]*)>/g,
-  (tag, attributes) => {
+  /<section\b(?=[^>]*\bmotion-caption-layer\b)[^>]*>[\s\S]*?<\/section>/gi,
+  (section) => {
+    const tag = /^<section\b[^>]*>/i.exec(section)?.[0];
+    if (!tag) return section;
+    const attributes = tag.slice("<section".length, -1);
     const startMatch = attributes.match(/\bdata-start=["']([0-9.]+)["']/);
     const durationMatch = attributes.match(/\bdata-duration=["']([0-9.]+)["']/);
-    if (!startMatch || !durationMatch) return tag;
+    if (!startMatch || !durationMatch) return section;
     const start = Number(startMatch[1]);
     const end = start + Number(durationMatch[1]);
     const overlapStart = Math.max(start, windowStart);
     const overlapEnd = Math.min(end, windowEnd);
-    if (overlapEnd <= overlapStart) {
-      return tag
-        .replace("<section", '<section hidden aria-hidden="true"')
-        .replace(startMatch[0], 'data-start="0"')
-        .replace(durationMatch[0], 'data-duration="0.001"');
-    }
-    return tag
+    if (overlapEnd <= overlapStart) return "";
+    const transformedTag = tag
       .replace(startMatch[0], `data-start="${decimal(overlapStart - windowStart)}"`)
       .replace(durationMatch[0], `data-duration="${decimal(overlapEnd - overlapStart)}"`);
+    return section.replace(tag, transformedTag);
   }
 );
 
@@ -98,9 +97,15 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
   const beats = new Map((beatMap.beats ?? []).map((beat) => [beat.id, beat]));
   const wordsById = transcriptWordsById(transcript);
   const fullDuration = Number(beatMap.duration ?? 10);
-  const windowStart = Number(options.windowStart ?? 0);
-  const windowEnd = Number(options.windowEnd ?? fullDuration);
-  if (!(windowStart >= 0 && windowEnd > windowStart && windowEnd <= fullDuration + 1e-6)) {
+  const fps = Number(beatMap.fps ?? 30);
+  const frameWindow = options.startFrame != null || options.endFrame != null;
+  if (frameWindow && (!Number.isInteger(Number(options.startFrame)) || !Number.isInteger(Number(options.endFrame)))) {
+    throw new Error("Composition frame windows require integer startFrame and endFrame");
+  }
+  const windowStart = frameWindow ? Number(options.startFrame) / fps : Number(options.windowStart ?? 0);
+  const windowEnd = frameWindow ? Number(options.endFrame) / fps : Number(options.windowEnd ?? fullDuration);
+  const maximumWindowEnd = frameWindow ? Math.ceil(fullDuration * fps) / fps : fullDuration;
+  if (!(windowStart >= 0 && windowEnd > windowStart && windowEnd <= maximumWindowEnd + 1e-9)) {
     throw new Error(`Invalid composition window ${windowStart}–${windowEnd} for duration ${fullDuration}`);
   }
 
@@ -112,6 +117,7 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
   const styles = [];
   const fragments = [];
   const timelines = [];
+  const includedBeatIds = [];
   let trackIndex = 10;
   for (const beatId of moduleDirectories(resolvedDirectory)) {
     const beat = beats.get(beatId);
@@ -139,6 +145,7 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
     const exitStartTime = decimal(renderWindow.exitStartTime - windowStart);
     const exitDuration = renderWindow.exitDuration;
     const rootSelector = beatRootSelector(beatId);
+    includedBeatIds.push(beatId);
     styles.push(`/* ${beatId} */\n${style}`);
     fragments.push([
       `<section class="clip" data-mg-beat-id="${beatId}" data-start="${decimal(start - windowStart)}" data-duration="${decimal(end - start)}" data-track-index="${trackIndex}">`,
@@ -160,13 +167,19 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
     trackIndex += 1;
   }
 
-  const duration = decimal(windowEnd - windowStart);
+  const duration = frameWindow
+    ? (Number(options.endFrame) - Number(options.startFrame)) / fps
+    : decimal(windowEnd - windowStart);
+  const mediaStart = frameWindow ? Number(options.startFrame) / fps : decimal(windowStart);
   source = transformCaptionLayers(source, windowStart, windowEnd)
     .replaceAll("__CUT_MOTION_DURATION__", String(duration))
-    .replaceAll("__CUT_MOTION_MEDIA_START__", String(decimal(windowStart)))
+    .replaceAll("__CUT_MOTION_MEDIA_START__", String(mediaStart))
     .replace(STYLE_MARKER, `${STYLE_MARKER}\n${styles.join("\n\n")}`)
     .replace(FRAGMENT_MARKER, `${FRAGMENT_MARKER}\n${fragments.join("\n")}`)
     .replace(TIMELINE_MARKER, `${TIMELINE_MARKER}\n${timelines.join("\n\n")}`);
+  if (options.videoOnly === true) {
+    source = source.replace(/\s*<audio\b[^>]*\bid=["']source-audio["'][^>]*><\/audio>\s*/i, "\n");
+  }
   const assetPrefix = path.relative(path.dirname(outputPath), resolvedDirectory).split(path.sep).join("/") || ".";
   source = rewriteRelativeResources(source, assetPrefix);
   const output = `${GENERATED_HEADER}\n${source}`;
@@ -174,14 +187,22 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
   if (!fs.existsSync(outputPath) || fs.readFileSync(outputPath, "utf8") !== output) {
     fs.writeFileSync(outputPath, output);
   }
-  return { outputPath, duration, windowStart, windowEnd, beatIds: [...moduleDirectories(resolvedDirectory)].filter((id) => beats.has(id)) };
+  return {
+    outputPath,
+    duration,
+    windowStart,
+    windowEnd,
+    startFrame: frameWindow ? Number(options.startFrame) : Math.floor(windowStart * fps),
+    endFrame: frameWindow ? Number(options.endFrame) : Math.ceil(windowEnd * fps),
+    beatIds: includedBeatIds
+  };
 };
 
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isCli) {
   const [directory, ...args] = process.argv.slice(2);
   if (!directory) {
-    console.error("Usage: node build-composition.mjs <hyperframes-directory> [--window-start <seconds> --window-end <seconds> --output <path>]");
+    console.error("Usage: node build-composition.mjs <hyperframes-directory> [--window-start <seconds> --window-end <seconds> | --start-frame <frame> --end-frame <frame>] [--video-only] [--output <path>]");
     process.exit(64);
   }
   const valueAfter = (flag) => {
@@ -191,6 +212,9 @@ if (isCli) {
   const result = buildComposition(directory, {
     windowStart: valueAfter("--window-start"),
     windowEnd: valueAfter("--window-end"),
+    startFrame: valueAfter("--start-frame"),
+    endFrame: valueAfter("--end-frame"),
+    videoOnly: args.includes("--video-only"),
     outputPath: valueAfter("--output")
   });
   console.log(`Built ${result.outputPath} (${result.duration}s, ${result.beatIds.length} MG module(s))`);

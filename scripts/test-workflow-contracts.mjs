@@ -539,6 +539,47 @@ try {
     /release captions must originate from an approved semantic plan/
   );
 
+  const standardDeliveryPath = path.join(authorityDeltaJob, "output", "standard-delivery.mp4");
+  fs.mkdirSync(path.dirname(standardDeliveryPath), { recursive: true });
+  fs.writeFileSync(standardDeliveryPath, "standard delivery");
+  const deliveryManifestPath = path.join(authorityDeltaJob, "checkpoints", "baselines", "delivery-render-manifest.json");
+  writeJsonAtomic(deliveryManifestPath, { contentManifestSha256: "a".repeat(64) });
+  const deliveryWorkflow = readJson(authorityDeltaWorkflowPath);
+  deliveryWorkflow.currentState = "render";
+  deliveryWorkflow.pendingGate = null;
+  deliveryWorkflow.previewBaseline = {
+    ...deliveryWorkflow.previewBaseline,
+    renderManifestPath: path.relative(authorityDeltaJob, deliveryManifestPath),
+    renderManifestSha256: sha256File(deliveryManifestPath),
+    contentManifestSha256: "a".repeat(64)
+  };
+  deliveryWorkflow.gates["final-preview"] = {
+    status: "approved",
+    artifact: "previews/baseline.mp4",
+    revisionId: deliveryWorkflow.revisionId
+  };
+  writeJsonAtomic(authorityDeltaWorkflowPath, deliveryWorkflow);
+  writeJsonAtomic(`${standardDeliveryPath}.render.json`, {
+    schemaVersion: "1.0.0",
+    quality: "standard",
+    outputPath: "output/standard-delivery.mp4",
+    artifactSha256: sha256File(standardDeliveryPath),
+    contentManifestSha256: "a".repeat(64)
+  });
+  nodeScript(
+    "workflow-state.mjs",
+    [
+      authorityDeltaWorkflowPath,
+      "advance",
+      "--artifact",
+      "output/standard-delivery.mp4",
+      "--note",
+      "must reject standard delivery"
+    ],
+    false,
+    /must use high quality/
+  );
+
   const transactionJob = scaffold("transaction", true);
   const transactionWorkflowPath = path.join(transactionJob, "state", "workflow.json");
   const preparedRelative = "state/workflow.json.bad.prepared";

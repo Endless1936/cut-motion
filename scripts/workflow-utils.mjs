@@ -75,6 +75,7 @@ export const ensureWorkflowDefaults = (workflow) => {
   }
   workflow.approvedDesignLanguageFingerprint ??= null;
   workflow.previewBaseline ??= null;
+  workflow.pendingPreviewBaseline ??= null;
   workflow.pendingDeltaPreview ??= null;
   for (const legacyField of ["gateHistory", "creativeReviewRequested", "creativeReviewRequired", "creativeReviewReasons", "visualSampleRequested", "visualSampleRequired", "visualSampleReasons", "pendingVisualSampleFingerprint", "intakeDecisionBlock"]) delete workflow[legacyField];
   workflow.gates ??= {};

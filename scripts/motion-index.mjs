@@ -6,6 +6,16 @@ import { isPathInside, readJson, sha256File, sha256Text, writeJsonAtomic } from 
 
 const relative = (jobRoot, candidate) => path.relative(jobRoot, candidate).split(path.sep).join("/");
 const digestFiles = (paths) => sha256Text(paths.map((candidate) => `${path.basename(candidate)}:${sha256File(candidate)}`).join("\n"));
+const withoutInstalledCaptions = (source) => source.replace(
+  /(<!-- CUT_MOTION_CAPTIONS_START -->)[\s\S]*?(<!-- CUT_MOTION_CAPTIONS_END -->)/,
+  "$1\n$2"
+);
+const digestSharedFiles = (paths, compositionSourcePath) => sha256Text(paths.map((candidate) => {
+  const digest = candidate === compositionSourcePath
+    ? sha256Text(withoutInstalledCaptions(fs.readFileSync(candidate, "utf8")))
+    : sha256File(candidate);
+  return `${path.basename(candidate)}:${digest}`;
+}).join("\n"));
 const buildScriptPath = fileURLToPath(new URL("./build-composition.mjs", import.meta.url));
 const motionWindowUtilsPath = fileURLToPath(new URL("./motion-window-utils.mjs", import.meta.url));
 
@@ -94,7 +104,7 @@ export const deriveMotionIndex = (jobRootInput) => {
       captions: fs.existsSync(captionsPath) ? sha256File(captionsPath) : null,
       compositionTemplate: sha256File(compositionSourcePath)
     },
-    sharedDependencySha256: digestFiles(sharedPaths),
+    sharedDependencySha256: digestSharedFiles(sharedPaths, compositionSourcePath),
     beats,
     captions: [...(captions.cues ?? [])]
       .sort((left, right) => left.start - right.start || left.id.localeCompare(right.id))

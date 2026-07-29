@@ -30,6 +30,7 @@ jobs/<job-id>/
 │   ├── creative-confirmation.json
 │   ├── workflow.json
 │   ├── beat-map.json
+│   ├── render-manifest.json
 │   └── qa-report.json
 ├── roughcut/
 │   └── a-roll.mp4
@@ -321,11 +322,11 @@ Run all gates in `docs/quality-gates.md`:
 5. Review-grid inspection against `examples/gold-standard/reference-frames` for density, scale, surface cleanliness, and hierarchy.
 6. Audio inspection for new silence, clipped syllables, and accumulated sync drift.
 7. Run `scripts/run-validation-check.mjs` for every check declared by `config/validation-evidence-contracts.json`; only its implementation-bound, hash-bound receipts are accepted. The reviewed media cannot serve as its own evidence.
-8. Render the final preview with `npm run render:preview`, which uses HyperFrames `standard` quality.
-9. After approval in `review` mode, render with `npm run render`, which uses HyperFrames `high` quality. It must preserve the approved preview's editorial content.
+8. Render the complete final preview with `npm run render:preview`. It uses HyperFrames `standard` quality, reuses valid content-addressed visual Chunks, stream-concatenates them, and attaches the continuous authoritative audio once.
+9. Final-preview approval binds the quality-independent Render Manifest. After approval in `review` mode, render with `npm run render`, which reuses valid `high` Chunks and must match that approved content hash exactly.
 10. Verify output existence, duration, frame rate, dimensions, and audio stream.
 
-For a user-approved final-preview revision, classification happens after the files change and before creative-authority assertion. When the design language, media baseline and shared dependencies are unchanged, derive `state/motion-index.json`, compare it with the bound baseline index, and use the padded union of old and new Beat/cue windows for a delta preview. Do not rerun unchanged Beat checks or render another full `standard` preview. Shared CSS, global caption style, media timing, design-language or broad changes use the existing full path. After delta approval, render one complete `high` delivery.
+For a user-approved final-preview revision, classification happens after the files change and before creative-authority assertion. Derive `state/motion-index.json`, compare it with the bound baseline index, and invalidate only the Render Chunks covering the old and new Beat/cue windows. Reuse every unchanged Chunk and assemble a new complete `standard` preview; do not rerun unchanged Beat checks. Shared CSS, global caption style, media timing, design-language or broad changes invalidate all Chunks. After approval, only missing or changed `high` Chunks may render.
 
 Only canonical large media persists: immutable `input/source.*`, `roughcut/a-roll.mp4`, current visual/final previews, HyperFrames input, and `output/final.mp4`. Use `promote-job-media.mjs` for explicit external exports; it must reject immutable input, escaped directories, and approved artifacts. Never scan download folders or delete unregistered user files.
 

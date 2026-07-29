@@ -10,6 +10,8 @@ import {
   verifyDeltaBindings
 } from "./delta-preview.mjs";
 import { writeMotionIndex } from "./motion-index.mjs";
+import { snapshotRenderManifest } from "./render-manifest.mjs";
+import { pruneChunkCache, verifyAssemblyReceipt } from "./render-chunks.mjs";
 import {
   assertCreativeAuthorities,
   assertRegularContainedFile,
@@ -321,6 +323,80 @@ const probeReviewSignal = (videoPath, duration, label) => {
   }
 };
 
+const hasChunkAssemblyReceipt = (relativePath) => {
+  if (!relativePath || path.isAbsolute(relativePath)) return false;
+  const artifactPath = path.join(jobRoot, relativePath);
+  return fs.existsSync(`${artifactPath}.render.json`);
+};
+
+const createPendingPreviewBaseline = (previewRelativePath) => {
+  const baseline = {
+    ...createPreviewBaseline(jobRoot, workflow.revisionId, previewRelativePath),
+    designLanguageFingerprint: computeDesignLanguageFingerprint(jobRoot, workflow.captionMode),
+    authoritativeMediaSha256: workflow.authoritativeMediaSha256
+  };
+  if (!hasChunkAssemblyReceipt(previewRelativePath)) return baseline;
+  const receipt = verifyAssemblyReceipt(jobRoot, previewRelativePath);
+  if (receipt.quality !== "standard") throw new Error("Final preview Chunk assembly must use standard quality");
+  const manifestPath = path.join(jobRoot, receipt.renderManifestPath);
+  if (!isPathInside(jobRoot, manifestPath) || !fs.existsSync(manifestPath)
+    || sha256File(manifestPath) !== receipt.renderManifestSha256) {
+    throw new Error("Final preview Render Manifest binding is stale");
+  }
+  const manifest = readJson(manifestPath);
+  if (manifest.contentManifestSha256 !== receipt.contentManifestSha256) {
+    throw new Error("Final preview content manifest binding is stale");
+  }
+  return {
+    ...baseline,
+    ...snapshotRenderManifest(jobRoot, manifest, workflow.revisionId)
+  };
+};
+
+const validateChunkedFullPreview = (previewRelativePath) => {
+  const receipt = verifyAssemblyReceipt(jobRoot, previewRelativePath);
+  if (receipt.quality !== "standard") throw new Error("Final preview must use standard Chunk quality");
+  if (workflow.pendingDeltaPreview) {
+    verifyDeltaBindings(jobRoot, workflow.pendingDeltaPreview, workflow.previewBaseline, { rebuildProduction: true });
+  } else {
+    validateFinalQa(previewRelativePath);
+  }
+  const manifestPath = path.join(jobRoot, receipt.renderManifestPath);
+  if (!isPathInside(jobRoot, manifestPath) || !fs.existsSync(manifestPath)
+    || sha256File(manifestPath) !== receipt.renderManifestSha256) {
+    throw new Error("Final preview Render Manifest binding is stale");
+  }
+  const manifest = readJson(manifestPath);
+  const previewPath = assertJobArtifact(previewRelativePath, "previews");
+  const probe = probeReviewVideo(previewPath, "Final preview");
+  probeReviewSignal(previewPath, probe.duration, "Final preview");
+  const expectedDuration = manifest.totalFrames / manifest.fps;
+  if (Math.abs(probe.duration - expectedDuration) > 1 / manifest.fps) {
+    throw new Error("Chunked final preview duration differs from its Render Manifest");
+  }
+  if (probe.width !== manifest.width || probe.height !== manifest.height || Math.abs(probe.fps - manifest.fps) > 0.001) {
+    throw new Error("Chunked final preview metadata differs from its Render Manifest");
+  }
+};
+
+const promotePendingPreviewBaseline = () => {
+  if (!workflow.pendingPreviewBaseline) throw new Error("Final preview approval has no pending preview baseline");
+  const pending = workflow.pendingPreviewBaseline;
+  const previewPath = assertJobArtifact(pending.previewPath, "previews");
+  if (sha256File(previewPath) !== pending.previewSha256) throw new Error("Pending final preview changed before approval");
+  if (pending.renderManifestPath) {
+    const manifestPath = path.join(jobRoot, pending.renderManifestPath);
+    if (!isPathInside(jobRoot, manifestPath) || !fs.existsSync(manifestPath)
+      || sha256File(manifestPath) !== pending.renderManifestSha256) {
+      throw new Error("Pending Render Manifest changed before approval");
+    }
+    verifyAssemblyReceipt(jobRoot, pending.previewPath, pending.contentManifestSha256);
+  }
+  workflow.previewBaseline = pending;
+  workflow.pendingPreviewBaseline = null;
+  workflow.pendingDeltaPreview = null;
+};
+
 const verifyEditorialMatch = (deliveryPath, previewPath) => {
   const video = spawnSync(
     "ffmpeg",
@@ -526,7 +602,8 @@ const validateGateArtifact = (gate) => {
     validateVisualSampleReport(recordedArtifact);
   }
   if (gate === "final-preview") {
-    if (workflow.pendingDeltaPreview) validateDeltaPreview(recordedArtifact);
+    if (hasChunkAssemblyReceipt(recordedArtifact)) validateChunkedFullPreview(recordedArtifact);
+    else if (workflow.pendingDeltaPreview) validateDeltaPreview(recordedArtifact);
     else validateFinalQa(recordedArtifact);
   }
 };
@@ -599,6 +676,7 @@ const autoApproveGate = () => {
   if (gate === "visual-sample-review") {
     workflow.approvedDesignLanguageFingerprint = computeDesignLanguageFingerprint(jobRoot, workflow.captionMode);
   }
+  if (gate === "final-preview" && workflow.pendingPreviewBaseline) promotePendingPreviewBaseline();
   move(gateStage.next, "auto-approve", "agent");
 };
 
@@ -995,18 +1073,25 @@ if (command === "advance") {
     }
     if (workflow.currentState === "qa") {
       probeReviewVideo(artifactPath, "Final preview");
-      if (workflow.pendingDeltaPreview) validateDeltaPreview(artifact);
-      else {
+      if (hasChunkAssemblyReceipt(artifact)) {
+        validateChunkedFullPreview(artifact);
+        workflow.pendingPreviewBaseline = createPendingPreviewBaseline(artifact);
+      } else if (workflow.pendingDeltaPreview) {
+        validateDeltaPreview(artifact);
+        workflow.pendingPreviewBaseline = null;
+      } else {
         validateFinalQa(artifact);
-        workflow.previewBaseline = {
-          ...createPreviewBaseline(jobRoot, workflow.revisionId, artifact),
-          designLanguageFingerprint: computeDesignLanguageFingerprint(jobRoot, workflow.captionMode),
-          authoritativeMediaSha256: workflow.authoritativeMediaSha256
-        };
+        workflow.pendingPreviewBaseline = createPendingPreviewBaseline(artifact);
       }
     }
     if (workflow.currentState === "render") {
       const canonicalDeliveryPath = path.join(jobRoot, "output", "final.mp4");
+      const chunkAssemblyReceipt = workflow.previewBaseline?.contentManifestSha256
+        ? verifyAssemblyReceipt(jobRoot, artifact, workflow.previewBaseline.contentManifestSha256)
+        : null;
+      if (chunkAssemblyReceipt && chunkAssemblyReceipt.quality !== "high") {
+        throw new Error("Final delivery Chunk assembly must use high quality");
+      }
       if (workflow.lastKnownGoodDelivery
         && artifactPath === canonicalDeliveryPath
         && sha256File(artifactPath) !== workflow.lastKnownGoodDelivery.sha256) {
@@ -1031,18 +1116,30 @@ if (command === "advance") {
       } else {
         validateDeltaPreview(workflow.gates?.["final-preview"]?.artifact, { rebuildProduction: true });
       }
-      if (artifactPath !== canonicalDeliveryPath) fs.renameSync(artifactPath, canonicalDeliveryPath);
+      if (artifactPath !== canonicalDeliveryPath) {
+        fs.renameSync(artifactPath, canonicalDeliveryPath);
+        const candidateReceiptPath = `${artifactPath}.render.json`;
+        if (fs.existsSync(candidateReceiptPath)) {
+          const receipt = readJson(candidateReceiptPath);
+          receipt.outputPath = "output/final.mp4";
+          writeJsonAtomic(candidateReceiptPath, receipt);
+          fs.renameSync(candidateReceiptPath, `${canonicalDeliveryPath}.render.json`);
+        }
+      }
       workflow.lastKnownGoodDelivery = {
         path: "output/final.mp4",
         sha256: sha256File(canonicalDeliveryPath),
-        validatedAt: now
-      };
-      workflow.previewBaseline = {
-        ...createPreviewBaseline(jobRoot, workflow.revisionId, "output/final.mp4"),
-        designLanguageFingerprint: computeDesignLanguageFingerprint(jobRoot, workflow.captionMode),
-        authoritativeMediaSha256: workflow.authoritativeMediaSha256
+        validatedAt: now,
+        ...(chunkAssemblyReceipt ? {
+          renderManifestPath: workflow.previewBaseline.renderManifestPath,
+          renderManifestSha256: workflow.previewBaseline.renderManifestSha256,
+          contentManifestSha256: workflow.previewBaseline.contentManifestSha256
+        } : {})
       };
       workflow.pendingDeltaPreview = null;
+      if (workflow.previewBaseline?.renderManifestPath) {
+        pruneChunkCache(jobRoot, [readJson(path.join(jobRoot, workflow.previewBaseline.renderManifestPath))]);
+      }
     }
     if (workflow.currentState === "composition") {
       workflow.compositionArtifactPath = artifact;
@@ -1094,6 +1191,7 @@ if (command === "advance") {
     if (workflow.currentState === "visual-sample-review") {
       workflow.approvedDesignLanguageFingerprint = computeDesignLanguageFingerprint(jobRoot, workflow.captionMode);
     }
+    if (workflow.currentState === "final-preview" && workflow.pendingPreviewBaseline) promotePendingPreviewBaseline();
     move(currentStage.next, "approve");
   }
 } else if (command === "revise") {
@@ -1108,6 +1206,7 @@ if (command === "advance") {
   if (["rough-cut-review", "motion-plan-review"].includes(workflow.currentState)) {
     beginWorkflowRevision(workflow, now, note ?? `${workflow.currentState} revision requested`);
   } else if (workflow.currentState === "final-preview") {
+    workflow.pendingPreviewBaseline = null;
     beginWorkflowRevision(workflow, now, note ?? "Final preview revision requested", {
       gates: ["final-preview"],
       invalidateVisualPlan: false
