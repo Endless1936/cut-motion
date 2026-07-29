@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { resolveCaptionCues } from "./caption-review-utils.mjs";
 
 const [captionsPath, pagesPath, designSystemPath] = process.argv.slice(2);
 if (!captionsPath || !pagesPath || !designSystemPath) {
@@ -18,12 +19,7 @@ const displayUnits = (value) => [...value.normalize("NFKC")].reduce((sum, charac
   if (/[，。；：！？、]/u.test(character)) return sum + 0.5;
   return sum + 1;
 }, 0);
-const cleanLines = (viewerText) => String(viewerText)
-  .split("/")
-  .map((line) => line.trim().replace(/[，。！？、；：,.!?:;]+/g, " ").replace(/\s+/g, " ").trim())
-  .filter(Boolean);
-
-if (!["chatcut-viewer-pages", "approved-semantic-plan"].includes(captions.source?.kind)) errors.push("captions must declare a supported source kind");
+if (captions.source?.kind !== "approved-semantic-plan") errors.push("release captions must originate from an approved semantic plan");
 if (captions.source?.fps !== pagesDocument.fps) errors.push("caption fps must match the locked edit timeline");
 if (captions.source?.roughCutLocked !== true) errors.push("captions require a locked ChatCut rough cut");
 if (captions.source?.captionRenderDisabled !== true) errors.push("captions require a clean export with ChatCut caption rendering disabled");
@@ -50,36 +46,30 @@ for (const cue of captions.cues ?? []) {
   previousEndFrame = cue.endFrame;
 }
 
-if (captions.source?.kind === "chatcut-viewer-pages") {
-  let expectedCueCount = 0;
-  for (let pageIndex = 0; pageIndex < (pagesDocument.pages ?? []).length; pageIndex += 1) {
-    const page = pagesDocument.pages[pageIndex];
-    const pageId = page.id ?? `chatcut-page-${String(pageIndex + 1).padStart(4, "0")}`;
-    const sourceLines = cleanLines(page.viewerText ?? page.text);
-    const pageCues = captions.cues.filter((cue) => cue.sourcePageId === pageId);
-    expectedCueCount += sourceLines.length;
-    if (pageCues.length !== sourceLines.length) errors.push(`${pageId}: every legacy ChatCut line must produce one cue`);
-  }
-  if (captions.cues.length !== expectedCueCount) errors.push("legacy caption cue count must equal the ChatCut line count");
+const reviewPlanRelativePath = captions.source.reviewPlan ?? "captions/caption-review-plan.json";
+const reviewPlanPath = path.resolve(path.dirname(path.dirname(captionsPath)), reviewPlanRelativePath);
+if (!fs.existsSync(reviewPlanPath)) {
+  errors.push("approved semantic captions require their review plan");
 } else {
-  const reviewPlanRelativePath = captions.source.reviewPlan ?? "captions/caption-review-plan.json";
-  const reviewPlanPath = path.resolve(path.dirname(path.dirname(captionsPath)), reviewPlanRelativePath);
-  if (!fs.existsSync(reviewPlanPath)) {
-    errors.push("approved semantic captions require their review plan");
-  } else {
-    const reviewPlan = JSON.parse(fs.readFileSync(reviewPlanPath, "utf8"));
-    if (reviewPlan.status !== "approved") errors.push("semantic caption plan must be user-approved before promotion");
-    if (reviewPlan.cues.length !== captions.cues.length) errors.push("promoted cue count differs from the approved plan");
-    for (let index = 0; index < Math.min(reviewPlan.cues.length, captions.cues.length); index += 1) {
-      const approved = reviewPlan.cues[index];
-      const rendered = captions.cues[index];
-      if (approved.id !== rendered.id || approved.text !== rendered.lines?.[0]) errors.push(`${rendered.id}: wording differs from the approved semantic plan`);
-      const expectedStartFrame = Math.max(0, Math.round(approved.start * captions.source.fps));
-      const expectedEndFrame = Math.max(expectedStartFrame + 1, Math.round(approved.end * captions.source.fps));
-      if (rendered.startFrame !== expectedStartFrame || rendered.endFrame !== expectedEndFrame) {
-        errors.push(`${rendered.id}: timing differs from the approved semantic plan`);
-      }
-      if (rendered.end - rendered.start < reviewPlan.rules.minimumDurationSeconds - 1 / captions.source.fps) errors.push(`${rendered.id}: duration is below the approved minimum`);
+  const reviewPlan = JSON.parse(fs.readFileSync(reviewPlanPath, "utf8"));
+  const transcriptPath = path.resolve(path.dirname(path.dirname(captionsPath)), "state", "transcript.json");
+  if (reviewPlan.status !== "approved") errors.push("semantic caption plan must be user-approved before promotion");
+  if (reviewPlan.cues.length !== captions.cues.length) errors.push("promoted cue count differs from the approved plan");
+  if (!fs.existsSync(transcriptPath)) errors.push("approved semantic captions require their transcript authority");
+  const resolvedCues = fs.existsSync(transcriptPath)
+    ? resolveCaptionCues(reviewPlan, JSON.parse(fs.readFileSync(transcriptPath, "utf8")))
+    : [];
+  for (let index = 0; index < Math.min(resolvedCues.length, captions.cues.length); index += 1) {
+    const approved = resolvedCues[index];
+    const rendered = captions.cues[index];
+    if (approved.id !== rendered.id || approved.text !== rendered.lines?.[0]) errors.push(`${rendered.id}: wording differs from the approved semantic plan`);
+    const expectedStartFrame = Math.max(0, Math.round(approved.start * captions.source.fps));
+    const expectedEndFrame = Math.max(expectedStartFrame + 1, Math.round(approved.end * captions.source.fps));
+    if (rendered.startFrame !== expectedStartFrame || rendered.endFrame !== expectedEndFrame) {
+      errors.push(`${rendered.id}: timing differs from the approved semantic plan`);
+    }
+    if (rendered.end - rendered.start < reviewPlan.rules.minimumDurationSeconds - 1 / captions.source.fps) {
+      errors.push(`${rendered.id}: duration is below the approved minimum`);
     }
   }
 }

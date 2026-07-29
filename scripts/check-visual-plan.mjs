@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { resolveBeatRenderWindow, transcriptWordsById } from "./motion-window-utils.mjs";
 
 const [beatMapPath, transcriptPath, designSystemPath] = process.argv.slice(2);
 
@@ -14,12 +15,10 @@ const errors = [];
 const warnings = [];
 const beats = [...beatMap.beats].sort((left, right) => left.start - right.start);
 const transcriptById = new Map(transcript.segments.map((segment) => [segment.id, segment]));
-const wordsById = new Map(transcript.segments.flatMap((segment) => (segment.words ?? []).map((word, index) => [
-  `${segment.id}:word-${String(index + 1).padStart(3, "0")}`,
-  word
-])));
+const wordsById = transcriptWordsById(transcript);
 const sourceUsage = new Map();
 const signatureUsage = new Map();
+const renderWindows = new Map();
 const normalize = (value) => value.replace(/[\s，。！？、,.!?]/g, "").toLowerCase();
 const captionMode = beatMap.captionMode ?? "motion-copy";
 const rhythm = designSystem.rhythmProfiles[captionMode];
@@ -79,7 +78,25 @@ for (let index = 0; index < beats.length; index += 1) {
   if (typeof beat.visualReference !== "string" || beat.visualReference.trim().length === 0) errors.push(`${beat.id}: motion beat must declare its approved or proposed visualReference`);
   if (!["sequence", "comparison", "convergence", "branch", "mapping", "emphasis", "evidence"].includes(beat.semanticTopology)) errors.push(`${beat.id}: motion beat must declare semanticTopology`);
   const entryWord = wordsById.get(beat.entryAnchorWordId);
+  const exitWord = wordsById.get(beat.exitAnchorWordId);
   if (!entryWord) errors.push(`${beat.id}: entryAnchorWordId does not resolve to a transcript word`);
+  if (!exitWord) errors.push(`${beat.id}: exitAnchorWordId does not resolve to a transcript word`);
+  if (!Number.isInteger(beat.exitAnchorOffsetFrames) || beat.exitAnchorOffsetFrames < 0 || beat.exitAnchorOffsetFrames > 12) {
+    errors.push(`${beat.id}: exitAnchorOffsetFrames must be an integer from 0 to 12`);
+  }
+  let renderWindow = null;
+  if (entryWord && exitWord) {
+    try {
+      renderWindow = resolveBeatRenderWindow(beat, beatMap, wordsById);
+      renderWindows.set(beat.id, renderWindow);
+      if (exitWord.end < entryWord.start) errors.push(`${beat.id}: exit anchor precedes entry anchor`);
+      if (renderWindow.exitAnchorTime > beat.end + 1 / beatMap.fps) errors.push(`${beat.id}: exit anchor extends beyond the Beat window`);
+      const lastMicroEvent = Math.max(beat.start, ...(beat.microEvents ?? []).map((event) => event.time));
+      if (renderWindow.exitAnchorTime < lastMicroEvent && !beat.staticHoldReason) errors.push(`${beat.id}: exit anchor precedes the last meaningful event`);
+    } catch (error) {
+      errors.push(error.message);
+    }
+  }
   if (captionMode === "subtitles" && beat.mgScope !== "local") errors.push(`${beat.id}: subtitles mode only permits local MG`);
   if (captionMode === "subtitles" && beat.captionSafeZonePass !== true) errors.push(`${beat.id}: local MG must pass caption safe-zone review`);
   if (captionMode === "subtitles") {
@@ -228,8 +245,15 @@ for (let index = 0; index < beats.length; index += 1) {
 
 const aAxisMotionBeats = beats.filter((beat) => beat.axis === "A" && !(captionMode === "subtitles" && beat.mgScope === "none"));
 for (const [index, beat] of aAxisMotionBeats.entries()) {
-  if (beat.layout?.faceCover !== "none" && beat.end - beat.start > 3) errors.push(`${beat.id}: A-axis face coverage exceeds three seconds`);
-  if (index > 0 && beat.start < aAxisMotionBeats[index - 1].end) errors.push(`${beat.id}: A-axis information groups overlap instead of replacing`);
+  const renderWindow = renderWindows.get(beat.id) ?? { start: beat.start, end: beat.end };
+  if (beat.layout?.faceCover !== "none" && renderWindow.end - renderWindow.start > 3) errors.push(`${beat.id}: A-axis face coverage exceeds three seconds`);
+  const previousWindow = index > 0
+    ? renderWindows.get(aAxisMotionBeats[index - 1].id) ?? {
+      start: aAxisMotionBeats[index - 1].start,
+      end: aAxisMotionBeats[index - 1].end
+    }
+    : null;
+  if (previousWindow && renderWindow.start < previousWindow.end) errors.push(`${beat.id}: A-axis information groups overlap instead of replacing`);
 }
 
 for (const repeatedBeats of signatureUsage.values()) {

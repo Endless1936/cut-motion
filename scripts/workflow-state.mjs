@@ -2,6 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { buildComposition } from "./build-composition.mjs";
+import {
+  buildDeltaCompositions,
+  createPreviewBaseline,
+  planDeltaPreview,
+  verifyDeltaBindings
+} from "./delta-preview.mjs";
+import { writeMotionIndex } from "./motion-index.mjs";
 import {
   assertCreativeAuthorities,
   assertRegularContainedFile,
@@ -10,7 +18,7 @@ import {
   computeCreativeDocumentFingerprints,
   computePendingCreativePackageSha256,
   computeValidationBundleSha256,
-  computeVisualSampleFingerprint,
+  computeDesignLanguageFingerprint,
   ensureWorkflowDefaults,
   invalidateCreativeArtifacts,
   isPathInside,
@@ -91,6 +99,153 @@ const markGateSkipped = (gate, reason) => {
     note: reason,
     revisionId: workflow.revisionId
   };
+};
+
+const latestUserCompositionRevision = () => [...workflow.history].reverse().find((entry) => (
+  entry.actor === "user"
+  && entry.revisionId === workflow.revisionId
+  && ((entry.action === "revise" && entry.from === "final-preview" && entry.to === "composition")
+    || (entry.action === "reopen" && entry.scope === "composition"))
+));
+
+const updateLocalCreativeAuthorities = (deltaPlan) => {
+  const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
+  const confirmation = readJson(confirmationPath);
+  const currentAuthorities = computeCreativeAuthorities(jobRoot, workflow.captionMode);
+  const changedAuthorities = Object.entries(currentAuthorities)
+    .filter(([name, authority]) => confirmation.authorities?.[name]?.sha256 !== authority.sha256)
+    .map(([name]) => name);
+  if (changedAuthorities.includes("transcript")) return { eligible: false, reason: "transcript-authority-changed" };
+  if (changedAuthorities.some((name) => !["beatMap", "captionPlan"].includes(name))) {
+    return { eligible: false, reason: "unsupported-creative-authority-changed" };
+  }
+  if (changedAuthorities.includes("beatMap")) {
+    runCheck(
+      "check-visual-plan.mjs",
+      [
+        path.join(jobRoot, "state", "beat-map.json"),
+        path.join(jobRoot, "state", "transcript.json"),
+        path.join(jobRoot, "state", "design-system.json")
+      ],
+      "User-approved Beat delta failed visual-plan validation"
+    );
+  }
+  if (changedAuthorities.includes("captionPlan")) {
+    runCheck(
+      "check-caption-review-plan.mjs",
+      [path.join(jobRoot, "captions", "caption-review-plan.json")],
+      "User-approved caption delta failed semantic validation"
+    );
+  }
+  for (const name of changedAuthorities) confirmation.authorities[name] = currentAuthorities[name];
+  if (changedAuthorities.length) {
+    writeJsonAtomic(confirmationPath, confirmation);
+    workflow.creativeConfirmationSha256 = sha256File(confirmationPath);
+  }
+  if (changedAuthorities.includes("beatMap")) {
+    workflow.visualPlanSha256 = currentAuthorities.beatMap.sha256;
+  }
+  workflow.history.push({
+    at: now,
+    action: "apply-user-approved-delta",
+    actor: "agent",
+    from: "composition",
+    to: "composition",
+    note: latestUserCompositionRevision()?.note ?? "User-approved local revision",
+    revisionId: workflow.revisionId,
+    authorities: changedAuthorities,
+    changedBeatIds: deltaPlan.changedBeatIds,
+    changedCaptionCueIds: deltaPlan.changedCaptionCueIds,
+    windows: deltaPlan.windows
+  });
+  return { eligible: true, changedAuthorities };
+};
+
+const classifyCompositionRevision = () => {
+  workflow.pendingDeltaPreview = null;
+  const deterministicTemplatePath = path.join(jobRoot, "hyperframes", "index.template.html");
+  if (!fs.existsSync(deterministicTemplatePath)) {
+    return { kind: "full", reason: "legacy-composition-requires-full-preview" };
+  }
+  const request = latestUserCompositionRevision();
+  const baseline = workflow.previewBaseline;
+  if (!request || !baseline) return { kind: "full", reason: "no-approved-preview-baseline" };
+  const baselineIndexPath = path.join(jobRoot, baseline.motionIndexPath);
+  if (!fs.existsSync(baselineIndexPath) || sha256File(baselineIndexPath) !== baseline.motionIndexSha256) {
+    return { kind: "full", reason: "baseline-index-stale" };
+  }
+  const baselinePreviewPath = path.join(jobRoot, baseline.previewPath);
+  if (!fs.existsSync(baselinePreviewPath) || sha256File(baselinePreviewPath) !== baseline.previewSha256) {
+    return { kind: "full", reason: "baseline-preview-stale" };
+  }
+  if (workflow.authoritativeMediaSha256 !== baseline.authoritativeMediaSha256) {
+    return { kind: "replan", reason: "authoritative-media-changed" };
+  }
+  if (computeDesignLanguageFingerprint(jobRoot, workflow.captionMode) !== baseline.designLanguageFingerprint) {
+    return { kind: "replan", reason: "design-language-changed" };
+  }
+  const deltaPlan = planDeltaPreview(jobRoot, baseline.motionIndexPath);
+  const authorityUpdate = updateLocalCreativeAuthorities(deltaPlan);
+  if (!authorityUpdate.eligible) return { kind: "replan", reason: authorityUpdate.reason };
+  const windowDuration = deltaPlan.windows.reduce((sum, window) => sum + window.end - window.start, 0);
+  const localized = deltaPlan.kind === "delta"
+    && deltaPlan.changedBeatIds.length <= 6
+    && deltaPlan.changedCaptionCueIds.length <= 8
+    && windowDuration <= 30;
+  if (!localized) return { kind: "full", reason: deltaPlan.reason, deltaPlan };
+  const sources = buildDeltaCompositions(jobRoot, deltaPlan).map((result) => ({
+    path: path.relative(jobRoot, result.outputPath),
+    sha256: sha256File(result.outputPath),
+    window: { start: result.windowStart, end: result.windowEnd }
+  }));
+  const currentMotionIndex = writeMotionIndex(jobRoot);
+  const productionCompositionPath = path.join(jobRoot, "hyperframes", "index.html");
+  workflow.pendingDeltaPreview = {
+    baselineMotionIndexPath: baseline.motionIndexPath,
+    baselineMotionIndexSha256: baseline.motionIndexSha256,
+    baselinePreviewPath: baseline.previewPath,
+    baselinePreviewSha256: baseline.previewSha256,
+    currentMotionIndexPath: path.relative(jobRoot, currentMotionIndex.outputPath),
+    currentMotionIndexSha256: sha256File(currentMotionIndex.outputPath),
+    productionCompositionPath: "hyperframes/index.html",
+    productionCompositionSha256: sha256File(productionCompositionPath),
+    designLanguageFingerprint: computeDesignLanguageFingerprint(jobRoot, workflow.captionMode),
+    authoritativeMediaSha256: workflow.authoritativeMediaSha256,
+    windows: deltaPlan.windows,
+    changedBeatIds: deltaPlan.changedBeatIds,
+    changedCaptionCueIds: deltaPlan.changedCaptionCueIds,
+    sources
+  };
+  return { kind: "delta", reason: deltaPlan.reason, deltaPlan };
+};
+
+const validateDeltaPreview = (previewRelativePath, options = {}) => {
+  const delta = workflow.pendingDeltaPreview;
+  if (!delta || delta.windows.length < 1 || delta.sources.length !== delta.windows.length) throw new Error("Delta preview state is incomplete");
+  verifyDeltaBindings(jobRoot, delta, workflow.previewBaseline, { rebuildProduction: options.rebuildProduction === true });
+  if (delta.designLanguageFingerprint !== computeDesignLanguageFingerprint(jobRoot, workflow.captionMode)) {
+    throw new Error("Delta design language changed after classification");
+  }
+  if (delta.authoritativeMediaSha256 !== workflow.authoritativeMediaSha256
+    || sha256File(path.join(jobRoot, workflow.authoritativeMediaPath)) !== delta.authoritativeMediaSha256) {
+    throw new Error("Delta authoritative media changed after classification");
+  }
+  for (let index = 0; index < delta.sources.length; index += 1) {
+    const source = delta.sources[index];
+    const sourcePath = assertJobArtifact(source.path, "hyperframes");
+    if (sha256File(sourcePath) !== source.sha256) throw new Error("Delta composition changed after classification");
+    if (JSON.stringify(source.window) !== JSON.stringify(delta.windows[index])) {
+      throw new Error("Delta source window no longer matches its manifest");
+    }
+  }
+  const previewPath = assertJobArtifact(previewRelativePath, "previews");
+  const probe = probeReviewVideo(previewPath, "Delta preview");
+  probeReviewSignal(previewPath, probe.duration, "Delta preview");
+  const expectedDuration = delta.windows.reduce((sum, window) => sum + window.end - window.start, 0);
+  const durationTolerance = (delta.windows.length + 1) / Math.max(probe.fps, 1);
+  if (Math.abs(probe.duration - expectedDuration) > durationTolerance) {
+    throw new Error(`Delta preview duration ${probe.duration}s does not match ${expectedDuration}s window`);
+  }
 };
 
 const runCheck = (scriptName, argumentsList, failurePrefix) => {
@@ -370,7 +525,10 @@ const validateGateArtifact = (gate) => {
   if (gate === "visual-sample-review") {
     validateVisualSampleReport(recordedArtifact);
   }
-  if (gate === "final-preview") validateFinalQa(recordedArtifact);
+  if (gate === "final-preview") {
+    if (workflow.pendingDeltaPreview) validateDeltaPreview(recordedArtifact);
+    else validateFinalQa(recordedArtifact);
+  }
 };
 
 const approveCreativePackage = (approvalNote, approvalActor) => {
@@ -407,9 +565,9 @@ const visualSampleRequired = () => {
   const confirmation = readJson(path.join(jobRoot, "state", "creative-confirmation.json"));
   const hasMotion = workflow.captionMode === "motion-copy"
     || (beatMap.beats ?? []).some((beat) => beat.mgScope && beat.mgScope !== "none");
-  const fingerprint = computeVisualSampleFingerprint(jobRoot, workflow.captionMode);
+  const fingerprint = computeDesignLanguageFingerprint(jobRoot, workflow.captionMode);
   return confirmation.visualSample?.required === true
-    || (hasMotion && workflow.approvedVisualSampleFingerprint !== fingerprint);
+    || (hasMotion && workflow.approvedDesignLanguageFingerprint !== fingerprint);
 };
 
 const continueAfterCreativeApproval = (action, entryActor) => {
@@ -439,7 +597,7 @@ const autoApproveGate = () => {
     return;
   }
   if (gate === "visual-sample-review") {
-    workflow.approvedVisualSampleFingerprint = computeVisualSampleFingerprint(jobRoot, workflow.captionMode);
+    workflow.approvedDesignLanguageFingerprint = computeDesignLanguageFingerprint(jobRoot, workflow.captionMode);
   }
   move(gateStage.next, "auto-approve", "agent");
 };
@@ -789,6 +947,44 @@ if (command === "advance") {
       if (creativeConfirmationCheck.status !== 0) throw new Error(`Motion plan requires a valid creative confirmation package: ${creativeConfirmationCheck.stderr.trim() || creativeConfirmationCheck.stdout.trim()}`);
       workflow.pendingCreativePackageSha256 = computePendingCreativePackageSha256(jobRoot, workflow.captionMode);
     }
+    if (workflow.currentState === "composition") {
+      const hyperframesDirectory = path.join(jobRoot, "hyperframes");
+      const deterministicTemplatePath = path.join(hyperframesDirectory, "index.template.html");
+      if (fs.existsSync(deterministicTemplatePath)) {
+        const built = buildComposition(hyperframesDirectory);
+        if (path.resolve(artifactPath) !== path.resolve(built.outputPath)) {
+          throw new Error("Composition advance requires the deterministic hyperframes/index.html build artifact");
+        }
+      } else if (path.resolve(artifactPath) !== path.join(hyperframesDirectory, "index.html")) {
+        throw new Error("Legacy composition advance requires hyperframes/index.html");
+      }
+      const classification = classifyCompositionRevision();
+      workflow.history.push({
+        at: now,
+        action: "classify-revision",
+        actor: "agent",
+        from: "composition",
+        to: classification.kind === "replan" ? "motion-plan" : "composition",
+        note: classification.reason,
+        revisionId: workflow.revisionId,
+        previewMode: classification.kind
+      });
+      if (classification.kind === "replan") {
+        beginWorkflowRevision(workflow, now, classification.reason);
+        invalidateCreativeConfirmation();
+        workflow.creativeConfirmationSha256 = null;
+        workflow.pendingCreativePackageSha256 = null;
+        workflow.creativeDocumentFingerprints = null;
+        workflow.visualPlanSha256 = null;
+        workflow.compositionArtifactPath = null;
+        workflow.compositionArtifactSha256 = null;
+        workflow.currentState = "motion-plan";
+        workflow.pendingGate = null;
+        save();
+        console.log(`Workflow state: motion-plan (${classification.reason})`);
+        process.exit(0);
+      }
+    }
     if (["visual-sample", "composition", "qa", "render"].includes(workflow.currentState)) {
       assertCreativeAuthorities(jobRoot, workflow);
       checkReconciliation(false);
@@ -799,7 +995,15 @@ if (command === "advance") {
     }
     if (workflow.currentState === "qa") {
       probeReviewVideo(artifactPath, "Final preview");
-      validateFinalQa(artifact);
+      if (workflow.pendingDeltaPreview) validateDeltaPreview(artifact);
+      else {
+        validateFinalQa(artifact);
+        workflow.previewBaseline = {
+          ...createPreviewBaseline(jobRoot, workflow.revisionId, artifact),
+          designLanguageFingerprint: computeDesignLanguageFingerprint(jobRoot, workflow.captionMode),
+          authoritativeMediaSha256: workflow.authoritativeMediaSha256
+        };
+      }
     }
     if (workflow.currentState === "render") {
       const canonicalDeliveryPath = path.join(jobRoot, "output", "final.mp4");
@@ -812,20 +1016,33 @@ if (command === "advance") {
       probeReviewSignal(artifactPath, delivery.duration, "Final delivery");
       const previewRelativePath = workflow.gates?.["final-preview"]?.artifact;
       const previewPath = assertJobArtifact(previewRelativePath, "previews");
-      const preview = probeReviewVideo(previewPath, "Final preview");
+      const comparisonPath = workflow.pendingDeltaPreview
+        ? assertJobArtifact(workflow.previewBaseline?.previewPath, workflow.previewBaseline?.previewPath?.startsWith("output/") ? "output" : "previews")
+        : previewPath;
+      const preview = probeReviewVideo(comparisonPath, workflow.pendingDeltaPreview ? "Preview baseline" : "Final preview");
       if (delivery.width !== preview.width || delivery.height !== preview.height
         || Math.abs(delivery.fps - preview.fps) > 0.001
         || Math.abs(delivery.duration - preview.duration) > 1 / Math.max(preview.fps, 1)) {
         throw new Error("Final delivery metadata differs from the approved preview");
       }
-      verifyEditorialMatch(artifactPath, previewPath);
-      validateFinalQa(workflow.gates?.["final-preview"]?.artifact);
+      if (!workflow.pendingDeltaPreview) {
+        verifyEditorialMatch(artifactPath, previewPath);
+        validateFinalQa(workflow.gates?.["final-preview"]?.artifact);
+      } else {
+        validateDeltaPreview(workflow.gates?.["final-preview"]?.artifact, { rebuildProduction: true });
+      }
       if (artifactPath !== canonicalDeliveryPath) fs.renameSync(artifactPath, canonicalDeliveryPath);
       workflow.lastKnownGoodDelivery = {
         path: "output/final.mp4",
         sha256: sha256File(canonicalDeliveryPath),
         validatedAt: now
       };
+      workflow.previewBaseline = {
+        ...createPreviewBaseline(jobRoot, workflow.revisionId, "output/final.mp4"),
+        designLanguageFingerprint: computeDesignLanguageFingerprint(jobRoot, workflow.captionMode),
+        authoritativeMediaSha256: workflow.authoritativeMediaSha256
+      };
+      workflow.pendingDeltaPreview = null;
     }
     if (workflow.currentState === "composition") {
       workflow.compositionArtifactPath = artifact;
@@ -875,7 +1092,7 @@ if (command === "advance") {
     continueAfterCreativeApproval("approve", actor);
   } else {
     if (workflow.currentState === "visual-sample-review") {
-      workflow.approvedVisualSampleFingerprint = computeVisualSampleFingerprint(jobRoot, workflow.captionMode);
+      workflow.approvedDesignLanguageFingerprint = computeDesignLanguageFingerprint(jobRoot, workflow.captionMode);
     }
     move(currentStage.next, "approve");
   }
@@ -890,6 +1107,11 @@ if (command === "advance") {
   };
   if (["rough-cut-review", "motion-plan-review"].includes(workflow.currentState)) {
     beginWorkflowRevision(workflow, now, note ?? `${workflow.currentState} revision requested`);
+  } else if (workflow.currentState === "final-preview") {
+    beginWorkflowRevision(workflow, now, note ?? "Final preview revision requested", {
+      gates: ["final-preview"],
+      invalidateVisualPlan: false
+    });
   }
   move(currentStage.revise, "revise");
   if (workflow.currentState === "motion-plan") invalidateCreativeConfirmation();

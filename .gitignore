@@ -9,3 +9,4 @@ jobs/*
 **/assets/fonts/*.woff2
 **/assets/gsap.min.js
 *.log
+docs/superpowers/

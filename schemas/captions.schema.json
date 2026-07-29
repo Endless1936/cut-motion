@@ -8,7 +8,7 @@
       "type": "object",
       "required": ["kind", "fps", "cleanExport", "roughCutLocked", "captionRenderDisabled"],
       "properties": {
-        "kind": { "enum": ["chatcut-viewer-pages", "approved-semantic-plan"] },
+        "kind": { "const": "approved-semantic-plan" },
         "fps": { "type": "number", "exclusiveMinimum": 0 },
         "cleanExport": { "type": "string", "minLength": 1 },
         "timelineVersion": { "type": ["string", "null"] },

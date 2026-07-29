@@ -44,6 +44,8 @@
           "visualReference": { "type": "string", "minLength": 1 },
           "semanticTopology": { "enum": ["sequence", "comparison", "convergence", "branch", "mapping", "emphasis", "evidence"] },
           "entryAnchorWordId": { "type": "string", "pattern": "^.+:word-[0-9]{3}$" },
+          "exitAnchorWordId": { "type": "string", "pattern": "^.+:word-[0-9]{3}$" },
+          "exitAnchorOffsetFrames": { "type": "integer", "minimum": 0, "maximum": 12 },
           "reuseGroup": { "type": "string", "minLength": 1 },
           "reuseReason": { "type": "string", "minLength": 1 },
           "viewerQuestion": { "type": "string", "minLength": 1 },
@@ -146,7 +148,7 @@
         "allOf": [
           {
             "if": { "properties": { "recipe": { "const": "caption-only" } }, "required": ["recipe"] },
-            "else": { "required": ["primaryFlowAxis", "visualReference", "semanticTopology", "entryAnchorWordId"] }
+            "else": { "required": ["primaryFlowAxis", "visualReference", "semanticTopology", "entryAnchorWordId", "exitAnchorWordId", "exitAnchorOffsetFrames", "exitFrames"] }
           }
         ]
       }

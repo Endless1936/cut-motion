@@ -1,13 +1,20 @@
 import fs from "node:fs";
+import path from "node:path";
+import { buildComposition } from "./build-composition.mjs";
 
-const [captionsPath, compositionPath] = process.argv.slice(2);
-if (!captionsPath || !compositionPath) {
-  console.error("Usage: node install-captions.mjs <captions.json> <hyperframes-index.html>");
+const [captionsPath, compositionPath, designSystemPath] = process.argv.slice(2);
+if (!captionsPath || !compositionPath || !designSystemPath) {
+  console.error("Usage: node install-captions.mjs <captions.json> <hyperframes-index.html> <design-system.json>");
   process.exit(64);
 }
 
 const captions = JSON.parse(fs.readFileSync(captionsPath, "utf8"));
-const source = fs.readFileSync(compositionPath, "utf8");
+const designSystem = JSON.parse(fs.readFileSync(designSystemPath, "utf8"));
+const templateCandidate = path.join(path.dirname(compositionPath), "index.template.html");
+const authoredCompositionPath = path.basename(compositionPath) === "index.html" && fs.existsSync(templateCandidate)
+  ? templateCandidate
+  : compositionPath;
+const source = fs.readFileSync(authoredCompositionPath, "utf8");
 const startMarker = "<!-- CUT_MOTION_CAPTIONS_START -->";
 const endMarker = "<!-- CUT_MOTION_CAPTIONS_END -->";
 const markerPair = [
@@ -26,7 +33,10 @@ const escapeHtml = (value) => String(value)
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#39;");
 
-const style = captions.style;
+if (JSON.stringify(captions.style) !== JSON.stringify(designSystem.captions)) {
+  throw new Error("Caption style must exactly match state/design-system.json");
+}
+const style = designSystem.captions;
 const shadow = `${style.shadow.xPx}px ${style.shadow.yPx}px ${style.shadow.blurPx}px ${style.shadow.color}`;
 const customProperties = [
   `--caption-bottom:${style.bottomOffsetPx}px`,
@@ -56,5 +66,6 @@ if (Number.isFinite(style.bottomOffsetRatio)) {
   updated = updated.replace(/data-caption-bottom-ratio=["'][0-9.]+["']/, `data-caption-bottom-ratio="${style.bottomOffsetRatio}"`);
 }
 updated = updated.replace(/data-caption-font-weight=["'][0-9]+["']/, `data-caption-font-weight="${style.fontWeight ?? 400}"`);
-fs.writeFileSync(compositionPath, updated);
-console.log(`Installed ${captions.cues.length} caption cue(s) into ${compositionPath}`);
+fs.writeFileSync(authoredCompositionPath, updated);
+if (authoredCompositionPath !== compositionPath) buildComposition(path.dirname(compositionPath));
+console.log(`Installed ${captions.cues.length} caption cue(s) into ${authoredCompositionPath}`);

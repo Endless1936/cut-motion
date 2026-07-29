@@ -1,0 +1,54 @@
+{
+  "source": {
+    "kind": "approved-semantic-plan",
+    "reviewPlan": "captions/caption-review-plan.json",
+    "fps": 30,
+    "cleanExport": "roughcut/a-roll.mp4",
+    "timelineVersion": "chatcut-example-v1",
+    "roughCutLocked": true,
+    "captionRenderDisabled": true
+  },
+  "style": {
+    "fontFamily": "Smiley Sans",
+    "fontAsset": "assets/fonts/smiley-sans-oblique.woff2",
+    "fontWeight": 400,
+    "color": "#FFFFFF",
+    "fontSizePx": 96,
+    "lineHeight": 1.15,
+    "maximumDisplayUnits": 11.8,
+    "minimumFontSizePx": 88,
+    "maximumLines": 1,
+    "bottomOffsetRatio": 0.2,
+    "bottomOffsetPx": 384,
+    "textAlign": "center",
+    "opaqueBackground": false,
+    "shadow": {
+      "xPx": 0,
+      "yPx": 9,
+      "blurPx": 21,
+      "color": "rgba(0, 0, 0, 0.76)"
+    }
+  },
+  "cues": [
+    {
+      "id": "caption-0001",
+      "sourcePageId": "approved-semantic-plan",
+      "startFrame": 0,
+      "endFrame": 45,
+      "start": 0,
+      "end": 1.5,
+      "viewerText": "看看这些特效",
+      "lines": ["看看这些特效"]
+    },
+    {
+      "id": "caption-0002",
+      "sourcePageId": "approved-semantic-plan",
+      "startFrame": 45,
+      "endFrame": 96,
+      "start": 1.5,
+      "end": 3.2,
+      "viewerText": "看看这些动画",
+      "lines": ["看看这些动画"]
+    }
+  ]
+}

@@ -50,6 +50,8 @@ while IFS= read -r module_file; do
   node --check "$module_file"
 done < <(find "$repository_root/scripts" -name '*.mjs' -type f)
 
+node "$repository_root/scripts/test-incremental-revision.mjs"
+
 trim_audit_file="$(mktemp)"
 cat > "$trim_audit_file" <<'EOF'
 {
@@ -295,7 +297,7 @@ fi
 invalid_layout_directory="$(mktemp -d)"
 cp "$repository_root/templates/hyperframes/caption.css" "$invalid_layout_directory/caption.css"
 invalid_surface_file="$invalid_layout_directory/invalid-surface.html"
-sed 's/data-border-policy="none"/data-border-policy="solid"/' "$repository_root/templates/hyperframes/index.html" > "$invalid_surface_file"
+sed 's#<!-- CUT_MOTION_MG_FRAGMENTS -->#<div data-motion-surface="container" data-border-policy="solid" style="border:2px solid red">invalid</div><!-- CUT_MOTION_MG_FRAGMENTS -->#' "$repository_root/templates/hyperframes/index.html" > "$invalid_surface_file"
 if node "$repository_root/scripts/check-layout-constraints.mjs" "$invalid_surface_file" "$repository_root/assets/design-system.default.json" >/dev/null 2>&1; then
   echo "Outlined generic motion container unexpectedly passed" >&2
   exit 1
@@ -324,20 +326,22 @@ if node "$repository_root/scripts/check-information-value.mjs" "$invalid_informa
 fi
 rm -f "$invalid_information_file"
 
-caption_smoke_file="$(mktemp)"
-node "$repository_root/scripts/build-captions.mjs" \
-  "$repository_root/examples/chatcut-caption-pages.example.json" \
-  "$repository_root/assets/design-system.default.json" \
-  "$caption_smoke_file"
+caption_smoke_job="$(mktemp -d)"
+mkdir -p "$caption_smoke_job/captions" "$caption_smoke_job/state"
+caption_smoke_file="$caption_smoke_job/captions/captions.json"
+cp "$repository_root/examples/captions.approved-semantic.example.json" "$caption_smoke_file"
+cp "$repository_root/examples/chatcut-caption-pages.example.json" "$caption_smoke_job/captions/chatcut-pages.json"
+jq '.status = "approved"' "$repository_root/examples/caption-review-plan.example.json" > "$caption_smoke_job/captions/caption-review-plan.json"
+cp "$repository_root/examples/transcript.example.json" "$caption_smoke_job/state/transcript.json"
 node "$repository_root/scripts/check-captions.mjs" \
   "$caption_smoke_file" \
-  "$repository_root/examples/chatcut-caption-pages.example.json" \
+  "$caption_smoke_job/captions/chatcut-pages.json" \
   "$repository_root/assets/design-system.default.json"
 
 caption_smoke_html="$(mktemp)"
 cp "$repository_root/templates/hyperframes/index.html" "$caption_smoke_html"
-node "$repository_root/scripts/install-captions.mjs" "$caption_smoke_file" "$caption_smoke_html"
-node "$repository_root/scripts/install-captions.mjs" "$caption_smoke_file" "$caption_smoke_html"
+node "$repository_root/scripts/install-captions.mjs" "$caption_smoke_file" "$caption_smoke_html" "$repository_root/assets/design-system.default.json"
+node "$repository_root/scripts/install-captions.mjs" "$caption_smoke_file" "$caption_smoke_html" "$repository_root/assets/design-system.default.json"
 node "$repository_root/scripts/check-caption-layer.mjs" "$caption_smoke_file" "$caption_smoke_html"
 rm -f "$caption_smoke_html"
 
@@ -348,7 +352,7 @@ if node "$repository_root/scripts/check-captions.mjs" "$invalid_caption_file" "$
   exit 1
 fi
 rm -f "$invalid_caption_file"
-rm -f "$caption_smoke_file"
+rm -rf "$caption_smoke_job"
 
 invalid_subtitle_map="$(mktemp)"
 jq '.beats[0].text = "看看这些特效"' "$repository_root/examples/beat-map.subtitles.example.json" > "$invalid_subtitle_map"
@@ -477,7 +481,7 @@ cp "$repository_root/templates/job/caption-lexicon.json" "$state_smoke_directory
 cp "$repository_root/examples/caption-review-plan.example.json" "$state_smoke_directory/captions/caption-review-plan.json"
 jq '.storyboard.beatCount = 2 | .review.status = "ready" | .visualAxisMode = "b-axis-stage" | .captionModeDecision = {"status":"acknowledged","source":"user"}' "$repository_root/templates/job/creative-confirmation.json" > "$state_smoke_directory/state/creative-confirmation.json"
 node "$repository_root/scripts/workflow-state.mjs" "$state_smoke_directory/state/workflow.json" set-axis-mode b-axis-stage --actor user --note "Approve the fixture B-axis stage" >/dev/null
-node "$repository_root/scripts/build-caption-review-plan.mjs" "$state_smoke_directory" >/dev/null
+node "$repository_root/scripts/render-caption-review-doc.mjs" "$state_smoke_directory" >/dev/null
 invalid_state_smoke_map="$(mktemp)"
 jq 'del(.beats[0].stillFrameValue)' "$state_smoke_directory/state/beat-map.json" > "$invalid_state_smoke_map"
 mv "$invalid_state_smoke_map" "$state_smoke_directory/state/beat-map.json"
@@ -687,13 +691,22 @@ required_files=(
   "$repository_root/assets/design-system.default.json"
   "$repository_root/config/validation-evidence-contracts.json"
   "$repository_root/schemas/workflow.schema.json"
+  "$repository_root/schemas/motion-index.schema.json"
   "$repository_root/schemas/captions.schema.json"
+  "$repository_root/schemas/caption-review-plan.schema.json"
   "$repository_root/schemas/chatcut-caption-pages.schema.json"
   "$repository_root/examples/chatcut-caption-pages.example.json"
   "$repository_root/examples/caption-reference.example.txt"
   "$repository_root/examples/caption-review-plan.example.json"
+  "$repository_root/examples/captions.approved-semantic.example.json"
   "$repository_root/examples/caption-plan.example.md"
-  "$repository_root/scripts/build-captions.mjs"
+  "$repository_root/scripts/caption-review-utils.mjs"
+  "$repository_root/scripts/render-caption-review-doc.mjs"
+  "$repository_root/scripts/motion-window-utils.mjs"
+  "$repository_root/scripts/build-composition.mjs"
+  "$repository_root/scripts/motion-index.mjs"
+  "$repository_root/scripts/delta-preview.mjs"
+  "$repository_root/scripts/render-delta-preview.mjs"
   "$repository_root/scripts/check-captions.mjs"
   "$repository_root/schemas/creative-confirmation.schema.json"
   "$repository_root/schemas/reference-script-annotations.schema.json"
@@ -714,8 +727,8 @@ required_files=(
   "$repository_root/scripts/resolve-transcript-item.mjs"
   "$repository_root/scripts/run-validation-check.mjs"
   "$repository_root/scripts/test-workflow-contracts.mjs"
-  "$repository_root/scripts/build-caption-review-plan.mjs"
-  "$repository_root/scripts/build-semantic-caption-proposal.mjs"
+  "$repository_root/scripts/render-caption-review-doc.mjs"
+  "$repository_root/scripts/caption-review-utils.mjs"
   "$repository_root/scripts/check-caption-review-plan.mjs"
   "$repository_root/scripts/remap-beat-caption-cues.mjs"
   "$repository_root/scripts/promote-caption-review-plan.mjs"

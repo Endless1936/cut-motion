@@ -123,7 +123,7 @@ For `subtitles` mode:
 - do not repeat the same sentence as a large motion headline;
 - use the reconciled recording-backed transcript as wording authority; reference scripts and ASR are evidence only;
 - retain `captions/chatcut-pages.json` as raw timing evidence, but do not preserve its `/` pagination blindly. Build `captions/caption-review-plan.json` by aligning the approved wording to word timestamps and authoring semantic one-line groups;
-- run `scripts/check-caption-review-plan.mjs` before presenting the plan. After `motion-plan-review` approval, promote that exact plan to `captions/captions.json`, then run `scripts/check-captions.mjs` and `scripts/install-captions.mjs`;
+- run `scripts/check-caption-review-plan.mjs` before presenting the plan. After `motion-plan-review` approval, promote that exact plan to `captions/captions.json`, then run `scripts/check-captions.mjs` and `scripts/install-captions.mjs <captions> <composition> <design-system>`;
 - start with a caption-only HyperFrames delivery. Add MG only after that baseline is viable and only at selected semantic nodes. Never cover captions, PiP, product evidence, or protected UI; face coverage follows the brief-semantic-only A-axis rule below. Global MG is forbidden in `subtitles` mode.
 - default to A-axis overlays in `subtitles` mode: keep the talking-head video full-frame beneath localized MG. A full-screen MG stage with a reduced speaker PiP requires explicit user approval.
 
@@ -221,6 +221,7 @@ Every spoken sentence must be represented. Split long sentences into meaningful 
 - one primary motion recipe when motion is approved;
 - one `primaryFlowAxis` (`horizontal` or `vertical`) and `visualReference` when motion is approved;
 - one `semanticTopology` and word-level `entryAnchorWordId` when motion is approved;
+- one word-level `exitAnchorWordId` plus `exitAnchorOffsetFrames` when motion is approved;
 - motion family and transition family when motion is approved;
 - micro-event timestamps and topology roles; connector/container events share a `revealGroup`;
 - supporting components;
@@ -264,6 +265,7 @@ Bind sample static checks to the independent sample HTML source and media checks
 10. Run `scripts/check-layout-constraints.mjs`; a one-character final line and any B-axis content that intrudes into the protected PIP zone are blocking failures.
 11. Preserve `data-motion-contract="enforced"` and the browser contract from the scaffold. Generic container borders, non-token connector colors, decorative labels, and caption-offset drift are blocking failures; HyperFrames remains responsible for computed peak-frame bounds.
 12. Put every authored visual inside one `data-motion-group` that declares axis, primary/auxiliary role, active time, face-cover policy, primary flow, and topology. Mark connectors with their reveal group and rendered flow axis; the existing browser contract enforces bounds, protected-region separation, A-axis replacement, group lifetime, and primary-flow continuity during timeline updates.
+13. Author each MG Beat under `hyperframes/mg/<beat-id>/` as `fragment.html`, scoped `style.css`, and `timeline.mjs`. Run `scripts/build-composition.mjs` before checks or renders; `hyperframes/index.html` is deterministic generated output and must not be edited.
 
 ### 8. A/B-axis direction
 
@@ -322,6 +324,8 @@ Run all gates in `docs/quality-gates.md`:
 8. Render the final preview with `npm run render:preview`, which uses HyperFrames `standard` quality.
 9. After approval in `review` mode, render with `npm run render`, which uses HyperFrames `high` quality. It must preserve the approved preview's editorial content.
 10. Verify output existence, duration, frame rate, dimensions, and audio stream.
+
+For a user-approved final-preview revision, classification happens after the files change and before creative-authority assertion. When the design language, media baseline and shared dependencies are unchanged, derive `state/motion-index.json`, compare it with the bound baseline index, and use the padded union of old and new Beat/cue windows for a delta preview. Do not rerun unchanged Beat checks or render another full `standard` preview. Shared CSS, global caption style, media timing, design-language or broad changes use the existing full path. After delta approval, render one complete `high` delivery.
 
 Only canonical large media persists: immutable `input/source.*`, `roughcut/a-roll.mp4`, current visual/final previews, HyperFrames input, and `output/final.mp4`. Use `promote-job-media.mjs` for explicit external exports; it must reject immutable input, escaped directories, and approved artifacts. Never scan download folders or delete unregistered user files.
 

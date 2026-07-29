@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { assertCreativeAuthorities, ensureWorkflowDefaults, readJson } from "./workflow-utils.mjs";
+import { resolveCaptionCues } from "./caption-review-utils.mjs";
 
 const [jobDirectoryArgument] = process.argv.slice(2);
 if (!jobDirectoryArgument) {
@@ -13,10 +14,12 @@ const workflow = ensureWorkflowDefaults(readJson(path.join(jobDirectory, "state"
 assertCreativeAuthorities(jobDirectory, workflow);
 const reviewPlan = JSON.parse(fs.readFileSync(path.join(jobDirectory, "captions", "caption-review-plan.json"), "utf8"));
 if (reviewPlan.status !== "approved") throw new Error("Caption review plan must be approved at motion-plan-review before promotion");
+const transcript = JSON.parse(fs.readFileSync(path.join(jobDirectory, "state", "transcript.json"), "utf8"));
+const resolvedCues = resolveCaptionCues(reviewPlan, transcript);
 const pages = JSON.parse(fs.readFileSync(path.join(jobDirectory, "captions", "chatcut-pages.json"), "utf8"));
 const designSystem = JSON.parse(fs.readFileSync(path.join(jobDirectory, "state", "design-system.json"), "utf8"));
 const fps = pages.fps;
-const cues = reviewPlan.cues.map((cue) => {
+const cues = resolvedCues.map((cue) => {
   const startFrame = Math.max(0, Math.round(cue.start * fps));
   const endFrame = Math.max(startFrame + 1, Math.round(cue.end * fps));
   return {

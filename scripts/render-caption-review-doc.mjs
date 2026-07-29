@@ -1,17 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
+import { resolveCaptionCues } from "./caption-review-utils.mjs";
 
 const [jobDirectoryArgument] = process.argv.slice(2);
 if (!jobDirectoryArgument) {
-  console.error("Usage: node build-caption-review-plan.mjs <job-directory>");
+  console.error("Usage: node render-caption-review-doc.mjs <job-directory>");
   process.exit(64);
 }
 
 const jobDirectory = path.resolve(jobDirectoryArgument);
 const semanticPlanPath = path.join(jobDirectory, "captions", "caption-review-plan.json");
-const captions = fs.existsSync(semanticPlanPath)
-  ? JSON.parse(fs.readFileSync(semanticPlanPath, "utf8"))
-  : JSON.parse(fs.readFileSync(path.join(jobDirectory, "captions", "captions.json"), "utf8"));
+if (!fs.existsSync(semanticPlanPath)) throw new Error("captions/caption-review-plan.json is required");
+const plan = JSON.parse(fs.readFileSync(semanticPlanPath, "utf8"));
+const transcript = JSON.parse(fs.readFileSync(path.join(jobDirectory, "state", "transcript.json"), "utf8"));
+const captions = { ...plan, cues: resolveCaptionCues(plan, transcript) };
 const beatMap = JSON.parse(fs.readFileSync(path.join(jobDirectory, "state", "beat-map.json"), "utf8"));
 const localBeats = beatMap.beats.filter((beat) => beat.mgScope === "local");
 const localByCue = new Map();

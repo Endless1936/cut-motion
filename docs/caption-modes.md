@@ -28,7 +28,7 @@ Use this sequence:
 node scripts/check-caption-review-plan.mjs jobs/<job-id>/captions/caption-review-plan.json
 node scripts/promote-caption-review-plan.mjs jobs/<job-id>
 node scripts/check-captions.mjs jobs/<job-id>/captions/captions.json jobs/<job-id>/captions/chatcut-pages.json jobs/<job-id>/state/design-system.json
-node scripts/install-captions.mjs jobs/<job-id>/captions/captions.json jobs/<job-id>/hyperframes/index.html
+node scripts/install-captions.mjs jobs/<job-id>/captions/captions.json jobs/<job-id>/hyperframes/index.html jobs/<job-id>/state/design-system.json
 ```
 
 Before promotion, lock the ChatCut rough cut, reconcile wording against the recording, author semantic one-line cues, and approve them in the creative package. Disable ChatCut caption rendering before exporting clean A-roll. The installer uses only the approved promoted cues and replaces prior generated clips idempotently.

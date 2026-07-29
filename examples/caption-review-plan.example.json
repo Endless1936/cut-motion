@@ -4,8 +4,8 @@
   "wordingAuthority": "state/transcript.json",
   "transcriptRevision": 1,
   "transcriptSha256": "8f20918cb83f012f107b0a061919a08254acfb1591ee84f4988d0bf98359e0ba",
-  "timingAuthority": "example",
-  "segmentationAuthority": "example",
+  "timingAuthority": "state/transcript.json word ranges",
+  "segmentationAuthority": "agent-authored word ranges",
   "rules": {
     "exactlyOneLine": true,
     "minimumDurationSeconds": 0.5,
@@ -16,28 +16,19 @@
     "protectedTerms": [],
     "forbiddenStandaloneCues": ["的", "了"]
   },
-  "alignment": {
-    "referenceCharacters": 12,
-    "acousticCharacters": 12,
-    "editDistance": 0
-  },
   "exceptions": {},
   "cues": [
     {
       "id": "caption-0001",
       "text": "看看这些特效",
-      "start": 0,
-      "end": 1.5,
-      "referenceCharacterStart": 0,
-      "referenceCharacterEnd": 5
+      "startWordId": "seg-001:word-001",
+      "endWordId": "seg-001:word-003"
     },
     {
       "id": "caption-0002",
       "text": "看看这些动画",
-      "start": 1.5,
-      "end": 3.2,
-      "referenceCharacterStart": 6,
-      "referenceCharacterEnd": 11
+      "startWordId": "seg-002:word-001",
+      "endWordId": "seg-002:word-003"
     }
   ]
 }

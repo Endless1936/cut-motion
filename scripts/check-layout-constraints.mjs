@@ -72,6 +72,12 @@ if (designSystem.captions) {
   if (!Number.isFinite(ratio) || Math.abs(ratio - designSystem.captions.bottomOffsetRatio) > 0.0001) errors.push("composition caption-bottom ratio must match the design system");
   const weight = Number(/data-caption-font-weight=["']([0-9]+)["']/i.exec(composition)?.[1]);
   if (weight !== designSystem.captions.fontWeight || weight > 500) errors.push("composition caption weight must remain the approved normal weight");
+  for (const match of composition.matchAll(/<section[^>]*class=["'][^"']*\bmotion-caption-layer\b[^"']*["'][^>]*>/gi)) {
+    const bottom = Number(/--caption-bottom\s*:\s*([0-9.]+)px/i.exec(match[0])?.[1]);
+    if (!Number.isFinite(bottom) || Math.abs(bottom - expectedBottomPx) > 0.5) {
+      errors.push("every caption layer must use the design-system bottom offset");
+    }
+  }
 }
 
 for (const match of composition.matchAll(/<[^>]+class=["']([^"']+)["'][^>]*>/gi)) {

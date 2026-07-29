@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "cut-motion Workflow State",
   "type": "object",
-  "required": ["schemaVersion", "jobId", "mode", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "reconciliationReturnState", "creativeConfirmationSha256", "pendingCreativePackageSha256", "creativeDocumentFingerprints", "authoritativeMediaPath", "authoritativeMediaSha256", "trimPlanSha256", "visualPlanSha256", "compositionArtifactPath", "compositionArtifactSha256", "revisionId", "approvedVisualSampleFingerprint", "currentState", "pendingGate", "completed", "gates", "history"],
+  "required": ["schemaVersion", "jobId", "mode", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "reconciliationReturnState", "creativeConfirmationSha256", "pendingCreativePackageSha256", "creativeDocumentFingerprints", "authoritativeMediaPath", "authoritativeMediaSha256", "trimPlanSha256", "visualPlanSha256", "compositionArtifactPath", "compositionArtifactSha256", "revisionId", "approvedDesignLanguageFingerprint", "previewBaseline", "pendingDeltaPreview", "currentState", "pendingGate", "completed", "gates", "history"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": "1.0.0" },
@@ -38,7 +38,55 @@
       "required": ["path", "sha256", "validatedAt"]
     },
     "revisionId": { "type": "integer", "minimum": 1 },
-    "approvedVisualSampleFingerprint": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+    "approvedDesignLanguageFingerprint": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+    "previewBaseline": {
+      "type": ["object", "null"],
+      "properties": {
+        "previewPath": { "type": "string", "minLength": 1 },
+        "previewSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "motionIndexPath": { "type": "string", "minLength": 1 },
+        "motionIndexSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "revisionId": { "type": "integer", "minimum": 1 },
+        "designLanguageFingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "authoritativeMediaSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "required": ["previewPath", "previewSha256", "motionIndexPath", "motionIndexSha256", "revisionId", "designLanguageFingerprint", "authoritativeMediaSha256"],
+      "additionalProperties": false
+    },
+    "pendingDeltaPreview": {
+      "type": ["object", "null"],
+      "properties": {
+        "baselineMotionIndexPath": { "type": "string", "minLength": 1 },
+        "baselineMotionIndexSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "baselinePreviewPath": { "type": "string", "minLength": 1 },
+        "baselinePreviewSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "currentMotionIndexPath": { "type": "string", "minLength": 1 },
+        "currentMotionIndexSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "productionCompositionPath": { "type": "string", "minLength": 1 },
+        "productionCompositionSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "designLanguageFingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "authoritativeMediaSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "windows": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/window" } },
+        "changedBeatIds": { "type": "array", "items": { "type": "string" } },
+        "changedCaptionCueIds": { "type": "array", "items": { "type": "string" } },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["path", "sha256", "window"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+              "window": { "$ref": "#/$defs/window" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["baselineMotionIndexPath", "baselineMotionIndexSha256", "baselinePreviewPath", "baselinePreviewSha256", "currentMotionIndexPath", "currentMotionIndexSha256", "productionCompositionPath", "productionCompositionSha256", "designLanguageFingerprint", "authoritativeMediaSha256", "windows", "changedBeatIds", "changedCaptionCueIds", "sources"],
+      "additionalProperties": false
+    },
     "currentState": {
       "enum": ["intake", "transcription", "rough-cut", "rough-cut-review", "motion-plan", "motion-plan-review", "visual-sample", "visual-sample-review", "composition", "qa", "final-preview", "render", "complete"]
     },
@@ -63,6 +111,17 @@
         },
         "additionalProperties": true
       }
+    }
+  },
+  "$defs": {
+    "window": {
+      "type": "object",
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "number", "minimum": 0 },
+        "end": { "type": "number", "exclusiveMinimum": 0 }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

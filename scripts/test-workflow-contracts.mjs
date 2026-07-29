@@ -10,13 +10,14 @@ import {
   computeCreativeAuthorities,
   computeCreativeDocumentFingerprints,
   computePendingCreativePackageSha256,
-  computeVisualSampleFingerprint,
+  computeDesignLanguageFingerprint,
   ensureWorkflowDefaults,
   readJson,
   sha256File,
   sha256Text,
   writeJsonAtomic
 } from "./workflow-utils.mjs";
+import { createPreviewBaseline } from "./delta-preview.mjs";
 import { parseReferenceScript } from "./reference-script-annotations.mjs";
 
 const repositoryRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
@@ -144,20 +145,20 @@ try {
   nodeScript("workflow-state.mjs", [modeSwitchWorkflow, "set-axis-mode", "b-axis-stage", "--actor", "user"]);
   assert.deepEqual(readJson(path.join(modeSwitchJob, "state", "creative-confirmation.json")).visualSample.requiredAxes, ["B"]);
   fs.copyFileSync(path.join(repositoryRoot, "examples", "beat-map.example.json"), path.join(modeSwitchJob, "state", "beat-map.json"));
-  const motionCopyFingerprint = computeVisualSampleFingerprint(modeSwitchJob, "motion-copy");
+  const motionCopyFingerprint = computeDesignLanguageFingerprint(modeSwitchJob, "motion-copy");
   const motionCopyMap = readJson(path.join(modeSwitchJob, "state", "beat-map.json"));
   motionCopyMap.beats[0].entryAnchorWordId = "seg-001:word-002";
   writeJsonAtomic(path.join(modeSwitchJob, "state", "beat-map.json"), motionCopyMap);
-  assert.equal(computeVisualSampleFingerprint(modeSwitchJob, "motion-copy"), motionCopyFingerprint);
+  assert.equal(computeDesignLanguageFingerprint(modeSwitchJob, "motion-copy"), motionCopyFingerprint);
   motionCopyMap.beats[0].attentionCost = "medium";
   writeJsonAtomic(path.join(modeSwitchJob, "state", "beat-map.json"), motionCopyMap);
-  const costFingerprint = computeVisualSampleFingerprint(modeSwitchJob, "motion-copy");
+  const costFingerprint = computeDesignLanguageFingerprint(modeSwitchJob, "motion-copy");
   motionCopyMap.beats[0].attentionCost = "low";
   writeJsonAtomic(path.join(modeSwitchJob, "state", "beat-map.json"), motionCopyMap);
-  assert.equal(computeVisualSampleFingerprint(modeSwitchJob, "motion-copy"), costFingerprint);
+  assert.equal(computeDesignLanguageFingerprint(modeSwitchJob, "motion-copy"), costFingerprint);
   motionCopyMap.beats[0].transitionFamily = "changed-grammar";
   writeJsonAtomic(path.join(modeSwitchJob, "state", "beat-map.json"), motionCopyMap);
-  assert.notEqual(computeVisualSampleFingerprint(modeSwitchJob, "motion-copy"), motionCopyFingerprint);
+  assert.notEqual(computeDesignLanguageFingerprint(modeSwitchJob, "motion-copy"), motionCopyFingerprint);
   nodeScript("workflow-state.mjs", [modeSwitchWorkflow, "set-caption-mode", "subtitles", "--actor", "user"]);
   assert.equal(readJson(path.join(modeSwitchJob, "state", "creative-confirmation.json")).storyboard.captionPlan, "docs/caption-plan.md");
   assert.equal(fs.existsSync(path.join(modeSwitchJob, "docs", "caption-plan.md")), true);
@@ -290,7 +291,7 @@ try {
   fs.copyFileSync(path.join(repositoryRoot, "examples", "beat-map.subtitles.example.json"), path.join(axisJob, "state", "beat-map.json"));
   fs.copyFileSync(path.join(repositoryRoot, "examples", "caption-review-plan.example.json"), path.join(axisJob, "captions", "caption-review-plan.json"));
   fs.writeFileSync(path.join(axisJob, "docs", "motion-plan.md"), "# Motion Plan\n\n关键帧 / GSAP\n\n30 FPS / 实时同步\n");
-  nodeScript("build-caption-review-plan.mjs", [axisJob]);
+  nodeScript("render-caption-review-doc.mjs", [axisJob]);
   nodeScript("create-transcript-reconciliation.mjs", [axisJob, "input/source.mov", writeSpeechOnlyItems(axisJob, "axis-items")]);
   const axisConfirmationPath = path.join(axisJob, "state", "creative-confirmation.json");
   const axisConfirmation = readJson(axisConfirmationPath);
@@ -420,14 +421,14 @@ try {
   fingerprintWorkflow.creativeConfirmationSha256 = sha256File(confirmationPath);
   fingerprintWorkflow.creativeDocumentFingerprints = computeCreativeDocumentFingerprints(fingerprintJob, "subtitles");
   writeJsonAtomic(fingerprintWorkflowPath, fingerprintWorkflow);
-  const sampleFingerprint = computeVisualSampleFingerprint(fingerprintJob, "subtitles");
+  const sampleFingerprint = computeDesignLanguageFingerprint(fingerprintJob, "subtitles");
   const repeatedGrammar = readJson(path.join(fingerprintJob, "state", "beat-map.json"));
   repeatedGrammar.beats.push({ ...repeatedGrammar.beats[0], id: "repeated-grammar" });
   writeJsonAtomic(path.join(fingerprintJob, "state", "beat-map.json"), repeatedGrammar);
-  assert.equal(computeVisualSampleFingerprint(fingerprintJob, "subtitles"), sampleFingerprint);
+  assert.equal(computeDesignLanguageFingerprint(fingerprintJob, "subtitles"), sampleFingerprint);
   repeatedGrammar.beats.at(-1).attentionCost = "high";
   writeJsonAtomic(path.join(fingerprintJob, "state", "beat-map.json"), repeatedGrammar);
-  assert.notEqual(computeVisualSampleFingerprint(fingerprintJob, "subtitles"), sampleFingerprint);
+  assert.notEqual(computeDesignLanguageFingerprint(fingerprintJob, "subtitles"), sampleFingerprint);
   fs.copyFileSync(path.join(repositoryRoot, "examples", "beat-map.subtitles.example.json"), path.join(fingerprintJob, "state", "beat-map.json"));
   assertCreativeAuthorities(fingerprintJob, fingerprintWorkflow);
   fs.appendFileSync(path.join(fingerprintJob, "state", "beat-map.json"), "\n");
@@ -436,6 +437,107 @@ try {
   driftedConfirmation.visualSample.scope = "selective-mg";
   writeJsonAtomic(confirmationPath, driftedConfirmation);
   assert.throws(() => assertCreativeAuthorities(fingerprintJob, fingerprintWorkflow), /package drift/);
+
+  const authorityDeltaJob = scaffold("caption-authority-delta", true);
+  const authorityDeltaWorkflowPath = path.join(authorityDeltaJob, "state", "workflow.json");
+  nodeScript("register-reference-script.mjs", [authorityDeltaWorkflowPath, "none", "--actor", "user"]);
+  fs.copyFileSync(path.join(repositoryRoot, "examples", "transcript.example.json"), path.join(authorityDeltaJob, "state", "transcript.json"));
+  fs.copyFileSync(path.join(repositoryRoot, "examples", "beat-map.subtitles.example.json"), path.join(authorityDeltaJob, "state", "beat-map.json"));
+  fs.copyFileSync(path.join(repositoryRoot, "examples", "caption-review-plan.example.json"), path.join(authorityDeltaJob, "captions", "caption-review-plan.json"));
+  fs.copyFileSync(path.join(repositoryRoot, "examples", "captions.approved-semantic.example.json"), path.join(authorityDeltaJob, "captions", "captions.json"));
+  fs.copyFileSync(path.join(repositoryRoot, "examples", "chatcut-caption-pages.example.json"), path.join(authorityDeltaJob, "captions", "chatcut-pages.json"));
+  nodeScript(
+    "create-transcript-reconciliation.mjs",
+    [authorityDeltaJob, "input/source.mov", writeSpeechOnlyItems(authorityDeltaJob, "caption-authority-delta-items")]
+  );
+  for (const beatId of ["support-001", "support-002"]) {
+    const moduleDirectory = path.join(authorityDeltaJob, "hyperframes", "mg", beatId);
+    fs.mkdirSync(moduleDirectory, { recursive: true });
+    fs.writeFileSync(path.join(moduleDirectory, "fragment.html"), `<div data-beat-id="${beatId}"><p class="copy">测试</p></div>\n`);
+    fs.writeFileSync(path.join(moduleDirectory, "style.css"), `[data-beat-id="${beatId}"] .copy { color: var(--paper); }\n`);
+    fs.writeFileSync(
+      path.join(moduleDirectory, "timeline.mjs"),
+      `timeline.from('[data-beat-id="${beatId}"] .copy', { opacity: 0, duration: 0.2 }, beat.start);\n`
+    );
+  }
+  const authorityDeltaAssets = path.join(authorityDeltaJob, "hyperframes", "assets");
+  fs.mkdirSync(path.join(authorityDeltaAssets, "fonts"), { recursive: true });
+  fs.copyFileSync(path.join(authorityDeltaJob, "input", "source.mov"), path.join(authorityDeltaAssets, "input-video.mp4"));
+  fs.writeFileSync(path.join(authorityDeltaAssets, "gsap.min.js"), "gsap");
+  fs.writeFileSync(path.join(authorityDeltaAssets, "fonts", "smiley-sans-oblique.woff2"), "font");
+  nodeScript("build-composition.mjs", [path.join(authorityDeltaJob, "hyperframes")]);
+  const authorityDeltaConfirmationPath = path.join(authorityDeltaJob, "state", "creative-confirmation.json");
+  const authorityDeltaConfirmation = readJson(authorityDeltaConfirmationPath);
+  authorityDeltaConfirmation.authorities = computeCreativeAuthorities(authorityDeltaJob, "subtitles");
+  authorityDeltaConfirmation.review = {
+    status: "approved",
+    actor: "user",
+    decidedAt: new Date().toISOString(),
+    note: "approved"
+  };
+  writeJsonAtomic(authorityDeltaConfirmationPath, authorityDeltaConfirmation);
+  fs.writeFileSync(path.join(authorityDeltaJob, "previews", "baseline.mp4"), "baseline");
+  const authorityDeltaMediaPath = path.join(authorityDeltaJob, "input", "source.mov");
+  const authorityDeltaWorkflow = ensureWorkflowDefaults(readJson(authorityDeltaWorkflowPath));
+  authorityDeltaWorkflow.currentState = "composition";
+  authorityDeltaWorkflow.pendingGate = null;
+  authorityDeltaWorkflow.referenceScriptStatus = "none";
+  authorityDeltaWorkflow.referenceScriptAcknowledged = true;
+  authorityDeltaWorkflow.captionModeAcknowledged = true;
+  authorityDeltaWorkflow.visualAxisModeAcknowledged = true;
+  authorityDeltaWorkflow.authoritativeMediaPath = "input/source.mov";
+  authorityDeltaWorkflow.authoritativeMediaSha256 = sha256File(authorityDeltaMediaPath);
+  authorityDeltaWorkflow.visualPlanSha256 = sha256File(path.join(authorityDeltaJob, "state", "beat-map.json"));
+  authorityDeltaWorkflow.creativeConfirmationSha256 = sha256File(authorityDeltaConfirmationPath);
+  authorityDeltaWorkflow.creativeDocumentFingerprints = computeCreativeDocumentFingerprints(authorityDeltaJob, "subtitles");
+  authorityDeltaWorkflow.previewBaseline = {
+    ...createPreviewBaseline(authorityDeltaJob, authorityDeltaWorkflow.revisionId, "previews/baseline.mp4"),
+    designLanguageFingerprint: computeDesignLanguageFingerprint(authorityDeltaJob, "subtitles"),
+    authoritativeMediaSha256: authorityDeltaWorkflow.authoritativeMediaSha256
+  };
+  authorityDeltaWorkflow.history.push({
+    at: new Date().toISOString(),
+    action: "revise",
+    actor: "user",
+    from: "final-preview",
+    to: "composition",
+    note: "Approve one local caption cue adjustment",
+    revisionId: authorityDeltaWorkflow.revisionId
+  });
+  writeJsonAtomic(authorityDeltaWorkflowPath, authorityDeltaWorkflow);
+  const locallyApprovedCaptionPlan = readJson(path.join(authorityDeltaJob, "captions", "caption-review-plan.json"));
+  locallyApprovedCaptionPlan.status = "approved";
+  writeJsonAtomic(path.join(authorityDeltaJob, "captions", "caption-review-plan.json"), locallyApprovedCaptionPlan);
+  nodeScript("workflow-state.mjs", [
+    authorityDeltaWorkflowPath,
+    "advance",
+    "--artifact",
+    "hyperframes/index.html",
+    "--note",
+    "apply local caption authority"
+  ]);
+  const advancedAuthorityDeltaWorkflow = readJson(authorityDeltaWorkflowPath);
+  assert.equal(advancedAuthorityDeltaWorkflow.currentState, "qa");
+  const authorityUpdateHistory = advancedAuthorityDeltaWorkflow.history.find((entry) => entry.action === "apply-user-approved-delta");
+  assert.deepEqual(authorityUpdateHistory.authorities, ["captionPlan"]);
+  assert.equal(
+    readJson(authorityDeltaConfirmationPath).authorities.captionPlan.sha256,
+    sha256File(path.join(authorityDeltaJob, "captions", "caption-review-plan.json"))
+  );
+  const legacyReleaseCaptions = readJson(path.join(authorityDeltaJob, "captions", "captions.json"));
+  legacyReleaseCaptions.source.kind = "chatcut-viewer-pages";
+  const legacyReleaseCaptionsPath = path.join(authorityDeltaJob, "captions", "legacy-release-captions.json");
+  writeJsonAtomic(legacyReleaseCaptionsPath, legacyReleaseCaptions);
+  nodeScript(
+    "check-captions.mjs",
+    [
+      legacyReleaseCaptionsPath,
+      path.join(authorityDeltaJob, "captions", "chatcut-pages.json"),
+      path.join(authorityDeltaJob, "state", "design-system.json")
+    ],
+    false,
+    /release captions must originate from an approved semantic plan/
+  );
 
   const transactionJob = scaffold("transaction", true);
   const transactionWorkflowPath = path.join(transactionJob, "state", "workflow.json");

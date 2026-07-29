@@ -38,8 +38,8 @@ Never cut raw text at a character limit before the language pass.
 ## Review workflow
 
 1. Use `state/transcript.json` as authority; `captions/reference-transcript.txt` may exist only as a derived human-readable snapshot.
-2. Record names, product configurations, number-unit pairs, and fixed phrases in `captions/caption-lexicon.json`, then author semantic groups in `captions/caption-segmentation.txt`.
-3. Align the groups to word timestamps with `scripts/build-semantic-caption-proposal.mjs`.
+2. Record names, product configurations, number-unit pairs, and fixed phrases in `captions/caption-lexicon.json`.
+3. The Agent authors each semantic cue directly in `captions/caption-review-plan.json` with `text`, `startWordId`, and `endWordId`. Code must not choose or optimize cue boundaries.
 4. Validate `captions/caption-review-plan.json` with `scripts/check-caption-review-plan.mjs`.
 5. Present every cue in `docs/caption-plan.md` when creative review is triggered.
 6. After required user approval or recorded conditional internal approval, the state machine marks the plan approved.

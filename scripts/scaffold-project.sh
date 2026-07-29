@@ -39,6 +39,7 @@ fi
 
 mkdir -p "$job_directory/input/reference-scripts" "$job_directory/state" "$job_directory/roughcut" "$job_directory/docs" "$job_directory/captions" "$job_directory/previews" "$job_directory/checkpoints" "$job_directory/logs" "$job_directory/output"
 cp -R "$repository_root/templates/hyperframes" "$job_directory/hyperframes"
+node "$repository_root/scripts/build-composition.mjs" "$job_directory/hyperframes"
 cp -p "$repository_root/templates/job/WORKSPACE.md" "$job_directory/WORKSPACE.md"
 cp -p "$repository_root/templates/job/motion-plan.md" "$job_directory/docs/motion-plan.md"
 if [[ "$caption_mode" == "motion-copy" ]]; then

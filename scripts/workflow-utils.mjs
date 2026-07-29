@@ -73,7 +73,9 @@ export const ensureWorkflowDefaults = (workflow) => {
   if (workflow.revisionId == null || (workflow.revisionId === 1 && legacyRevisionCount > 0)) {
     workflow.revisionId = 1 + legacyRevisionCount;
   }
-  workflow.approvedVisualSampleFingerprint ??= null;
+  workflow.approvedDesignLanguageFingerprint ??= null;
+  workflow.previewBaseline ??= null;
+  workflow.pendingDeltaPreview ??= null;
   for (const legacyField of ["gateHistory", "creativeReviewRequested", "creativeReviewRequired", "creativeReviewReasons", "visualSampleRequested", "visualSampleRequired", "visualSampleReasons", "pendingVisualSampleFingerprint", "intakeDecisionBlock"]) delete workflow[legacyField];
   workflow.gates ??= {};
   if (workflow.pendingGate && workflow.gates[workflow.pendingGate]) {
@@ -82,7 +84,7 @@ export const ensureWorkflowDefaults = (workflow) => {
   return workflow;
 };
 
-export const computeVisualSampleFingerprint = (jobRoot, captionMode) => {
+export const computeDesignLanguageFingerprint = (jobRoot, captionMode) => {
   const confirmation = readJson(path.join(jobRoot, "state", "creative-confirmation.json"));
   const beatMap = readJson(path.join(jobRoot, "state", "beat-map.json"));
   const designSystemPath = path.join(jobRoot, "state", "design-system.json");
@@ -94,13 +96,10 @@ export const computeVisualSampleFingerprint = (jobRoot, captionMode) => {
     transitionFamily: beat.transitionFamily,
     primaryFlowAxis: beat.primaryFlowAxis,
     semanticTopology: beat.semanticTopology,
-    revealGroups: (beat.microEvents ?? []).map((event) => ({
+    revealGrammar: (beat.microEvents ?? []).map((event) => ({
       visualRole: event.visualRole,
       topologyRole: event.topologyRole
-    })),
-    visualStyle: beat.visualStyle,
-    typography: beat.typography,
-    visualReference: beat.visualReference
+    })).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))
   })))].sort();
   const highAttention = visualBeats
     .filter((beat) => beat.attentionCost === "high")
@@ -110,15 +109,13 @@ export const computeVisualSampleFingerprint = (jobRoot, captionMode) => {
       transitionFamily: beat.transitionFamily,
       primaryFlowAxis: beat.primaryFlowAxis,
       semanticTopology: beat.semanticTopology,
-      visualStyle: beat.visualStyle,
-      typography: beat.typography,
-      visualEncoding: beat.visualEncoding,
-      visualReference: beat.visualReference
-    }));
+      supportRole: beat.supportRole,
+      visualEncoding: beat.visualEncoding
+    }))
+    .sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)));
   return sha256Text(JSON.stringify({
     captionMode,
     visualAxisMode: confirmation.visualAxisMode,
-    visualSample: confirmation.visualSample,
     designSystem: {
       canvas: designSystem.canvas,
       typography: designSystem.typography,

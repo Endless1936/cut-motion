@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cut-motion Motion Index",
+  "type": "object",
+  "required": ["schemaVersion", "duration", "sourceHashes", "sharedDependencySha256", "beats", "captions"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "duration": { "type": "number", "exclusiveMinimum": 0 },
+    "sourceHashes": {
+      "type": "object",
+      "required": ["beatMap", "captions", "compositionTemplate"],
+      "properties": {
+        "beatMap": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "captions": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+        "compositionTemplate": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "sharedDependencySha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "beats": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["beatId", "modulePath", "rootSelector", "assets", "captionCueIds", "window", "moduleSha256"],
+        "properties": {
+          "beatId": { "type": "string", "minLength": 1 },
+          "modulePath": { "type": ["string", "null"] },
+          "rootSelector": { "type": ["string", "null"] },
+          "assets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["path", "sha256"],
+              "properties": {
+                "path": { "type": "string", "minLength": 1 },
+                "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "captionCueIds": { "type": "array", "items": { "type": "string" } },
+          "window": {
+            "type": "object",
+            "required": ["start", "end"],
+            "properties": {
+              "start": { "type": "number", "minimum": 0 },
+              "end": { "type": "number", "exclusiveMinimum": 0 }
+            },
+            "additionalProperties": false
+          },
+          "moduleSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "captions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["cueId", "window", "contentSha256"],
+        "properties": {
+          "cueId": { "type": "string", "minLength": 1 },
+          "window": {
+            "type": "object",
+            "required": ["start", "end"],
+            "properties": {
+              "start": { "type": "number", "minimum": 0 },
+              "end": { "type": "number", "exclusiveMinimum": 0 }
+            },
+            "additionalProperties": false
+          },
+          "contentSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

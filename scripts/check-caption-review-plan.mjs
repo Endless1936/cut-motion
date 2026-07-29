@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { sha256File } from "./workflow-utils.mjs";
+import { resolveCaptionCues } from "./caption-review-utils.mjs";
 
 const [planPathArgument] = process.argv.slice(2);
 if (!planPathArgument) {
@@ -45,13 +46,25 @@ if (normalize(plan.cues.map((cue) => cue.text).join("")) !== normalize(reference
   errors.push("caption cues do not preserve the approved reference transcript");
 }
 
+let resolvedCues = [];
+try {
+  resolvedCues = resolveCaptionCues(plan, transcript);
+} catch (error) {
+  errors.push(error.message);
+}
+const totalWordCount = (transcript.segments ?? []).reduce((sum, segment) => sum + (segment.words?.length ?? 0), 0);
+if (resolvedCues.length > 0 && resolvedCues.at(-1).endWordIndex !== totalWordCount - 1) {
+  errors.push("caption word ranges do not cover the complete transcript");
+}
+
 let previousEnd = -Infinity;
 let characterOffset = 0;
 const cueRanges = [];
-for (const [index, cue] of plan.cues.entries()) {
+for (const [index, cue] of resolvedCues.entries()) {
   const expectedId = `caption-${String(index + 1).padStart(4, "0")}`;
   if (cue.id !== expectedId) errors.push(`${cue.id}: expected sequential ID ${expectedId}`);
   if (/[\r\n]/.test(cue.text)) errors.push(`${cue.id}: cue must render on exactly one line`);
+  if (normalize(cue.text) !== normalize(cue.resolvedText)) errors.push(`${cue.id}: text does not match its selected transcript word range`);
   const normalizedText = normalize(cue.text);
   if (normalizedText.length < 2) errors.push(`${cue.id}: one-character cues are forbidden`);
   const cueRange = { start: characterOffset, end: characterOffset + normalizedText.length - 1, id: cue.id };
@@ -74,8 +87,6 @@ for (const [index, cue] of plan.cues.entries()) {
   if (/^[，。；：！？、,.!?]/u.test(cue.text) || /[、，,:：;；]$/u.test(cue.text)) errors.push(`${cue.id}: punctuation indicates an invalid phrase boundary`);
   previousEnd = cue.end;
 }
-if (plan.alignment?.editDistance !== 0) errors.push("caption plan wording and reconciled acoustic words must align exactly");
-
 const fullText = normalize(referenceText);
 for (const term of plan.rules.protectedTerms ?? []) {
   const normalizedTerm = normalize(term);
