@@ -194,6 +194,11 @@ rm -f "$missing_seam_plan"
 jq '.seams[0].classification = "natural-pause"' "$trim_smoke_directory/residual-plan.json" > "$trim_smoke_directory/natural-plan.json"
 node "$repository_root/scripts/audit-roughcut-seams.mjs" "$trim_smoke_directory/natural-plan.json" "$trim_smoke_directory/residual.wav" >/dev/null
 node "$repository_root/scripts/check-trim-plan.mjs" "$trim_smoke_directory/natural-plan.json" --require-audit --media "$trim_smoke_directory/residual.wav" >/dev/null
+jq '.remove[0].start = 2.025 | .remove[0].end = 2.125 | .seams[0].classification = "natural-pause"' \
+  "$trim_smoke_directory/natural-plan.json" > "$trim_smoke_directory/terminal-rounding-plan.json"
+node "$repository_root/scripts/audit-roughcut-seams.mjs" "$trim_smoke_directory/terminal-rounding-plan.json" "$trim_smoke_directory/residual.wav" >/dev/null
+node "$repository_root/scripts/check-trim-plan.mjs" "$trim_smoke_directory/terminal-rounding-plan.json" --require-audit --media "$trim_smoke_directory/residual.wav" >/dev/null
+jq -e '.seams[0].outputTime == .verification.mediaAudit.duration' "$trim_smoke_directory/terminal-rounding-plan.json" >/dev/null
 printf '{"duration":10,"start":1,"end":3,"audioAnchorTime":4,"microEvents":[{"time":8}]}\n' > "$trim_smoke_directory/times.json"
 bash "$repository_root/scripts/shift-timestamps.sh" "$trim_smoke_directory/times.json" 2 5 "$trim_smoke_directory/shifted.json"
 jq -e '.duration == 7 and .start == 1 and .end == 2 and .audioAnchorTime == 2 and .microEvents[0].time == 5' "$trim_smoke_directory/shifted.json" >/dev/null

@@ -85,7 +85,13 @@ if (requireAudit) {
       }
       if (seam.pictureAudited !== true || seam.audioAudited !== true) errors.push(`${prefix} must record pictureAudited and audioAudited as true`);
       if (mediaPath) {
-        const expectedOutputTime = plan.remove[index]?.start - removedDuration;
+        const derivedOutputTime = plan.remove[index]?.start - removedDuration;
+        const auditedDuration = Number(verification?.mediaAudit?.duration);
+        const terminalRounding = index === seams.length - 1
+          && Number.isFinite(auditedDuration)
+          && derivedOutputTime > auditedDuration
+          && derivedOutputTime <= auditedDuration + 1 / plan.fps;
+        const expectedOutputTime = terminalRounding ? auditedDuration : derivedOutputTime;
         if (!Number.isFinite(seam.outputTime) || Math.abs(seam.outputTime - expectedOutputTime) > 0.5 / plan.fps) errors.push(`${prefix}.outputTime must match its derived cut position`);
         if (!Number.isFinite(seam.measuredResidualSilenceMs) || seam.measuredResidualSilenceMs < 0) errors.push(`${prefix}.measuredResidualSilenceMs is required`);
         if (removableClassifications.has(seam.classification)) {

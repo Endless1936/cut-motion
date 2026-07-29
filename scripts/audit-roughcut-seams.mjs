@@ -75,7 +75,11 @@ if ((plan.seams ?? []).length !== (plan.remove ?? []).length) {
 for (const [index, seam] of (plan.seams ?? []).entries()) {
   const range = plan.remove?.[index];
   const outputTime = range ? range.start - removedBefore(index) : NaN;
-  if (!Number.isFinite(outputTime) || outputTime < 0 || outputTime > duration) {
+  const terminalTolerance = 1 / fps;
+  const terminalRounding = index === (plan.seams?.length ?? 0) - 1
+    && outputTime > duration
+    && outputTime <= duration + terminalTolerance;
+  if (!Number.isFinite(outputTime) || outputTime < 0 || outputTime > duration && !terminalRounding) {
     errors.push(`${seam.id ?? `seam-${index + 1}`}: outputTime cannot be resolved`);
     continue;
   }
@@ -83,7 +87,8 @@ for (const [index, seam] of (plan.seams ?? []).entries()) {
     errors.push(`${seam.id ?? `seam-${index + 1}`}: unknown seam classification ${seam.classification}`);
     continue;
   }
-  const residualSeconds = thresholds.map((threshold) => residualAt(outputTime, intervalsByThreshold.get(threshold)));
+  const auditedOutputTime = terminalRounding ? duration : outputTime;
+  const residualSeconds = thresholds.map((threshold) => residualAt(auditedOutputTime, intervalsByThreshold.get(threshold)));
   const measuredResidualSilenceMs = Number((median(residualSeconds) * 1000).toFixed(3));
   const maximumResidualSilenceMs = removableClassifications.has(seam.classification)
     ? Number(plan.trimProfile?.maximumResidualSilenceMs ?? 80)
@@ -91,7 +96,7 @@ for (const [index, seam] of (plan.seams ?? []).entries()) {
   const quantizedMaximumMs = maximumResidualSilenceMs === null
     ? null
     : Math.floor(maximumResidualSilenceMs * fps / 1000) / fps * 1000;
-  seam.outputTime = Number(outputTime.toFixed(6));
+  seam.outputTime = Number(auditedOutputTime.toFixed(6));
   seam.measuredResidualSilenceMs = measuredResidualSilenceMs;
   seam.residualSilenceByThresholdMs = Object.fromEntries(
     thresholds.map((threshold, thresholdIndex) => [String(threshold), Number((residualSeconds[thresholdIndex] * 1000).toFixed(3))])
