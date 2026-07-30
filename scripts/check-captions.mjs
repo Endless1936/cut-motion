@@ -2,9 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { resolveCaptionCues } from "./caption-review-utils.mjs";
 
-const [captionsPath, pagesPath, designSystemPath] = process.argv.slice(2);
+const [captionsPath, pagesPath, designSystemPath, compositionPath] = process.argv.slice(2);
 if (!captionsPath || !pagesPath || !designSystemPath) {
-  console.error("Usage: node check-captions.mjs <captions.json> <chatcut-pages.json> <design-system.json>");
+  console.error("Usage: node check-captions.mjs <captions.json> <chatcut-pages.json> <design-system.json> [hyperframes-index.html]");
   process.exit(64);
 }
 
@@ -70,6 +70,38 @@ if (!fs.existsSync(reviewPlanPath)) {
     }
     if (rendered.end - rendered.start < reviewPlan.rules.minimumDurationSeconds - 1 / captions.source.fps) {
       errors.push(`${rendered.id}: duration is below the approved minimum`);
+    }
+  }
+}
+
+if (compositionPath) {
+  const source = fs.readFileSync(compositionPath, "utf8");
+  const escapeHtml = (value) => String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+  const sections = [...source.matchAll(/<section\b([^>]*)\bdata-caption-id="([^"]+)"([^>]*)>([\s\S]*?)<\/section>/g)]
+    .map((match) => ({ attributes: `${match[1]} ${match[3]}`, id: match[2], body: match[4] }));
+  if (sections.length !== captions.cues.length) errors.push(`Expected ${captions.cues.length} caption clips, found ${sections.length}`);
+  for (const cue of captions.cues) {
+    const section = sections.find((candidate) => candidate.id === escapeHtml(cue.id));
+    if (!section) {
+      errors.push(`${cue.id}: timed caption clip is missing`);
+      continue;
+    }
+    const start = Number(section.attributes.match(/data-start="([^"]+)"/)?.[1]);
+    const duration = Number(section.attributes.match(/data-duration="([^"]+)"/)?.[1]);
+    if (Math.abs(start - cue.start) > 0.000001) errors.push(`${cue.id}: clip start does not match caption data`);
+    if (Math.abs(duration - (cue.end - cue.start)) > 0.000001) errors.push(`${cue.id}: clip duration does not match caption data`);
+    if (!section.attributes.includes(`data-caption-page-id="${escapeHtml(cue.sourcePageId)}"`)) errors.push(`${cue.id}: ChatCut source page is missing`);
+    if (!section.attributes.includes(`data-caption-start-frame="${cue.startFrame}"`)
+      || !section.attributes.includes(`data-caption-end-frame="${cue.endFrame}"`)) {
+      errors.push(`${cue.id}: ChatCut frame range is missing`);
+    }
+    for (const line of cue.lines) {
+      if (!section.body.includes(`>${escapeHtml(line)}</p>`)) errors.push(`${cue.id}: rendered line is missing: ${line}`);
     }
   }
 }

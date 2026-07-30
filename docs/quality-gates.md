@@ -36,7 +36,7 @@
 ## Motion design
 
 - `state/creative-confirmation.json` and `docs/creative-confirmation.md` exist, agree with the workflow caption mode, and pass `scripts/check-creative-confirmation.mjs`.
-- `scripts/check-creative-fingerprints.mjs` passes before sample, composition, QA, and render.
+- Creative-authority hashes are validated by the workflow state transition before sample, composition, QA, and render.
 - A-axis overlays replace rather than accumulate, use one declared top/bottom/side face-safe zone, and use localized glass only; B-axis scenes retain a live protected PIP and may exit as a group.
 - Every MG keeps one horizontal or vertical primary flow; the main chain does not turn 90 degrees.
 - Copy, timing, and size-only revisions inherit the approved visual reference.

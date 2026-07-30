@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import {
   beginWorkflowRevision,
   ensureWorkflowDefaults,
-  mirrorWorkflowToProject,
   jobRootForWorkflow,
   readJson,
   recoverTranscriptTransaction,
@@ -133,5 +132,4 @@ fs.fsyncSync(journalDescriptor);
 fs.closeSync(journalDescriptor);
 fs.renameSync(journalTemporaryPath, journalPath);
 recoverTranscriptTransaction(jobRoot);
-mirrorWorkflowToProject(workflowPath, workflow);
 console.log(`Resolved ${itemId}; transcript revision ${transcript.revision}; workflow returned to motion-plan.`);

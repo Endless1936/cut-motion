@@ -4,15 +4,16 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   assertRegularContainedFile,
-  computeValidationBundleSha256,
-  computeValidationRunnerVersion,
-  computeValidatorVersion,
   isPathInside,
   readJson,
   resolveLockedHyperframesCli,
   sha256File,
   writeJsonAtomic
 } from "./workflow-utils.mjs";
+import {
+  resolveValidationInvocation,
+  validateReceipt
+} from "./validation-receipt.mjs";
 
 const [jobArgument, phase, checkId, suppliedSampleOrSubjectPath, suppliedSourcePath] = process.argv.slice(2);
 if (!jobArgument || !["visual", "final"].includes(phase) || !checkId) {
@@ -70,60 +71,19 @@ if (phase === "visual") {
 const subjectPath = path.resolve(jobRoot, subjectRelativePath);
 if (!isPathInside(jobRoot, subjectPath)) throw new Error("Validation subject escapes the job");
 assertRegularContainedFile(jobRoot, subjectPath, "Validation subject");
-const subjectSha256 = sha256File(subjectPath);
-const runnerSha256 = computeValidationRunnerVersion(repositoryRoot, contracts);
-const validatorVersion = computeValidatorVersion(repositoryRoot, contracts, contract.validator, jobRoot);
-const bundleSha256 = computeValidationBundleSha256(jobRoot, phase, subjectRelativePath, workflow.captionMode);
-const canonicalCommand = phase === "visual"
-  ? `node ${contracts.runner} ${jobRoot} ${phase} ${checkId} ${sampleRelativePath} ${sourceRelativePath}`
-  : `node ${contracts.runner} ${jobRoot} ${phase} ${checkId} ${subjectRelativePath}`;
-const receiptRelativePath = `${contract.directory}/${phase}-${checkId}.json`;
+const invocation = resolveValidationInvocation(jobRoot, phase, checkId, subjectRelativePath, contracts);
+const receiptRelativePath = invocation.receiptRelativePath;
 const receiptPath = path.join(jobRoot, receiptRelativePath);
 
-const emitEvidence = (receipt) => {
-  const evidence = {
-    kind: contract.kind,
-    path: receiptRelativePath,
-    sha256: sha256File(receiptPath),
-    subjectSha256,
-    validator: contract.validator,
-    validatorVersion,
-    runnerSha256,
-    bundleSha256,
-    command: canonicalCommand
-  };
-  process.stdout.write(`${JSON.stringify(evidence)}\n`);
-};
+const emitEvidence = () => process.stdout.write(`${JSON.stringify({
+  path: receiptRelativePath,
+  sha256: sha256File(receiptPath)
+})}\n`);
 
 if (fs.existsSync(receiptPath)) {
   const cached = readJson(receiptPath);
-  const cachedOutputPath = cached.output?.path ? path.resolve(jobRoot, cached.output.path) : null;
-  const outputValid = cachedOutputPath
-    && isPathInside(jobRoot, cachedOutputPath)
-    && fs.existsSync(cachedOutputPath)
-    && sha256File(cachedOutputPath) === cached.output.sha256;
-  const snapshotsValid = contract.kind !== "snapshot-manifest"
-    || (Array.isArray(cached.snapshots)
-      && cached.snapshots.length >= 3
-      && cached.snapshots.every((snapshot) => {
-        const snapshotPath = path.resolve(jobRoot, snapshot.path ?? "");
-        return isPathInside(jobRoot, snapshotPath)
-          && fs.existsSync(snapshotPath)
-          && sha256File(snapshotPath) === snapshot.sha256;
-      }));
-  if (cached.schemaVersion === "1.0.0"
-    && cached.status === "pass"
-    && cached.kind === contract.kind
-    && cached.validator === contract.validator
-    && cached.validatorVersion === validatorVersion
-    && cached.runnerSha256 === runnerSha256
-    && cached.bundleSha256 === bundleSha256
-    && cached.command === canonicalCommand
-    && cached.subject?.path === subjectRelativePath
-    && cached.subject?.sha256 === subjectSha256
-    && outputValid
-    && snapshotsValid) {
-    emitEvidence(cached);
+  if (validateReceipt(jobRoot, cached, invocation)) {
+    emitEvidence();
     process.exit(0);
   }
 }
@@ -149,22 +109,12 @@ switch (contract.validator) {
   case "check-information-value":
     output = node("check-information-value.mjs", [subjectPath, design]);
     break;
-  case "check-trim-plan":
-    output = node("check-trim-plan.mjs", [path.join(jobRoot, "state", "trim-plan.json"), "--require-audit"]);
-    break;
-  case "check-visual-plan":
-  case "check-motion-copy-coverage":
-    output = node("check-visual-plan.mjs", [
-      path.join(jobRoot, "state", "beat-map.json"),
-      path.join(jobRoot, "state", "transcript.json"),
-      design
-    ]);
-    break;
   case "check-captions":
     output = node("check-captions.mjs", [
       path.join(jobRoot, "captions", "captions.json"),
       path.join(jobRoot, "captions", "chatcut-pages.json"),
-      design
+      design,
+      subjectPath
     ]);
     break;
   case "hyperframes-check":
@@ -265,15 +215,12 @@ const receipt = {
   status: "pass",
   kind: contract.kind,
   validator: contract.validator,
-  validatorVersion,
-  runnerSha256,
-  bundleSha256,
-  command: canonicalCommand,
-  exitCode: 0,
+  implementationSha256: invocation.implementationSha256,
+  inputs: invocation.inputs,
   output: { path: outputRelativePath, sha256: sha256File(outputPath) },
-  subject: { path: subjectRelativePath, sha256: subjectSha256 },
+  subject: invocation.subject,
   checkedAt: new Date().toISOString(),
   ...extra
 };
 writeJsonAtomic(receiptPath, receipt);
-emitEvidence(receipt);
+emitEvidence();

@@ -1,25 +1,220 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { deriveMotionIndex } from "./motion-index.mjs";
+import { resolveBeatRenderWindow, transcriptWordsById } from "./motion-window-utils.mjs";
 import {
   computeDesignLanguageFingerprint,
   isPathInside,
   readJson,
+  resolveLockedHyperframesCli,
   sha256File,
   sha256Text,
   writeJsonAtomic
 } from "./workflow-utils.mjs";
 
 export const CHUNK_SECONDS = Object.freeze({ minimum: 8, target: 12, maximum: 18 });
+const buildScriptPath = fileURLToPath(new URL("./build-composition.mjs", import.meta.url));
+const motionWindowUtilsPath = fileURLToPath(new URL("./motion-window-utils.mjs", import.meta.url));
+const beatMapSchemaPath = fileURLToPath(new URL("../schemas/beat-map.schema.json", import.meta.url));
 const overlaps = (start, end, window) => start < window.endFrame && end > window.startFrame;
 const boundaryIsSafe = (frame, intervals) => !intervals.some((interval) => interval.startFrame < frame && frame < interval.endFrame);
 const uniqueSorted = (values) => [...new Set(values)].sort((left, right) => left - right);
+const relative = (root, candidate) => path.relative(root, candidate).split(path.sep).join("/");
+const digestFiles = (paths) => sha256Text(paths.map((candidate) => `${relative(path.dirname(candidate), candidate)}:${sha256File(candidate)}`).join("\n"));
+const captionBlockPattern = /(<!-- CUT_MOTION_CAPTIONS_START -->)[\s\S]*?(<!-- CUT_MOTION_CAPTIONS_END -->)/;
+const stripInstalledCaptions = (source) => {
+  const matches = source.match(new RegExp(captionBlockPattern.source, "g"));
+  if (matches?.length !== 1) throw new Error("Composition template requires exactly one installed-caption block");
+  return source.replace(captionBlockPattern, "$1\n$2");
+};
+const escapeHtml = (value) => String(value)
+  .replaceAll("&", "&amp;")
+  .replaceAll("<", "&lt;")
+  .replaceAll(">", "&gt;")
+  .replaceAll('"', "&quot;")
+  .replaceAll("'", "&#39;");
+
+const installedCaptionSections = (source, cues) => {
+  const block = source.match(captionBlockPattern)?.[0];
+  if (!block) throw new Error("Composition template requires an installed-caption block");
+  const sectionPattern = /<section\b(?=[^>]*\bmotion-caption-layer\b)(?=[^>]*\bdata-caption-id=["']([^"']+)["'])[^>]*>[\s\S]*?<\/section>/gi;
+  const sections = new Map();
+  for (const match of block.matchAll(sectionPattern)) {
+    if (sections.has(match[1])) throw new Error(`Duplicate installed caption section: ${match[1]}`);
+    sections.set(match[1], match[0]);
+  }
+  const residue = block
+    .replace("<!-- CUT_MOTION_CAPTIONS_START -->", "")
+    .replace("<!-- CUT_MOTION_CAPTIONS_END -->", "")
+    .replace(sectionPattern, "")
+    .trim();
+  if (residue) throw new Error("Installed-caption block contains content outside caption sections");
+  if (sections.size !== cues.length) {
+    throw new Error(`Installed caption section count ${sections.size} differs from captions.json count ${cues.length}`);
+  }
+  return new Map(cues.map((cue) => {
+    const id = escapeHtml(cue.id);
+    const section = sections.get(id);
+    if (!section) throw new Error(`Installed caption section is missing: ${cue.id}`);
+    return [cue.id, section];
+  }));
+};
 
 export const quantizeRenderInterval = (start, end, fps, totalFrames) => ({
   startFrame: Math.max(0, Math.min(totalFrames, Math.floor(Number(start) * fps))),
   endFrame: Math.max(0, Math.min(totalFrames, Math.ceil(Number(end) * fps)))
 });
+
+const assetEntry = (jobRoot, sourceDirectory, value) => {
+  if (!value || value.startsWith("data:") || value.startsWith("#") || /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(value)) return null;
+  const cleanValue = value.split(/[?#]/, 1)[0];
+  if (!cleanValue) return null;
+  let decodedValue;
+  try {
+    decodedValue = decodeURI(cleanValue);
+  } catch {
+    throw new Error(`Invalid local asset URL: ${value}`);
+  }
+  const hyperframesDirectory = path.join(jobRoot, "hyperframes");
+  const absolutePath = decodedValue.startsWith("/")
+    ? path.resolve(hyperframesDirectory, `.${decodedValue}`)
+    : path.resolve(sourceDirectory, decodedValue);
+  if (!isPathInside(jobRoot, absolutePath)) throw new Error(`Local asset escapes the job directory: ${value}`);
+  if (!fs.existsSync(absolutePath)) throw new Error(`Local asset is missing: ${value}`);
+  const realPath = fs.realpathSync(absolutePath);
+  if (!isPathInside(fs.realpathSync(jobRoot), realPath) || !fs.statSync(realPath).isFile()) {
+    throw new Error(`Local asset escapes the job directory: ${value}`);
+  }
+  return { path: relative(jobRoot, absolutePath), sha256: sha256File(realPath) };
+};
+
+const dynamicAssetPattern = /\b(?:fetch|import)\s*\(|\bnew\s+URL\s*\(|\.(?:src|srcset|poster)\s*=|\bsetAttribute\s*\(\s*["'](?:src|srcset|poster)["']|\bbackgroundImage\s*=|url\(\s*var\(/;
+const assertNoDynamicAssets = (source, sourcePath) => {
+  if (dynamicAssetPattern.test(source)) {
+    throw new Error(`Dynamic media references are unsupported in render sources: ${relative(path.dirname(path.dirname(sourcePath)), sourcePath)}`);
+  }
+};
+
+const referencesInSource = (source) => {
+  const values = [];
+  for (const match of source.matchAll(/\b(?:src|href|poster)=["']([^"']+)["']|url\(\s*["']?([^"')]+)["']?\s*\)/gi)) {
+    values.push(match[1] ?? match[2]);
+  }
+  for (const match of source.matchAll(/\bsrcset=["']([^"']+)["']/gi)) {
+    if (/\bdata:/i.test(match[1])) throw new Error("Data URLs in srcset are unsupported; use a static local file or src");
+    for (const candidate of match[1].split(",")) {
+      const value = candidate.trim().split(/\s+/, 1)[0];
+      if (value) values.push(value);
+    }
+  }
+  for (const match of source.matchAll(/\bimage-set\(([^)]*)\)/gi)) {
+    for (const candidate of match[1].matchAll(/["']([^"']+)["']/g)) values.push(candidate[1]);
+  }
+  for (const match of source.matchAll(/@import\s+["']([^"']+)["']/gi)) values.push(match[1]);
+  return values;
+};
+
+const assetsForSourcePaths = (jobRoot, sourcePaths, initialReferenceDirectory = null) => {
+  const assets = new Map();
+  const scanned = new Set();
+  const scan = (sourcePath, referenceDirectory = path.dirname(sourcePath)) => {
+    const realSourcePath = fs.realpathSync(sourcePath);
+    if (scanned.has(realSourcePath)) return;
+    scanned.add(realSourcePath);
+    const source = fs.readFileSync(sourcePath, "utf8");
+    assertNoDynamicAssets(source, sourcePath);
+    for (const value of referencesInSource(source)) {
+      const entry = assetEntry(jobRoot, referenceDirectory, value);
+      if (!entry) continue;
+      assets.set(entry.path, entry);
+      const referencedPath = path.join(jobRoot, entry.path);
+      if (/\.(?:html?|css)$/i.test(referencedPath)) scan(referencedPath);
+    }
+  };
+  for (const sourcePath of sourcePaths) scan(sourcePath, initialReferenceDirectory ?? path.dirname(sourcePath));
+  return [...assets.values()]
+    .sort((left, right) => left.path.localeCompare(right.path));
+};
+
+const digestSharedFiles = (paths, compositionSourcePath) => sha256Text(paths.map((candidate) => {
+  const digest = candidate === compositionSourcePath
+    ? sha256Text(stripInstalledCaptions(fs.readFileSync(candidate, "utf8")))
+    : sha256File(candidate);
+  return `${relative(path.dirname(compositionSourcePath), candidate)}:${digest}`;
+}).join("\n"));
+
+export const deriveRenderInputs = (jobRootInput) => {
+  const jobRoot = path.resolve(jobRootInput);
+  const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
+  const captionsPath = path.join(jobRoot, "captions", "captions.json");
+  const transcriptPath = path.join(jobRoot, "state", "transcript.json");
+  const templatePath = path.join(jobRoot, "hyperframes", "index.template.html");
+  const captionCssPath = path.join(jobRoot, "hyperframes", "caption.css");
+  const packagePath = path.join(jobRoot, "hyperframes", "package.json");
+  if (!fs.existsSync(templatePath)) throw new Error("Render Manifest requires hyperframes/index.template.html");
+
+  const beatMap = readJson(beatMapPath);
+  const captions = fs.existsSync(captionsPath) ? readJson(captionsPath) : { cues: [] };
+  const wordsById = transcriptWordsById(readJson(transcriptPath));
+  const fps = Number(beatMap.fps);
+  const duration = Number(beatMap.duration);
+  if (!(fps > 0 && duration > 0)) throw new Error("Render Manifest requires positive fps and duration");
+  const totalFrames = Math.ceil(duration * fps);
+
+  const sharedSourcePaths = [templatePath, captionCssPath].filter((candidate) => fs.existsSync(candidate));
+  const templateSource = fs.readFileSync(templatePath, "utf8");
+  const captionSections = installedCaptionSections(templateSource, captions.cues ?? []);
+  const sharedAssets = assetsForSourcePaths(jobRoot, sharedSourcePaths);
+  const sharedPaths = [...new Set([
+    ...sharedSourcePaths,
+    buildScriptPath,
+    motionWindowUtilsPath,
+    beatMapSchemaPath,
+    packagePath,
+    ...sharedAssets.map((entry) => path.join(jobRoot, entry.path))
+  ].filter((candidate) => fs.existsSync(candidate)))].sort();
+
+  const beats = [...(beatMap.beats ?? [])]
+    .sort((left, right) => left.start - right.start || left.id.localeCompare(right.id))
+    .map((beat) => {
+      const moduleDirectory = path.join(jobRoot, "hyperframes", "mg", beat.id);
+      const sourcePaths = ["fragment.html", "style.css", "timeline.mjs"].map((filename) => path.join(moduleDirectory, filename));
+      const hasModule = sourcePaths.every((candidate) => fs.existsSync(candidate));
+      const renderWindow = hasModule ? resolveBeatRenderWindow(beat, beatMap, wordsById) : { start: beat.start, end: beat.end };
+      const assets = hasModule ? assetsForSourcePaths(jobRoot, sourcePaths, path.join(jobRoot, "hyperframes")) : [];
+      const moduleSha256 = hasModule ? digestFiles(sourcePaths) : null;
+      const window = quantizeRenderInterval(renderWindow.start, renderWindow.end, fps, totalFrames);
+      return {
+        beatId: beat.id,
+        modulePath: hasModule ? relative(jobRoot, moduleDirectory) : null,
+        rootSelector: hasModule ? `[data-beat-id="${beat.id}"]` : null,
+        captionCueIds: [...(beat.captionCueIds ?? [])].sort(),
+        window,
+        fingerprint: sha256Text(JSON.stringify({ beat, renderWindow, moduleSha256, assets }))
+      };
+    });
+
+  const captionEntries = [...(captions.cues ?? [])]
+    .sort((left, right) => left.start - right.start || left.id.localeCompare(right.id))
+    .map((cue) => ({
+      cueId: cue.id,
+      window: quantizeRenderInterval(cue.start, cue.end, fps, totalFrames),
+      fingerprint: sha256Text(JSON.stringify({
+        cue,
+        installedSectionSha256: sha256Text(captionSections.get(cue.id))
+      }))
+    }));
+
+  return {
+    beatMap,
+    fps,
+    duration,
+    totalFrames,
+    sharedDependencySha256: digestSharedFiles(sharedPaths, templatePath),
+    beats,
+    captions: captionEntries
+  };
+};
 
 const mergeIntervals = (intervals) => {
   const sorted = intervals
@@ -28,53 +223,33 @@ const mergeIntervals = (intervals) => {
   const merged = [];
   for (const interval of sorted) {
     const previous = merged.at(-1);
-    if (previous && interval.startFrame < previous.endFrame) {
-      previous.endFrame = Math.max(previous.endFrame, interval.endFrame);
-    } else {
-      merged.push({ ...interval });
-    }
+    if (previous && interval.startFrame < previous.endFrame) previous.endFrame = Math.max(previous.endFrame, interval.endFrame);
+    else merged.push({ ...interval });
   }
   return merged;
 };
 
-const continuousBeatIntervals = (beatMap, fps, totalFrames) => {
-  const beats = [...(beatMap.beats ?? [])].sort((left, right) => left.start - right.start || left.id.localeCompare(right.id));
+const continuousBAxisIntervals = (beatMap, fps, totalFrames) => {
   const intervals = [];
   let group = [];
   const flush = () => {
-    if (group.length < 2) {
-      group = [];
-      return;
-    }
-    intervals.push(quantizeRenderInterval(group[0].start, group.at(-1).end, fps, totalFrames));
+    if (group.length > 1) intervals.push(quantizeRenderInterval(group[0].start, group.at(-1).end, fps, totalFrames));
     group = [];
   };
-  for (const beat of beats) {
+  for (const beat of [...(beatMap.beats ?? [])].sort((left, right) => left.start - right.start || left.id.localeCompare(right.id))) {
     const previous = group.at(-1);
-    const sharesContinuousState = previous && (
-      (beat.axis === "B" && previous.axis === "B" && beat.start <= previous.end + 1 / fps)
-      || (beat.reuseGroup && beat.reuseGroup === previous.reuseGroup)
-    );
-    if (!sharesContinuousState) flush();
+    if (!previous || beat.axis !== "B" || previous.axis !== "B" || beat.start > previous.end + 1 / fps) flush();
     group.push(beat);
   }
   flush();
   return intervals;
 };
 
-export const unsafeRenderIntervals = (beatMap, motionIndex) => {
-  const fps = Number(beatMap.fps);
-  const totalFrames = Math.ceil(Number(beatMap.duration) * fps);
-  const intervals = [];
-  for (const beat of motionIndex.beats ?? []) {
-    if (beat.modulePath) intervals.push(quantizeRenderInterval(beat.window.start, beat.window.end, fps, totalFrames));
-  }
-  for (const cue of motionIndex.captions ?? []) {
-    intervals.push(quantizeRenderInterval(cue.window.start, cue.window.end, fps, totalFrames));
-  }
-  intervals.push(...continuousBeatIntervals(beatMap, fps, totalFrames));
-  return mergeIntervals(intervals);
-};
+export const unsafeRenderIntervals = (beatMap, inputs) => mergeIntervals([
+  ...inputs.beats.filter((beat) => beat.modulePath).map((beat) => beat.window),
+  ...inputs.captions.map((cue) => cue.window),
+  ...continuousBAxisIntervals(beatMap, inputs.fps, inputs.totalFrames)
+]);
 
 const nearestSafeBoundary = (anchor, intervals, lower, upper) => {
   const candidates = [anchor, lower, upper];
@@ -99,9 +274,7 @@ export const planStableChunkBoundaries = ({
   const baseline = uniqueSorted(baselineBoundaries)
     .filter((frame) => frame > 0 && frame < totalFrames && boundaryIsSafe(frame, unsafeIntervals));
   const candidates = new Set([0, totalFrames, ...baseline]);
-  const absoluteAnchors = [];
-  for (let anchor = targetFrames; anchor < totalFrames; anchor += targetFrames) absoluteAnchors.push(anchor);
-  for (const anchor of absoluteAnchors) {
+  for (let anchor = targetFrames; anchor < totalFrames; anchor += targetFrames) {
     if ([...candidates].some((frame) => Math.abs(frame - anchor) < minimumFrames / 2)) continue;
     const boundary = nearestSafeBoundary(
       anchor,
@@ -153,22 +326,13 @@ export const planStableChunkBoundaries = ({
 };
 
 const baselineBoundariesFrom = (baselineManifest) => baselineManifest?.chunks?.slice(0, -1).map((chunk) => chunk.endFrame) ?? [];
-const contentEntry = (chunk) => ({
-  id: chunk.id,
-  startFrame: chunk.startFrame,
-  endFrame: chunk.endFrame,
-  beatIds: chunk.beatIds,
-  captionCueIds: chunk.captionCueIds,
-  dependencySha256: chunk.dependencySha256
-});
 
 export const deriveRenderManifest = (jobRootInput, options = {}) => {
   const jobRoot = path.resolve(jobRootInput);
-  const beatMap = readJson(path.join(jobRoot, "state", "beat-map.json"));
   const workflow = readJson(path.join(jobRoot, "state", "workflow.json"));
   const designSystem = readJson(path.join(jobRoot, "state", "design-system.json"));
   const packageJson = readJson(path.join(jobRoot, "hyperframes", "package.json"));
-  const motionIndex = deriveMotionIndex(jobRoot);
+  const inputs = deriveRenderInputs(jobRoot);
   const authoritativeMediaPath = path.join(jobRoot, workflow.authoritativeMediaPath ?? "");
   if (!workflow.authoritativeMediaPath
     || !isPathInside(jobRoot, authoritativeMediaPath)
@@ -176,87 +340,61 @@ export const deriveRenderManifest = (jobRootInput, options = {}) => {
     || sha256File(authoritativeMediaPath) !== workflow.authoritativeMediaSha256) {
     throw new Error("Render Manifest authoritative media binding is stale");
   }
-  const fps = Number(beatMap.fps);
-  const duration = Number(beatMap.duration);
-  if (!(fps > 0 && duration > 0)) throw new Error("Render Manifest requires positive fps and duration");
-  const totalFrames = Math.ceil(duration * fps);
-  const baselineManifest = options.baselineManifest ?? null;
-  const intervals = unsafeRenderIntervals(beatMap, motionIndex);
-  const boundaries = planStableChunkBoundaries({
-    totalFrames,
-    fps,
-    unsafeIntervals: intervals,
-    baselineBoundaries: baselineBoundariesFrom(baselineManifest)
-  });
-  const beatById = new Map((beatMap.beats ?? []).map((beat) => [beat.id, beat]));
   const designLanguageFingerprint = options.designLanguageFingerprint
     ?? computeDesignLanguageFingerprint(jobRoot, workflow.captionMode);
+  const runtime = resolveLockedHyperframesCli(jobRoot);
   const shared = {
     authoritativeMediaSha256: workflow.authoritativeMediaSha256,
     designLanguageFingerprint,
-    sharedDependencySha256: motionIndex.sharedDependencySha256,
+    sharedDependencySha256: inputs.sharedDependencySha256,
     canvas: designSystem.canvas,
-    fps,
+    fps: inputs.fps,
     hyperframes: packageJson.devDependencies?.hyperframes,
-    gsap: packageJson.devDependencies?.gsap
+    gsap: packageJson.devDependencies?.gsap,
+    rendererFingerprint: runtime.fingerprint,
+    cacheContract: 3
   };
+  const boundaries = planStableChunkBoundaries({
+    totalFrames: inputs.totalFrames,
+    fps: inputs.fps,
+    unsafeIntervals: unsafeRenderIntervals(inputs.beatMap, inputs),
+    baselineBoundaries: baselineBoundariesFrom(options.baselineManifest)
+  });
   const chunks = boundaries.slice(0, -1).map((startFrame, index) => {
     const endFrame = boundaries[index + 1];
-    const beats = (motionIndex.beats ?? []).filter((entry) => {
-      const window = quantizeRenderInterval(entry.window.start, entry.window.end, fps, totalFrames);
-      return overlaps(startFrame, endFrame, window);
-    });
-    const captions = (motionIndex.captions ?? []).filter((entry) => {
-      const window = quantizeRenderInterval(entry.window.start, entry.window.end, fps, totalFrames);
-      return overlaps(startFrame, endFrame, window);
-    });
-    const beatPlan = beats.map((entry) => {
-      const beat = beatById.get(entry.beatId);
-      return {
-        motion: entry,
-        plan: beat ? {
-          id: beat.id,
-          sceneId: beat.sceneId,
-          start: beat.start,
-          end: beat.end,
-          axis: beat.axis,
-          reuseGroup: beat.reuseGroup ?? null
-        } : null
-      };
-    });
-    const dependencySha256 = sha256Text(JSON.stringify({ shared, startFrame, endFrame, beats: beatPlan, captions }));
-    const id = `f${String(startFrame).padStart(6, "0")}-f${String(endFrame).padStart(6, "0")}`;
+    const beats = inputs.beats.filter((entry) => overlaps(startFrame, endFrame, entry.window));
+    const captions = inputs.captions.filter((entry) => overlaps(startFrame, endFrame, entry.window));
+    const dependencySha256 = sha256Text(JSON.stringify({ shared, startFrame, endFrame, beats, captions }));
     return {
-      id,
+      id: `f${String(startFrame).padStart(6, "0")}-f${String(endFrame).padStart(6, "0")}`,
       startFrame,
       endFrame,
       beatIds: beats.map((entry) => entry.beatId),
       captionCueIds: captions.map((entry) => entry.cueId),
       dependencySha256,
-      standardKey: sha256Text(JSON.stringify({ dependencySha256, quality: "standard" })),
-      highKey: sha256Text(JSON.stringify({ dependencySha256, quality: "high" }))
+      cacheKey: sha256Text(JSON.stringify({ dependencySha256, rendererFingerprint: runtime.fingerprint }))
     };
   });
   const content = {
-    schemaVersion: "1.0.0",
-    fps,
+    schemaVersion: "2.0.0",
+    fps: inputs.fps,
     width: Number(designSystem.canvas.width),
     height: Number(designSystem.canvas.height),
-    totalFrames,
-    duration: totalFrames / fps,
+    totalFrames: inputs.totalFrames,
+    duration: inputs.totalFrames / inputs.fps,
     audio: { sourcePath: workflow.authoritativeMediaPath, sourceSha256: workflow.authoritativeMediaSha256 },
-    chunks: chunks.map(contentEntry)
-  };
-  return {
-    ...content,
-    contentManifestSha256: sha256Text(JSON.stringify(content)),
+    designLanguageFingerprint,
+    sharedDependencySha256: inputs.sharedDependencySha256,
+    beats: inputs.beats,
+    captions: inputs.captions,
     chunks
   };
+  return { ...content, contentManifestSha256: sha256Text(JSON.stringify(content)) };
 };
 
 export const writeRenderManifest = (jobRootInput, options = {}) => {
   const jobRoot = path.resolve(jobRootInput);
-  const manifest = deriveRenderManifest(jobRoot, options);
+  const manifest = options.manifest ?? deriveRenderManifest(jobRoot, options);
   const outputPath = path.join(jobRoot, "state", "render-manifest.json");
   writeJsonAtomic(outputPath, manifest);
   return { outputPath, manifest };

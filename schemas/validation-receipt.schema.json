@@ -6,11 +6,8 @@
     "status",
     "kind",
     "validator",
-    "validatorVersion",
-    "runnerSha256",
-    "bundleSha256",
-    "command",
-    "exitCode",
+    "implementationSha256",
+    "inputs",
     "output",
     "subject",
     "checkedAt"
@@ -27,28 +24,16 @@
       ]
     },
     "validator": { "type": "string", "minLength": 1 },
-    "validatorVersion": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "runnerSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "bundleSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "command": { "type": "string", "minLength": 1 },
-    "exitCode": { "const": 0 },
+    "implementationSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "inputs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/binding" }
+    },
     "output": {
-      "type": "object",
-      "required": ["path", "sha256"],
-      "properties": {
-        "path": { "type": "string", "minLength": 1 },
-        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
-      },
-      "additionalProperties": false
+      "$ref": "#/$defs/binding"
     },
     "subject": {
-      "type": "object",
-      "required": ["path", "sha256"],
-      "properties": {
-        "path": { "type": "string", "minLength": 1 },
-        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
-      },
-      "additionalProperties": false
+      "$ref": "#/$defs/binding"
     },
     "checkedAt": { "type": "string", "format": "date-time" },
     "snapshots": {
@@ -66,6 +51,17 @@
       }
     },
     "metrics": { "type": "object" }
+  },
+  "$defs": {
+    "binding": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false
 }

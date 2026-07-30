@@ -28,7 +28,6 @@
   "approvedDesignLanguageFingerprint": null,
   "previewBaseline": null,
   "pendingPreviewBaseline": null,
-  "pendingDeltaPreview": null,
   "currentState": "intake",
   "pendingGate": null,
   "completed": false,

@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 export const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, "utf8"));
 
@@ -76,30 +75,6 @@ export const resolveLockedHyperframesCli = (jobRootInput) => {
   };
 };
 
-export const computeValidatorVersion = (repositoryRoot, contracts, validator, jobRoot) => {
-  const implementationPaths = [path.join(repositoryRoot, contracts.implementations[validator])];
-  if (validator === "check-layout-constraints") {
-    implementationPaths.push(path.join(repositoryRoot, "schemas", "beat-map.schema.json"));
-  }
-  const implementationSha256 = implementationPaths.length === 1
-    ? sha256File(implementationPaths[0])
-    : sha256Text(
-      implementationPaths.map((candidate) => `${path.relative(repositoryRoot, candidate)}:${sha256File(candidate)}`).join("\n")
-    );
-  if (validator !== "hyperframes-check") return implementationSha256;
-  const runtime = resolveLockedHyperframesCli(jobRoot);
-  return sha256Text(`${implementationSha256}:${runtime.fingerprint}`);
-};
-
-export const computeValidationRunnerVersion = (repositoryRoot, contracts) => {
-  const runnerPath = path.join(repositoryRoot, contracts.runner);
-  const workflowUtilsPath = fileURLToPath(import.meta.url);
-  return sha256Text([
-    `${path.relative(repositoryRoot, runnerPath)}:${sha256File(runnerPath)}`,
-    `${path.relative(repositoryRoot, workflowUtilsPath)}:${sha256File(workflowUtilsPath)}`
-  ].join("\n"));
-};
-
 export const jobRootForWorkflow = (workflowPath) => path.dirname(path.dirname(path.resolve(workflowPath)));
 
 export const isPathInside = (parent, candidate) => {
@@ -117,50 +92,11 @@ export const assertRegularContainedFile = (parent, candidate, label = "File") =>
 };
 
 export const ensureWorkflowDefaults = (workflow) => {
-  workflow.captionModeSource ??= "default";
-  workflow.captionModeAcknowledged ??= false;
-  workflow.visualAxisMode ??= "a-axis-overlay";
-  workflow.visualAxisModeSource ??= "default";
-  workflow.visualAxisModeAcknowledged ??= false;
-  workflow.referenceScriptStatus ??= "none";
-  workflow.referenceScriptAcknowledged ??= false;
-  workflow.referenceScriptPath ??= null;
-  workflow.referenceScriptSha256 ??= null;
-  if (workflow.referenceScriptStatus === "unknown"
-    && workflow.referenceScriptPath === null
-    && workflow.referenceScriptSha256 === null) {
-    workflow.referenceScriptStatus = "none";
-  }
-  workflow.reconciliationReturnState ??= null;
-  workflow.creativeConfirmationSha256 ??= null;
-  workflow.pendingCreativePackageSha256 ??= null;
-  workflow.creativeDocumentFingerprints ??= null;
-  workflow.authoritativeMediaPath ??= null;
-  workflow.authoritativeMediaSha256 ??= null;
-  workflow.trimPlanSha256 ??= null;
-  workflow.visualPlanSha256 ??= null;
-  workflow.compositionArtifactPath ??= null;
-  workflow.compositionArtifactSha256 ??= null;
   workflow.lastKnownGoodDelivery ??= null;
   workflow.history ??= [];
-  const legacyRevisionCount = workflow.history.filter((entry) => entry.revisionId == null && (
-    ["replan", "resolve-transcript-item"].includes(entry.action)
-    || (["set-caption-mode", "set-axis-mode"].includes(entry.action) && entry.from !== entry.to)
-    || (entry.action === "revise" && ["rough-cut-review", "motion-plan-review"].includes(entry.from))
-    || (entry.action === "register-reference-script" && entry.from !== "intake" && entry.to === "transcription")
-  )).length;
-  if (workflow.revisionId == null || (workflow.revisionId === 1 && legacyRevisionCount > 0)) {
-    workflow.revisionId = 1 + legacyRevisionCount;
-  }
-  workflow.approvedDesignLanguageFingerprint ??= null;
   workflow.previewBaseline ??= null;
   workflow.pendingPreviewBaseline ??= null;
-  workflow.pendingDeltaPreview ??= null;
-  for (const legacyField of ["gateHistory", "creativeReviewRequested", "creativeReviewRequired", "creativeReviewReasons", "visualSampleRequested", "visualSampleRequired", "visualSampleReasons", "pendingVisualSampleFingerprint", "intakeDecisionBlock"]) delete workflow[legacyField];
   workflow.gates ??= {};
-  if (workflow.pendingGate && workflow.gates[workflow.pendingGate]) {
-    workflow.gates[workflow.pendingGate].revisionId ??= workflow.revisionId;
-  }
   return workflow;
 };
 
@@ -235,36 +171,10 @@ export const beginWorkflowRevision = (workflow, now, reason, options = {}) => {
   if (options.invalidateVisualPlan !== false) workflow.visualPlanSha256 = null;
 };
 
-export const mirrorWorkflowToProject = (workflowPath, workflow) => {
-  const projectPath = path.join(path.dirname(workflowPath), "project.json");
-  if (!fs.existsSync(projectPath)) return;
-  const project = readJson(projectPath);
-  for (const field of [
-    "mode",
-    "captionMode",
-    "captionModeSource",
-    "captionModeAcknowledged",
-    "visualAxisMode",
-    "visualAxisModeSource",
-    "visualAxisModeAcknowledged",
-    "referenceScriptStatus",
-    "referenceScriptAcknowledged",
-    "referenceScriptPath",
-    "referenceScriptSha256",
-    "authoritativeMediaPath",
-    "authoritativeMediaSha256",
-    "revisionId",
-    "lastKnownGoodDelivery"
-  ]) project[field] = workflow[field];
-  project.status = workflow.currentState;
-  writeJsonAtomic(projectPath, project);
-};
-
 export const saveWorkflow = (workflowPath, workflow, now = new Date().toISOString()) => {
   workflow.completed = workflow.currentState === "complete";
   workflow.updatedAt = now;
   writeJsonAtomic(workflowPath, workflow);
-  mirrorWorkflowToProject(workflowPath, workflow);
 };
 
 export const validateActiveReference = (workflowPath, workflow) => {
@@ -322,42 +232,6 @@ export const computePendingCreativePackageSha256 = (jobRoot, captionMode) => {
     ...Object.values(computeCreativeDocumentFingerprints(jobRoot, captionMode)).map((entry) => entry.sha256)
   ];
   return sha256Text(parts.join(":"));
-};
-
-export const computeValidationBundleSha256 = (jobRoot, phase, subjectRelativePath, captionMode) => {
-  const relativePaths = new Set([
-    subjectRelativePath,
-    "state/design-system.json",
-    "state/beat-map.json",
-    "state/transcript.json",
-    "state/transcript-reconciliation.json",
-    "state/trim-plan.json"
-  ]);
-  if (captionMode === "subtitles") {
-    for (const relativePath of [
-      "captions/caption-review-plan.json",
-      "captions/chatcut-pages.json",
-      "captions/captions.json"
-    ]) {
-      if (fs.existsSync(path.join(jobRoot, relativePath))) relativePaths.add(relativePath);
-    }
-  }
-  const hyperframesRoot = path.join(jobRoot, "hyperframes");
-  const visit = (directory) => {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      if (["node_modules", ".hyperframes", "snapshots", "cache", "chunks", "delta"].includes(entry.name)) continue;
-      const absolutePath = path.join(directory, entry.name);
-      if (entry.isDirectory()) visit(absolutePath);
-      else if (entry.isFile() && !entry.isSymbolicLink()) relativePaths.add(path.relative(jobRoot, absolutePath));
-    }
-  };
-  if (fs.existsSync(hyperframesRoot)) visit(hyperframesRoot);
-  const fingerprints = [...relativePaths].sort().map((relativePath) => {
-    const absolutePath = path.join(jobRoot, relativePath);
-    assertRegularContainedFile(jobRoot, absolutePath, `${phase} validation input`);
-    return `${relativePath}:${sha256File(absolutePath)}`;
-  });
-  return sha256Text(fingerprints.join("\n"));
 };
 
 export const assertCreativeAuthorities = (jobRoot, workflow, { requireApproved = true } = {}) => {
@@ -439,7 +313,5 @@ export const recoverTranscriptTransaction = (jobRoot) => {
     fs.renameSync(prepared, target);
   }
   fs.unlinkSync(journalPath);
-  const workflowPath = path.join(jobRoot, "state", "workflow.json");
-  if (fs.existsSync(workflowPath)) mirrorWorkflowToProject(workflowPath, ensureWorkflowDefaults(readJson(workflowPath)));
   return true;
 };

@@ -3,15 +3,9 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { buildComposition } from "./build-composition.mjs";
-import {
-  buildDeltaCompositions,
-  createPreviewBaseline,
-  planDeltaPreview,
-  verifyDeltaBindings
-} from "./delta-preview.mjs";
-import { writeMotionIndex } from "./motion-index.mjs";
 import { snapshotRenderManifest } from "./render-manifest.mjs";
 import { pruneChunkCache, verifyAssemblyReceipt } from "./render-chunks.mjs";
+import { validateCanonicalReceipt } from "./validation-receipt.mjs";
 import {
   assertCreativeAuthorities,
   assertRegularContainedFile,
@@ -19,9 +13,6 @@ import {
   computeCreativeAuthorities,
   computeCreativeDocumentFingerprints,
   computePendingCreativePackageSha256,
-  computeValidationBundleSha256,
-  computeValidationRunnerVersion,
-  computeValidatorVersion,
   computeDesignLanguageFingerprint,
   ensureWorkflowDefaults,
   invalidateCreativeArtifacts,
@@ -72,8 +63,7 @@ for (let index = 0; index < rawArguments.length; index += 1) {
 
 const jobRoot = jobRootForWorkflow(workflowPath);
 recoverTranscriptTransaction(jobRoot);
-const workflowBeforeMigration = fs.readFileSync(workflowPath, "utf8");
-const workflow = ensureWorkflowDefaults(JSON.parse(workflowBeforeMigration));
+const workflow = ensureWorkflowDefaults(JSON.parse(fs.readFileSync(workflowPath, "utf8")));
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const actor = String(options.actor ?? (command === "advance" ? "agent" : "user"));
 const artifact = options.artifact ? String(options.artifact) : null;
@@ -112,144 +102,36 @@ const latestUserCompositionRevision = () => [...workflow.history].reverse().find
     || (entry.action === "reopen" && entry.scope === "composition"))
 ));
 
-const updateLocalCreativeAuthorities = (deltaPlan) => {
+const changedCreativeAuthorities = () => {
   const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
   const confirmation = readJson(confirmationPath);
   const currentAuthorities = computeCreativeAuthorities(jobRoot, workflow.captionMode);
-  const changedAuthorities = Object.entries(currentAuthorities)
+  return Object.entries(currentAuthorities)
     .filter(([name, authority]) => confirmation.authorities?.[name]?.sha256 !== authority.sha256)
     .map(([name]) => name);
-  if (changedAuthorities.includes("transcript")) return { eligible: false, reason: "transcript-authority-changed" };
-  if (changedAuthorities.some((name) => !["beatMap", "captionPlan"].includes(name))) {
-    return { eligible: false, reason: "unsupported-creative-authority-changed" };
-  }
-  if (changedAuthorities.includes("beatMap")) {
-    runCheck(
-      "check-visual-plan.mjs",
-      [
-        path.join(jobRoot, "state", "beat-map.json"),
-        path.join(jobRoot, "state", "transcript.json"),
-        path.join(jobRoot, "state", "design-system.json")
-      ],
-      "User-approved Beat delta failed visual-plan validation"
-    );
-  }
-  if (changedAuthorities.includes("captionPlan")) {
-    runCheck(
-      "check-caption-review-plan.mjs",
-      [path.join(jobRoot, "captions", "caption-review-plan.json")],
-      "User-approved caption delta failed semantic validation"
-    );
-  }
-  for (const name of changedAuthorities) confirmation.authorities[name] = currentAuthorities[name];
-  if (changedAuthorities.length) {
-    writeJsonAtomic(confirmationPath, confirmation);
-    workflow.creativeConfirmationSha256 = sha256File(confirmationPath);
-  }
-  if (changedAuthorities.includes("beatMap")) {
-    workflow.visualPlanSha256 = currentAuthorities.beatMap.sha256;
-  }
-  workflow.history.push({
-    at: now,
-    action: "apply-user-approved-delta",
-    actor: "agent",
-    from: "composition",
-    to: "composition",
-    note: latestUserCompositionRevision()?.note ?? "User-approved local revision",
-    revisionId: workflow.revisionId,
-    authorities: changedAuthorities,
-    changedBeatIds: deltaPlan.changedBeatIds,
-    changedCaptionCueIds: deltaPlan.changedCaptionCueIds,
-    windows: deltaPlan.windows
-  });
-  return { eligible: true, changedAuthorities };
 };
 
-const classifyCompositionRevision = () => {
-  workflow.pendingDeltaPreview = null;
-  const deterministicTemplatePath = path.join(jobRoot, "hyperframes", "index.template.html");
-  if (!fs.existsSync(deterministicTemplatePath)) {
-    return { kind: "full", reason: "legacy-composition-requires-full-preview" };
+const prepareCompositionRevision = () => {
+  const changedAuthorities = changedCreativeAuthorities();
+  if (changedAuthorities.length) {
+    return { kind: "replan", reason: `creative-authority-changed:${changedAuthorities.join(",")}` };
   }
   const request = latestUserCompositionRevision();
-  const baseline = workflow.previewBaseline;
-  if (!request || !baseline) return { kind: "full", reason: "no-approved-preview-baseline" };
-  const baselineIndexPath = path.join(jobRoot, baseline.motionIndexPath);
-  if (!fs.existsSync(baselineIndexPath) || sha256File(baselineIndexPath) !== baseline.motionIndexSha256) {
-    return { kind: "full", reason: "baseline-index-stale" };
-  }
-  const baselinePreviewPath = path.join(jobRoot, baseline.previewPath);
-  if (!fs.existsSync(baselinePreviewPath) || sha256File(baselinePreviewPath) !== baseline.previewSha256) {
-    return { kind: "full", reason: "baseline-preview-stale" };
-  }
-  if (workflow.authoritativeMediaSha256 !== baseline.authoritativeMediaSha256) {
-    return { kind: "replan", reason: "authoritative-media-changed" };
-  }
-  if (computeDesignLanguageFingerprint(jobRoot, workflow.captionMode) !== baseline.designLanguageFingerprint) {
-    return { kind: "replan", reason: "design-language-changed" };
-  }
-  const deltaPlan = planDeltaPreview(jobRoot, baseline.motionIndexPath);
-  const authorityUpdate = updateLocalCreativeAuthorities(deltaPlan);
-  if (!authorityUpdate.eligible) return { kind: "replan", reason: authorityUpdate.reason };
-  const windowDuration = deltaPlan.windows.reduce((sum, window) => sum + window.end - window.start, 0);
-  const localized = deltaPlan.kind === "delta"
-    && deltaPlan.changedBeatIds.length <= 6
-    && deltaPlan.changedCaptionCueIds.length <= 8
-    && windowDuration <= 30;
-  if (!localized) return { kind: "full", reason: deltaPlan.reason, deltaPlan };
-  const sources = buildDeltaCompositions(jobRoot, deltaPlan).map((result) => ({
-    path: path.relative(jobRoot, result.outputPath),
-    sha256: sha256File(result.outputPath),
-    window: { start: result.windowStart, end: result.windowEnd }
-  }));
-  const currentMotionIndex = writeMotionIndex(jobRoot);
-  const productionCompositionPath = path.join(jobRoot, "hyperframes", "index.html");
-  workflow.pendingDeltaPreview = {
-    baselineMotionIndexPath: baseline.motionIndexPath,
-    baselineMotionIndexSha256: baseline.motionIndexSha256,
-    baselinePreviewPath: baseline.previewPath,
-    baselinePreviewSha256: baseline.previewSha256,
-    currentMotionIndexPath: path.relative(jobRoot, currentMotionIndex.outputPath),
-    currentMotionIndexSha256: sha256File(currentMotionIndex.outputPath),
-    productionCompositionPath: "hyperframes/index.html",
-    productionCompositionSha256: sha256File(productionCompositionPath),
-    designLanguageFingerprint: computeDesignLanguageFingerprint(jobRoot, workflow.captionMode),
-    authoritativeMediaSha256: workflow.authoritativeMediaSha256,
-    windows: deltaPlan.windows,
-    changedBeatIds: deltaPlan.changedBeatIds,
-    changedCaptionCueIds: deltaPlan.changedCaptionCueIds,
-    sources
-  };
-  return { kind: "delta", reason: deltaPlan.reason, deltaPlan };
-};
-
-const validateDeltaPreview = (previewRelativePath, options = {}) => {
-  const delta = workflow.pendingDeltaPreview;
-  if (!delta || delta.windows.length < 1 || delta.sources.length !== delta.windows.length) throw new Error("Delta preview state is incomplete");
-  verifyDeltaBindings(jobRoot, delta, workflow.previewBaseline, { rebuildProduction: options.rebuildProduction === true });
-  if (delta.designLanguageFingerprint !== computeDesignLanguageFingerprint(jobRoot, workflow.captionMode)) {
-    throw new Error("Delta design language changed after classification");
-  }
-  if (delta.authoritativeMediaSha256 !== workflow.authoritativeMediaSha256
-    || sha256File(path.join(jobRoot, workflow.authoritativeMediaPath)) !== delta.authoritativeMediaSha256) {
-    throw new Error("Delta authoritative media changed after classification");
-  }
-  for (let index = 0; index < delta.sources.length; index += 1) {
-    const source = delta.sources[index];
-    const sourcePath = assertJobArtifact(source.path, "hyperframes");
-    if (sha256File(sourcePath) !== source.sha256) throw new Error("Delta composition changed after classification");
-    if (JSON.stringify(source.window) !== JSON.stringify(delta.windows[index])) {
-      throw new Error("Delta source window no longer matches its manifest");
+  if (!request) return { kind: "chunked", reason: "complete-standard-preview" };
+  if (workflow.previewBaseline?.renderManifestPath) {
+    const baselinePath = path.join(jobRoot, workflow.previewBaseline.renderManifestPath);
+    if (!fs.existsSync(baselinePath) || sha256File(baselinePath) !== workflow.previewBaseline.renderManifestSha256) {
+      throw new Error("Approved Render Manifest is stale");
+    }
+    const baseline = readJson(baselinePath);
+    if (baseline.audio?.sourceSha256 !== workflow.authoritativeMediaSha256) {
+      return { kind: "replan", reason: "authoritative-media-changed" };
+    }
+    if (baseline.designLanguageFingerprint !== computeDesignLanguageFingerprint(jobRoot, workflow.captionMode)) {
+      return { kind: "replan", reason: "design-language-changed" };
     }
   }
-  const previewPath = assertJobArtifact(previewRelativePath, "previews");
-  const probe = probeReviewVideo(previewPath, "Delta preview");
-  probeReviewSignal(previewPath, probe.duration, "Delta preview");
-  const expectedDuration = delta.windows.reduce((sum, window) => sum + window.end - window.start, 0);
-  const durationTolerance = (delta.windows.length + 1) / Math.max(probe.fps, 1);
-  if (Math.abs(probe.duration - expectedDuration) > durationTolerance) {
-    throw new Error(`Delta preview duration ${probe.duration}s does not match ${expectedDuration}s window`);
-  }
+  return { kind: "chunked", reason: "parameter-only-revision" };
 };
 
 const runCheck = (scriptName, argumentsList, failurePrefix) => {
@@ -325,53 +207,32 @@ const probeReviewSignal = (videoPath, duration, label) => {
   }
 };
 
-const hasChunkAssemblyReceipt = (relativePath) => {
-  if (!relativePath || path.isAbsolute(relativePath)) return false;
-  const artifactPath = path.join(jobRoot, relativePath);
-  return fs.existsSync(`${artifactPath}.render.json`);
-};
-
 const createPendingPreviewBaseline = (previewRelativePath) => {
-  const baseline = {
-    ...createPreviewBaseline(jobRoot, workflow.revisionId, previewRelativePath),
-    designLanguageFingerprint: computeDesignLanguageFingerprint(jobRoot, workflow.captionMode),
-    authoritativeMediaSha256: workflow.authoritativeMediaSha256
-  };
-  if (!hasChunkAssemblyReceipt(previewRelativePath)) return baseline;
-  const receipt = verifyAssemblyReceipt(jobRoot, previewRelativePath);
-  if (receipt.quality !== "standard") throw new Error("Final preview Chunk assembly must use standard quality");
-  const manifestPath = path.join(jobRoot, receipt.renderManifestPath);
-  if (!isPathInside(jobRoot, manifestPath) || !fs.existsSync(manifestPath)
-    || sha256File(manifestPath) !== receipt.renderManifestSha256) {
-    throw new Error("Final preview Render Manifest binding is stale");
-  }
+  const receipt = verifyAssemblyReceipt(jobRoot, previewRelativePath, { quality: "standard" });
+  const manifestPath = path.join(jobRoot, "state", "render-manifest.json");
   const manifest = readJson(manifestPath);
   if (manifest.contentManifestSha256 !== receipt.contentManifestSha256) {
     throw new Error("Final preview content manifest binding is stale");
   }
-  return {
-    ...baseline,
+  const baseline = {
+    revisionId: workflow.revisionId,
+    previewPath: previewRelativePath,
+    previewSha256: sha256File(path.join(jobRoot, previewRelativePath)),
     ...snapshotRenderManifest(jobRoot, manifest, workflow.revisionId)
   };
+  return baseline;
 };
 
-const validateChunkedFullPreview = (previewRelativePath) => {
-  const receipt = verifyAssemblyReceipt(jobRoot, previewRelativePath);
-  if (receipt.quality !== "standard") throw new Error("Final preview must use standard Chunk quality");
-  if (workflow.pendingDeltaPreview) {
-    verifyDeltaBindings(jobRoot, workflow.pendingDeltaPreview, workflow.previewBaseline, { rebuildProduction: true });
-  } else {
-    validateFinalQa(previewRelativePath);
+const validateChunkedFullPreview = (previewRelativePath, { inspectMedia = true } = {}) => {
+  const receipt = verifyAssemblyReceipt(jobRoot, previewRelativePath, { quality: "standard" });
+  validateFinalQa(previewRelativePath);
+  const manifest = readJson(path.join(jobRoot, "state", "render-manifest.json"));
+  if (manifest.contentManifestSha256 !== receipt.contentManifestSha256) {
+    throw new Error("Final preview content manifest binding is stale");
   }
-  const manifestPath = path.join(jobRoot, receipt.renderManifestPath);
-  if (!isPathInside(jobRoot, manifestPath) || !fs.existsSync(manifestPath)
-    || sha256File(manifestPath) !== receipt.renderManifestSha256) {
-    throw new Error("Final preview Render Manifest binding is stale");
-  }
-  const manifest = readJson(manifestPath);
   const previewPath = assertJobArtifact(previewRelativePath, "previews");
   const probe = probeReviewVideo(previewPath, "Final preview");
-  probeReviewSignal(previewPath, probe.duration, "Final preview");
+  if (inspectMedia) probeReviewSignal(previewPath, probe.duration, "Final preview");
   const expectedDuration = manifest.totalFrames / manifest.fps;
   if (Math.abs(probe.duration - expectedDuration) > 1 / manifest.fps) {
     throw new Error("Chunked final preview duration differs from its Render Manifest");
@@ -392,108 +253,31 @@ const promotePendingPreviewBaseline = () => {
       || sha256File(manifestPath) !== pending.renderManifestSha256) {
       throw new Error("Pending Render Manifest changed before approval");
     }
-    verifyAssemblyReceipt(jobRoot, pending.previewPath, pending.contentManifestSha256);
+    verifyAssemblyReceipt(jobRoot, pending.previewPath, {
+      quality: "standard",
+      contentManifestSha256: pending.contentManifestSha256
+    });
   }
   workflow.previewBaseline = pending;
   workflow.pendingPreviewBaseline = null;
-  workflow.pendingDeltaPreview = null;
-};
-
-const verifyEditorialMatch = (deliveryPath, previewPath) => {
-  const video = spawnSync(
-    "ffmpeg",
-    ["-hide_banner", "-nostats", "-i", deliveryPath, "-i", previewPath, "-filter_complex", "[0:v][1:v]ssim", "-an", "-f", "null", "-"],
-    { encoding: "utf8" }
-  );
-  const videoScore = Number(/All:([0-9.]+)/.exec(video.stderr)?.[1]);
-  if (video.status !== 0 || !Number.isFinite(videoScore) || videoScore < 0.92) {
-    throw new Error("Final delivery picture differs from the approved preview");
-  }
-  const audio = spawnSync(
-    "ffmpeg",
-    ["-hide_banner", "-nostats", "-i", deliveryPath, "-i", previewPath, "-filter_complex", "[0:a][1:a]apsnr", "-f", "null", "-"],
-    { encoding: "utf8" }
-  );
-  const audioScores = [...audio.stderr.matchAll(/PSNR ch\d+:\s*(inf|[0-9.]+)\s*dB/g)]
-    .map((match) => match[1] === "inf" ? Infinity : Number(match[1]));
-  if (audio.status !== 0 || audioScores.length === 0 || audioScores.some((score) => score < 20)) {
-    throw new Error("Final delivery audio differs from the approved preview");
-  }
 };
 
 const evidenceContracts = readJson(path.join(scriptDirectory, "..", "config", "validation-evidence-contracts.json"));
-
-const validateEvidenceReceipt = (item, contract, subject, usedPaths, invocation = null) => {
-  const repositoryRoot = path.join(scriptDirectory, "..");
-  const expectedCommand = contract.phase === "visual"
-    ? `node ${evidenceContracts.runner} ${jobRoot} ${contract.phase} ${contract.checkId} ${invocation.sample.path} ${invocation.source.path}`
-    : `node ${evidenceContracts.runner} ${jobRoot} ${contract.phase} ${contract.checkId} ${subject.path}`;
-  const expectedRunnerSha256 = computeValidationRunnerVersion(repositoryRoot, evidenceContracts);
-  const expectedValidatorVersion = computeValidatorVersion(
-    repositoryRoot,
-    evidenceContracts,
-    contract.validator,
-    jobRoot
-  );
-  const expectedBundleSha256 = computeValidationBundleSha256(jobRoot, contract.phase, subject.path, workflow.captionMode);
-  if (item.kind !== contract.kind || item.validator !== contract.validator) {
-    throw new Error(`Evidence contract mismatch for ${contract.validator}`);
-  }
-  if (item.command !== expectedCommand
-    || item.runnerSha256 !== expectedRunnerSha256
-    || item.validatorVersion !== expectedValidatorVersion
-    || item.bundleSha256 !== expectedBundleSha256
-    || item.subjectSha256 !== subject.sha256) {
-    throw new Error(`Evidence metadata is incomplete for ${contract.validator}`);
-  }
-  const invocationSubjects = invocation ? Object.values(invocation).map((candidate) => candidate.path) : [];
-  if (item.path === subject.path || invocationSubjects.includes(item.path) || usedPaths.has(item.path)) {
-    throw new Error(`Evidence must be an independent receipt for ${contract.validator}`);
-  }
-  usedPaths.add(item.path);
-  const receiptPath = assertJobArtifact(item.path, contract.directory);
-  if (sha256File(receiptPath) !== item.sha256 || path.extname(receiptPath) !== ".json") {
-    throw new Error(`Evidence receipt is stale or not JSON: ${item.path}`);
-  }
-  const receipt = readJson(receiptPath);
-  if (receipt.schemaVersion !== "1.0.0"
-    || receipt.status !== "pass"
-    || receipt.kind !== item.kind
-    || receipt.validator !== item.validator
-    || receipt.validatorVersion !== item.validatorVersion
-    || receipt.runnerSha256 !== item.runnerSha256
-    || receipt.bundleSha256 !== item.bundleSha256
-    || receipt.command !== item.command
-    || receipt.exitCode !== 0
-    || receipt.subject?.path !== subject.path
-    || receipt.subject?.sha256 !== subject.sha256) {
-    throw new Error(`Evidence receipt metadata mismatch: ${item.path}`);
-  }
-  const outputPath = assertJobArtifact(receipt.output?.path, "logs");
-  if (receipt.output?.sha256 !== sha256File(outputPath)) {
-    throw new Error(`Evidence output is stale: ${receipt.output?.path}`);
-  }
-  if (item.kind === "snapshot-manifest") {
-    if (!Array.isArray(receipt.snapshots) || receipt.snapshots.length < 3) {
-      throw new Error("Snapshot evidence requires at least three review frames");
-    }
-    const timestamps = new Set();
-    for (const snapshot of receipt.snapshots) {
-      if (!Number.isFinite(snapshot.time) || timestamps.has(snapshot.time)) throw new Error("Snapshot times must be distinct");
-      timestamps.add(snapshot.time);
-      const snapshotPath = assertJobArtifact(snapshot.path, "checkpoints");
-      if (sha256File(snapshotPath) !== snapshot.sha256 || !/\.(png|jpe?g)$/i.test(snapshot.path)) {
-        throw new Error(`Snapshot evidence is invalid: ${snapshot.path}`);
-      }
-    }
-  }
-};
 
 const validateFinalQa = (previewRelativePath) => {
   const reportPath = path.join(jobRoot, "state", "qa-report.json");
   assertRegularContainedFile(path.join(jobRoot, "state"), reportPath, "QA report");
   const report = readJson(reportPath);
-  const requiredChecks = ["hyperframes", "font", "information-value", "layout", "snapshots", workflow.captionMode === "subtitles" ? "captions" : "motion-copy-coverage", "audio", "media"];
+  const requiredChecks = [
+    "hyperframes",
+    "font",
+    "information-value",
+    "layout",
+    "snapshots",
+    ...(workflow.captionMode === "subtitles" ? ["captions"] : []),
+    "audio",
+    "media"
+  ];
   const passed = new Set((report.checks ?? []).filter((check) => check.status === "pass").map((check) => check.id));
   if (report.passed !== true || requiredChecks.some((id) => !passed.has(id))) {
     throw new Error("Final preview requires a passing QA report with every required check");
@@ -507,26 +291,18 @@ const validateFinalQa = (previewRelativePath) => {
   if (!workflow.visualPlanSha256 || sha256File(beatMapPath) !== workflow.visualPlanSha256) {
     throw new Error("Approved visual plan changed after planning validation");
   }
-  const previewProbe = probeReviewVideo(previewPath, "Final preview");
-  probeReviewSignal(previewPath, previewProbe.duration, "Final preview");
   if (report.artifacts?.composition?.path !== workflow.compositionArtifactPath
     || report.artifacts?.composition?.sha256 !== workflow.compositionArtifactSha256
     || report.artifacts?.preview?.path !== previewRelativePath
     || report.artifacts?.preview?.sha256 !== sha256File(previewPath)) {
     throw new Error("QA report artifact fingerprints are stale");
   }
-  const subjects = {
-    composition: { path: workflow.compositionArtifactPath, sha256: workflow.compositionArtifactSha256 },
-    preview: { path: previewRelativePath, sha256: sha256File(previewPath) }
-  };
-  const usedEvidencePaths = new Set();
   for (const checkId of requiredChecks) {
     const check = (report.checks ?? []).find((candidate) => candidate.id === checkId);
-    if (!Array.isArray(check?.evidence) || check.evidence.length === 0) throw new Error(`QA check ${checkId} lacks evidence`);
-    const contract = { ...evidenceContracts.final[checkId], phase: "final", checkId };
-    for (const item of check.evidence) {
-      validateEvidenceReceipt(item, contract, subjects[contract.subject], usedEvidencePaths);
+    if (!Array.isArray(check?.evidence) || check.evidence.length !== 1) {
+      throw new Error(`QA check ${checkId} requires one canonical receipt`);
     }
+    validateCanonicalReceipt(jobRoot, "final", checkId, check.evidence[0]);
   }
 };
 
@@ -550,15 +326,12 @@ const validateVisualSampleReport = (sampleRelativePath) => {
     || requiredChecks.some((id) => checks.get(id)?.status !== "pass")) {
     throw new Error("Visual sample requires a current passing validation report");
   }
-  const usedEvidencePaths = new Set();
-  const subjects = { sample: sampleSubject, source: sourceSubject };
   for (const id of requiredChecks) {
     const evidence = checks.get(id)?.evidence ?? [];
-    if (evidence.length === 0) throw new Error(`Visual-sample check ${id} lacks evidence`);
-    for (const item of evidence) {
-      const contract = { ...evidenceContracts.visual[id], phase: "visual", checkId: id };
-      validateEvidenceReceipt(item, contract, subjects[contract.subject], usedEvidencePaths, subjects);
+    if (evidence.length !== 1) {
+      throw new Error(`Visual-sample check ${id} requires one canonical receipt`);
     }
+    validateCanonicalReceipt(jobRoot, "visual", id, evidence[0]);
   }
 };
 
@@ -609,9 +382,7 @@ const validateGateArtifact = (gate) => {
     validateVisualSampleReport(recordedArtifact);
   }
   if (gate === "final-preview") {
-    if (hasChunkAssemblyReceipt(recordedArtifact)) validateChunkedFullPreview(recordedArtifact);
-    else if (workflow.pendingDeltaPreview) validateDeltaPreview(recordedArtifact);
-    else validateFinalQa(recordedArtifact);
+    validateChunkedFullPreview(recordedArtifact, { inspectMedia: false });
   }
 };
 
@@ -776,7 +547,6 @@ const approveCaptionReviewPlan = (approvalNote) => {
 };
 
 if (command === "status") {
-  if (`${JSON.stringify(workflow, null, 2)}\n` !== workflowBeforeMigration) save();
   console.log(JSON.stringify(workflow, null, 2));
   process.exit(0);
 }
@@ -1034,16 +804,11 @@ if (command === "advance") {
     }
     if (workflow.currentState === "composition") {
       const hyperframesDirectory = path.join(jobRoot, "hyperframes");
-      const deterministicTemplatePath = path.join(hyperframesDirectory, "index.template.html");
-      if (fs.existsSync(deterministicTemplatePath)) {
-        const built = buildComposition(hyperframesDirectory);
-        if (path.resolve(artifactPath) !== path.resolve(built.outputPath)) {
-          throw new Error("Composition advance requires the deterministic hyperframes/index.html build artifact");
-        }
-      } else if (path.resolve(artifactPath) !== path.join(hyperframesDirectory, "index.html")) {
-        throw new Error("Legacy composition advance requires hyperframes/index.html");
+      const built = buildComposition(hyperframesDirectory);
+      if (path.resolve(artifactPath) !== path.resolve(built.outputPath)) {
+        throw new Error("Composition advance requires the deterministic hyperframes/index.html build artifact");
       }
-      const classification = classifyCompositionRevision();
+      const classification = prepareCompositionRevision();
       workflow.history.push({
         at: now,
         action: "classify-revision",
@@ -1079,26 +844,18 @@ if (command === "advance") {
       validateVisualSampleReport(artifact);
     }
     if (workflow.currentState === "qa") {
-      probeReviewVideo(artifactPath, "Final preview");
-      if (hasChunkAssemblyReceipt(artifact)) {
-        validateChunkedFullPreview(artifact);
-        workflow.pendingPreviewBaseline = createPendingPreviewBaseline(artifact);
-      } else if (workflow.pendingDeltaPreview) {
-        validateDeltaPreview(artifact);
-        workflow.pendingPreviewBaseline = null;
-      } else {
-        validateFinalQa(artifact);
-        workflow.pendingPreviewBaseline = createPendingPreviewBaseline(artifact);
-      }
+      validateChunkedFullPreview(artifact);
+      workflow.pendingPreviewBaseline = createPendingPreviewBaseline(artifact);
     }
     if (workflow.currentState === "render") {
       const canonicalDeliveryPath = path.join(jobRoot, "output", "final.mp4");
       const chunkAssemblyReceipt = workflow.previewBaseline?.contentManifestSha256
-        ? verifyAssemblyReceipt(jobRoot, artifact, workflow.previewBaseline.contentManifestSha256)
+        ? verifyAssemblyReceipt(jobRoot, artifact, {
+          quality: "high",
+          contentManifestSha256: workflow.previewBaseline.contentManifestSha256
+        })
         : null;
-      if (chunkAssemblyReceipt && chunkAssemblyReceipt.quality !== "high") {
-        throw new Error("Final delivery Chunk assembly must use high quality");
-      }
+      if (!chunkAssemblyReceipt) throw new Error("Final delivery requires an approved Render Manifest");
       if (workflow.lastKnownGoodDelivery
         && artifactPath === canonicalDeliveryPath
         && sha256File(artifactPath) !== workflow.lastKnownGoodDelivery.sha256) {
@@ -1108,28 +865,16 @@ if (command === "advance") {
       probeReviewSignal(artifactPath, delivery.duration, "Final delivery");
       const previewRelativePath = workflow.gates?.["final-preview"]?.artifact;
       const previewPath = assertJobArtifact(previewRelativePath, "previews");
-      const comparisonPath = workflow.pendingDeltaPreview
-        ? assertJobArtifact(workflow.previewBaseline?.previewPath, workflow.previewBaseline?.previewPath?.startsWith("output/") ? "output" : "previews")
-        : previewPath;
-      const preview = probeReviewVideo(comparisonPath, workflow.pendingDeltaPreview ? "Preview baseline" : "Final preview");
+      const preview = probeReviewVideo(previewPath, "Final preview");
       if (delivery.width !== preview.width || delivery.height !== preview.height
         || Math.abs(delivery.fps - preview.fps) > 0.001
         || Math.abs(delivery.duration - preview.duration) > 1 / Math.max(preview.fps, 1)) {
         throw new Error("Final delivery metadata differs from the approved preview");
       }
-      if (!workflow.pendingDeltaPreview) {
-        verifyEditorialMatch(artifactPath, previewPath);
-        validateFinalQa(workflow.gates?.["final-preview"]?.artifact);
-      } else {
-        validateDeltaPreview(workflow.gates?.["final-preview"]?.artifact, { rebuildProduction: true });
-      }
       if (artifactPath !== canonicalDeliveryPath) {
         fs.renameSync(artifactPath, canonicalDeliveryPath);
         const candidateReceiptPath = `${artifactPath}.render.json`;
         if (fs.existsSync(candidateReceiptPath)) {
-          const receipt = readJson(candidateReceiptPath);
-          receipt.outputPath = "output/final.mp4";
-          writeJsonAtomic(candidateReceiptPath, receipt);
           fs.renameSync(candidateReceiptPath, `${canonicalDeliveryPath}.render.json`);
         }
       }
@@ -1143,7 +888,6 @@ if (command === "advance") {
           contentManifestSha256: workflow.previewBaseline.contentManifestSha256
         } : {})
       };
-      workflow.pendingDeltaPreview = null;
       if (workflow.previewBaseline?.renderManifestPath) {
         pruneChunkCache(jobRoot, [readJson(path.join(jobRoot, workflow.previewBaseline.renderManifestPath))]);
       }

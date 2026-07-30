@@ -10,14 +10,14 @@ mg/<beat-id>/
 Beat IDs match `^[a-z0-9][a-z0-9-]*$`. `fragment.html` contains exactly
 one root with `data-beat-id="<beat-id>"`; do not author the reserved
 `id="mg-<beat-id>"`, which belongs to the generated wrapper.
-`style.css` is scoped to that root and cannot use at-rules; shared declarations
-belong in `index.template.html`. `timeline.mjs` is a deterministic snippet that
-receives `timeline`, `beat`, `root`, and `select`; it must append motion to the
-supplied timeline and must not create or register another timeline. Tween
-targets must use `root`, `select("...")`, `root.querySelector(All)`, or a
-literal selector whose result remains inside the exact Beat root. The builder
-applies the root exit using `beat.exitStartTime`, `beat.exitAnchorTime`, and
-`beat.exitDuration`.
+The builder wraps `style.css` in `@scope (#mg-<beat-id>)`; shared at-rules and
+declarations belong in `index.template.html`. `timeline.mjs` receives
+`timeline`, `beat`, `root`, and `select`. It is trusted Agent-authored code:
+tween only `root` or `select("...")`, do not access global or parent DOM, and
+do not create a separate timeline. The builder rejects imports and explicit
+second timelines but deliberately does not maintain a JavaScript parser.
+The builder applies the root exit using
+`beat.exitStartTime`, `beat.exitAnchorTime`, and `beat.exitDuration`.
 
 Use this lifecycle baseline:
 

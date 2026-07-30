@@ -4,6 +4,7 @@
   "type": "object",
   "required": ["passed", "checkedAt", "artifacts", "checks"],
   "properties": {
+    "$schema": { "type": "string" },
     "passed": { "type": "boolean" },
     "checkedAt": { "type": "string", "format": "date-time" },
     "artifacts": {
@@ -19,7 +20,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "status"],
+        "required": ["id", "status", "evidence"],
         "properties": {
           "id": { "type": "string" },
           "status": { "enum": ["pass", "fail", "warning"] },
@@ -29,22 +30,16 @@
             "minItems": 1,
             "items": {
               "type": "object",
-              "required": ["kind", "path", "sha256", "subjectSha256", "bundleSha256", "validator", "validatorVersion", "runnerSha256", "command"],
+              "required": ["path", "sha256"],
               "properties": {
-                "kind": { "enum": ["validator-report", "snapshot-manifest", "audio-analysis", "media-probe"] },
                 "path": { "type": "string" },
-                "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-                "subjectSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-                "bundleSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-                "validator": { "type": "string", "minLength": 1 },
-                "validatorVersion": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-                "runnerSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-                "command": { "type": "string", "minLength": 1 }
+                "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
               },
               "additionalProperties": false
             }
           }
-        }
+        },
+        "additionalProperties": false
       }
     }
   },
@@ -58,5 +53,6 @@
       },
       "additionalProperties": false
     }
-  }
+  },
+  "additionalProperties": false
 }

@@ -9,336 +9,37 @@ const FRAGMENT_MARKER = "<!-- CUT_MOTION_MG_FRAGMENTS -->";
 const TIMELINE_MARKER = "/* CUT_MOTION_MG_TIMELINES */";
 const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, "utf8"));
 const beatMapSchema = readJson(fileURLToPath(new URL("../schemas/beat-map.schema.json", import.meta.url)));
-const BEAT_ID_PATTERN_SOURCE = beatMapSchema.properties.beats.items.properties.id.pattern;
-const BEAT_ID_PATTERN = new RegExp(BEAT_ID_PATTERN_SOURCE);
+const BEAT_ID_PATTERN = new RegExp(beatMapSchema.properties.beats.items.properties.id.pattern);
 
+const seconds = (frames, fps) => frames / fps;
 const decimal = (value) => Number(Number(value).toFixed(6));
 const beatRootSelector = (beatId) => `[data-beat-id="${beatId}"]`;
-const splitTopLevelSelectorList = (selector) => {
-  const parts = [];
-  let start = 0;
-  let quote = null;
-  let escaped = false;
-  let bracketDepth = 0;
-  let parenthesisDepth = 0;
-  for (let index = 0; index < selector.length; index += 1) {
-    const character = selector[index];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (character === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (quote) {
-      if (character === quote) quote = null;
-      continue;
-    }
-    if (character === "'" || character === "\"") {
-      quote = character;
-      continue;
-    }
-    if (character === "[") bracketDepth += 1;
-    else if (character === "]") bracketDepth -= 1;
-    else if (character === "(") parenthesisDepth += 1;
-    else if (character === ")") parenthesisDepth -= 1;
-    else if (character === "," && bracketDepth === 0 && parenthesisDepth === 0) {
-      parts.push(selector.slice(start, index));
-      start = index + 1;
-    }
-    if (bracketDepth < 0 || parenthesisDepth < 0) return [];
+const pathIsInside = (parent, candidate) => {
+  const relative = path.relative(parent, candidate);
+  return relative !== "" && !relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative);
+};
+const assertSafeOutputPath = (directory, outputPath) => {
+  const fullOutput = path.join(directory, "index.html");
+  const chunkRoot = path.join(directory, "chunks");
+  const chunkOutput = path.basename(outputPath) === "index.html"
+    && path.dirname(path.dirname(outputPath)) === chunkRoot;
+  if (outputPath !== fullOutput && !chunkOutput) {
+    throw new Error("Composition output must be hyperframes/index.html or hyperframes/chunks/<chunk>/index.html");
   }
-  if (quote || bracketDepth !== 0 || parenthesisDepth !== 0) return [];
-  parts.push(selector.slice(start));
-  return parts;
-};
-
-const selectorPartIsScopedToBeat = (selectorPart, rootSelector) => {
-  const selector = selectorPart.trim();
-  if (!selector.startsWith(rootSelector)) return false;
-  const suffix = selector.slice(rootSelector.length);
-  if (!suffix) return true;
-  if (!/[.#[:\s>+~|]/.test(suffix[0])) return false;
-
-  let quote = null;
-  let escaped = false;
-  let bracketDepth = 0;
-  let parenthesisDepth = 0;
-  for (let index = 0; index < suffix.length; index += 1) {
-    const character = suffix[index];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (character === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (quote) {
-      if (character === quote) quote = null;
-      continue;
-    }
-    if (character === "'" || character === "\"") {
-      quote = character;
-      continue;
-    }
-    if (character === "[") {
-      bracketDepth += 1;
-      continue;
-    }
-    if (character === "]") {
-      bracketDepth -= 1;
-      if (bracketDepth < 0) return false;
-      continue;
-    }
-    if (character === "(") {
-      parenthesisDepth += 1;
-      continue;
-    }
-    if (character === ")") {
-      parenthesisDepth -= 1;
-      if (parenthesisDepth < 0) return false;
-      continue;
-    }
-    if (bracketDepth !== 0 || parenthesisDepth !== 0) continue;
-    if (character === "+" || character === "~") return false;
-    if (character === "|" && suffix[index + 1] === "|") return false;
-    if (character === ">") return true;
-    if (/\s/.test(character)) {
-      let nextIndex = index + 1;
-      while (nextIndex < suffix.length && /\s/.test(suffix[nextIndex])) nextIndex += 1;
-      if (nextIndex === suffix.length) return true;
-      if (suffix[nextIndex] === "+" || suffix[nextIndex] === "~") return false;
-      if (suffix[nextIndex] === "|" && suffix[nextIndex + 1] === "|") return false;
-      return true;
-    }
+  let existingAncestor = path.dirname(outputPath);
+  while (!fs.existsSync(existingAncestor)) existingAncestor = path.dirname(existingAncestor);
+  const realDirectory = fs.realpathSync(directory);
+  const realAncestor = fs.realpathSync(existingAncestor);
+  if (realAncestor !== realDirectory && !pathIsInside(realDirectory, realAncestor)) {
+    throw new Error("Composition output resolves outside the HyperFrames directory");
   }
-  return !quote && bracketDepth === 0 && parenthesisDepth === 0;
-};
-
-const selectorIsScopedToBeat = (selector, rootSelector) => {
-  const parts = splitTopLevelSelectorList(selector);
-  return parts.length > 0 && parts.every((part) => selectorPartIsScopedToBeat(part, rootSelector));
-};
-
-const firstCallArgument = (source, startIndex) => {
-  let quote = null;
-  let escaped = false;
-  let bracketDepth = 0;
-  let braceDepth = 0;
-  let parenthesisDepth = 0;
-  for (let index = startIndex; index < source.length; index += 1) {
-    const character = source[index];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (character === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (quote) {
-      if (character === quote) quote = null;
-      continue;
-    }
-    if (character === "'" || character === "\"" || character === "`") {
-      quote = character;
-      continue;
-    }
-    if (character === "[") bracketDepth += 1;
-    else if (character === "]") bracketDepth -= 1;
-    else if (character === "{") braceDepth += 1;
-    else if (character === "}") braceDepth -= 1;
-    else if (character === "(") parenthesisDepth += 1;
-    else if (character === ")" && bracketDepth === 0 && braceDepth === 0 && parenthesisDepth === 0) {
-      return source.slice(startIndex, index).trim();
-    } else if (character === ")") parenthesisDepth -= 1;
-    else if (character === "," && bracketDepth === 0 && braceDepth === 0 && parenthesisDepth === 0) {
-      return source.slice(startIndex, index).trim();
-    }
-    if (bracketDepth < 0 || braceDepth < 0 || parenthesisDepth < 0) return null;
+  if (fs.existsSync(outputPath)) {
+    const stat = fs.lstatSync(outputPath);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Composition output must be a regular file");
   }
-  return null;
 };
-
-const isBareCallExpression = (source, calleePattern) => {
-  const match = calleePattern.exec(source);
-  if (!match) return false;
-  const openingIndex = source.indexOf("(", match.index);
-  let quote = null;
-  let escaped = false;
-  let depth = 1;
-  for (let index = openingIndex + 1; index < source.length; index += 1) {
-    const character = source[index];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (character === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (quote) {
-      if (character === quote) quote = null;
-      continue;
-    }
-    if (character === "'" || character === "\"" || character === "`") {
-      quote = character;
-      continue;
-    }
-    if (character === "(") depth += 1;
-    else if (character === ")") {
-      depth -= 1;
-      if (depth === 0) return source.slice(index + 1).trim() === "";
-    }
-  }
-  return false;
-};
-
-const firstForbiddenCssAtRule = (source) => {
-  let quote = null;
-  let escaped = false;
-  let inComment = false;
-  let parenthesisDepth = 0;
-  for (let index = 0; index < source.length; index += 1) {
-    const character = source[index];
-    if (inComment) {
-      if (character === "*" && source[index + 1] === "/") {
-        inComment = false;
-        index += 1;
-      }
-      continue;
-    }
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (character === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (quote) {
-      if (character === quote) quote = null;
-      continue;
-    }
-    if (character === "/" && source[index + 1] === "*") {
-      inComment = true;
-      index += 1;
-      continue;
-    }
-    if (character === "'" || character === "\"") {
-      quote = character;
-      continue;
-    }
-    if (character === "(") {
-      parenthesisDepth += 1;
-      continue;
-    }
-    if (character === ")") {
-      parenthesisDepth = Math.max(0, parenthesisDepth - 1);
-      continue;
-    }
-    if (character !== "@" || parenthesisDepth !== 0) continue;
-    const name = /^[-a-z]+/i.exec(source.slice(index + 1))?.[0]?.toLowerCase();
-    return name || "rule";
-  }
-  return null;
-};
-
-const stripCssComments = (source) => {
-  let output = "";
-  let quote = null;
-  let escaped = false;
-  let inComment = false;
-  for (let index = 0; index < source.length; index += 1) {
-    const character = source[index];
-    if (inComment) {
-      if (character === "*" && source[index + 1] === "/") {
-        inComment = false;
-        index += 1;
-      }
-      continue;
-    }
-    if (escaped) {
-      output += character;
-      escaped = false;
-      continue;
-    }
-    if (character === "\\") {
-      output += character;
-      escaped = true;
-      continue;
-    }
-    if (quote) {
-      output += character;
-      if (character === quote) quote = null;
-      continue;
-    }
-    if (character === "/" && source[index + 1] === "*") {
-      inComment = true;
-      index += 1;
-      continue;
-    }
-    output += character;
-    if (character === "'" || character === "\"") quote = character;
-  }
-  return inComment || quote || escaped ? null : output;
-};
-
-const topLevelCssSelectors = (source) => {
-  const selectors = [];
-  let selectorStart = 0;
-  let blockDepth = 0;
-  let quote = null;
-  let escaped = false;
-  let bracketDepth = 0;
-  let parenthesisDepth = 0;
-  for (let index = 0; index < source.length; index += 1) {
-    const character = source[index];
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (character === "\\") {
-      escaped = true;
-      continue;
-    }
-    if (quote) {
-      if (character === quote) quote = null;
-      continue;
-    }
-    if (character === "'" || character === "\"") {
-      quote = character;
-      continue;
-    }
-    if (blockDepth === 0) {
-      if (character === "[") bracketDepth += 1;
-      else if (character === "]") bracketDepth -= 1;
-      else if (character === "(") parenthesisDepth += 1;
-      else if (character === ")") parenthesisDepth -= 1;
-      else if (character === "{" && bracketDepth === 0 && parenthesisDepth === 0) {
-        const selector = source.slice(selectorStart, index).trim();
-        if (!selector) return null;
-        selectors.push(selector);
-        blockDepth = 1;
-      } else if (character === "}" || character === ";") {
-        return null;
-      }
-    } else if (character === "{") {
-      return null;
-    } else if (character === "}") {
-      blockDepth = 0;
-      selectorStart = index + 1;
-    }
-    if (bracketDepth < 0 || parenthesisDepth < 0) return null;
-  }
-  if (quote || escaped || blockDepth !== 0 || bracketDepth !== 0 || parenthesisDepth !== 0) return null;
-  return source.slice(selectorStart).trim() ? null : selectors;
-};
-
-const moduleDirectories = (hyperframesDirectory) => {
-  const mgDirectory = path.join(hyperframesDirectory, "mg");
+const moduleDirectories = (directory) => {
+  const mgDirectory = path.join(directory, "mg");
   if (!fs.existsSync(mgDirectory)) return [];
   return fs.readdirSync(mgDirectory, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
@@ -346,202 +47,174 @@ const moduleDirectories = (hyperframesDirectory) => {
     .sort();
 };
 
-const assertModuleSource = (beatId, fragment, style, timeline) => {
-  const rootSelector = beatRootSelector(beatId);
-  const generatedWrapperId = `mg-${beatId}`;
+const assertModuleSource = (beatId, fragment, timeline) => {
   const rootMatches = [...fragment.matchAll(/data-beat-id=["']([^"']+)["']/g)];
   if (rootMatches.length !== 1 || rootMatches[0][1] !== beatId) {
     throw new Error(`${beatId}: fragment.html must contain exactly one data-beat-id="${beatId}" root`);
   }
-  const authoredIds = [...fragment.matchAll(/(?:^|\s)id\s*=\s*["']([^"']+)["']/gi)].map((match) => match[1]);
-  if (authoredIds.includes(generatedWrapperId)) {
-    throw new Error(`${beatId}: fragment.html cannot use reserved generated wrapper ID "${generatedWrapperId}"`);
+  if (new RegExp(`\\bid\\s*=\\s*["']mg-${beatId}["']`, "i").test(fragment)) {
+    throw new Error(`${beatId}: fragment.html cannot use reserved generated wrapper ID "mg-${beatId}"`);
   }
-  if (/<(?:script|style|video|audio)\b/i.test(fragment)) throw new Error(`${beatId}: fragment.html contains a forbidden shared element`);
-  if (/gsap\.(?:timeline|set|to|from|fromTo)\s*\(|__timelines|window\.__timelines|\bfetch\s*\(|^\s*(?:import|export)\b/m.test(timeline)) {
-    throw new Error(`${beatId}: timeline.mjs must append to the supplied timeline without creating or registering another timeline`);
+  if (/<(?:script|style|video|audio)\b/i.test(fragment)) {
+    throw new Error(`${beatId}: fragment.html contains a forbidden shared element`);
   }
-  if (/\bdocument\s*\.\s*(?:querySelector|querySelectorAll|getElementById|getElementsByClassName|getElementsByTagName)\b/.test(timeline)) {
-    throw new Error(`${beatId}: timeline.mjs must query through the supplied Beat root`);
+  if (/^\s*(?:import|export)\b/m.test(timeline) || /\bgsap\s*\.\s*timeline\s*\(/.test(timeline)) {
+    throw new Error(`${beatId}: timeline.mjs must append to the supplied timeline without imports or a second timeline`);
   }
-  const commentFreeStyle = stripCssComments(style);
-  if (commentFreeStyle == null) throw new Error(`${beatId}: style.css contains an unterminated comment, string, or escape`);
-  const forbiddenAtRule = firstForbiddenCssAtRule(commentFreeStyle);
-  if (forbiddenAtRule) {
-    throw new Error(`${beatId}: style.css cannot use @${forbiddenAtRule}; keep MG styles directly scoped to the Beat root`);
-  }
-  for (const match of timeline.matchAll(/timeline\.(?:set|to|from|fromTo)\s*\(\s*/g)) {
-    const target = firstCallArgument(timeline, match.index + match[0].length);
-    const quoted = /^(["'`])([\s\S]*)\1$/.exec(target);
-    const literalSelector = quoted?.[2].trim();
-    const scopedString = literalSelector != null
-      && !(quoted[1] === "`" && literalSelector.includes("${"))
-      && selectorIsScopedToBeat(literalSelector, rootSelector);
-    const scopedReference = target === "root"
-      || isBareCallExpression(target, /^(?:select|root\.querySelector(?:All)?)\s*\(/);
-    if (!scopedString && !scopedReference) {
-      throw new Error(`${beatId}: timeline tween target must be the Beat root or a selector scoped to ${rootSelector}`);
-    }
-  }
-  const cssSelectors = topLevelCssSelectors(commentFreeStyle);
-  if (cssSelectors == null) {
-    throw new Error(`${beatId}: style.css must contain balanced, flat CSS rules scoped directly to the Beat root`);
-  }
-  const unscopedSelector = cssSelectors.find((selector) => !selectorIsScopedToBeat(selector, rootSelector));
-  if (unscopedSelector) throw new Error(`${beatId}: style.css selector is not scoped to its Beat root: ${unscopedSelector}`);
 };
 
-const rewriteRelativeResources = (source, assetPrefix) => source
-  .replace(/(\b(?:src|href)=["'])\.\/assets\//g, `$1${assetPrefix}/assets/`)
-  .replace(/url\(\s*(["']?)\.\/assets\//g, (_, quote) => `url(${quote}${assetPrefix}/assets/`)
-  .replaceAll('href="./caption.css"', `href="${assetPrefix}/caption.css"`)
-  .replaceAll("href='./caption.css'", `href='${assetPrefix}/caption.css'`);
-
-const transformCaptionLayers = (source, windowStart, windowEnd) => source.replace(
+const transformCaptionLayers = (source, startFrame, endFrame, fps) => source.replace(
   /<section\b(?=[^>]*\bmotion-caption-layer\b)[^>]*>[\s\S]*?<\/section>/gi,
   (section) => {
     const tag = /^<section\b[^>]*>/i.exec(section)?.[0];
     if (!tag) return section;
-    const attributes = tag.slice("<section".length, -1);
-    const startMatch = attributes.match(/\bdata-start=["']([0-9.]+)["']/);
-    const durationMatch = attributes.match(/\bdata-duration=["']([0-9.]+)["']/);
-    if (!startMatch || !durationMatch) return section;
-    const start = Number(startMatch[1]);
-    const end = start + Number(durationMatch[1]);
-    const overlapStart = Math.max(start, windowStart);
-    const overlapEnd = Math.min(end, windowEnd);
+    const cueStart = Number(/\bdata-caption-start-frame=["'](\d+)["']/.exec(tag)?.[1]);
+    const cueEnd = Number(/\bdata-caption-end-frame=["'](\d+)["']/.exec(tag)?.[1]);
+    if (!Number.isInteger(cueStart) || !Number.isInteger(cueEnd)) {
+      throw new Error("Caption layers must declare integer data-caption-start-frame and data-caption-end-frame");
+    }
+    const overlapStart = Math.max(cueStart, startFrame);
+    const overlapEnd = Math.min(cueEnd, endFrame);
     if (overlapEnd <= overlapStart) return "";
+    const localStart = seconds(overlapStart - startFrame, fps);
+    const duration = seconds(overlapEnd - overlapStart, fps);
     const transformedTag = tag
-      .replace(startMatch[0], `data-start="${decimal(overlapStart - windowStart)}"`)
-      .replace(durationMatch[0], `data-duration="${decimal(overlapEnd - overlapStart)}"`);
+      .replace(/\bdata-start=["'][^"']+["']/, `data-start="${localStart}"`)
+      .replace(/\bdata-duration=["'][^"']+["']/, `data-duration="${duration}"`);
     return section.replace(tag, transformedTag);
   }
 );
 
+const ensureLocalResourceLinks = (compositionDirectory, sourceDirectory) => {
+  fs.mkdirSync(compositionDirectory, { recursive: true });
+  for (const name of ["assets", "caption.css"]) {
+    const source = path.join(sourceDirectory, name);
+    if (!fs.existsSync(source)) continue;
+    const target = path.join(compositionDirectory, name);
+    if (fs.existsSync(target)) {
+      if (fs.realpathSync(target) !== fs.realpathSync(source)) {
+        throw new Error(`Localized composition resource conflicts with ${name}`);
+      }
+      continue;
+    }
+    fs.symlinkSync(
+      path.relative(compositionDirectory, source),
+      target,
+      fs.statSync(source).isDirectory() && process.platform === "win32" ? "junction" : undefined
+    );
+  }
+};
+
 export const buildComposition = (hyperframesDirectory, options = {}) => {
-  const resolvedDirectory = path.resolve(hyperframesDirectory);
-  const templatePath = path.join(resolvedDirectory, "index.template.html");
-  const outputPath = options.outputPath ? path.resolve(options.outputPath) : path.join(resolvedDirectory, "index.html");
-  const jobRoot = path.dirname(resolvedDirectory);
+  const directory = path.resolve(hyperframesDirectory);
+  const outputPath = path.resolve(options.outputPath ?? path.join(directory, "index.html"));
+  assertSafeOutputPath(directory, outputPath);
+  const jobRoot = path.dirname(directory);
   const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
   const transcriptPath = path.join(jobRoot, "state", "transcript.json");
-  const beatMap = fs.existsSync(beatMapPath) ? readJson(beatMapPath) : { duration: 10, beats: [] };
+  const beatMap = fs.existsSync(beatMapPath) ? readJson(beatMapPath) : { duration: 10, fps: 30, beats: [] };
   const transcript = fs.existsSync(transcriptPath) ? readJson(transcriptPath) : { segments: [] };
+  const fps = Number(beatMap.fps ?? 30);
+  const fullDuration = Number(beatMap.duration ?? 10);
+  if (!Number.isFinite(fps) || fps <= 0 || !Number.isFinite(fullDuration) || fullDuration <= 0) {
+    throw new Error("Beat Map requires positive fps and duration");
+  }
+
+  const totalFrames = Math.ceil(fullDuration * fps);
+  const startFrame = options.startFrame == null ? 0 : Number(options.startFrame);
+  const endFrame = options.endFrame == null ? totalFrames : Number(options.endFrame);
+  if (!Number.isInteger(startFrame) || !Number.isInteger(endFrame)
+    || startFrame < 0 || endFrame <= startFrame || endFrame > totalFrames) {
+    throw new Error(`Composition requires a half-open integer frame window within [0, ${totalFrames})`);
+  }
+
+  const beats = new Map();
   for (const beat of beatMap.beats ?? []) {
     if (!BEAT_ID_PATTERN.test(beat.id ?? "")) {
       throw new Error(`Invalid Beat ID "${beat.id ?? ""}": use lowercase letters, numbers, and hyphens`);
     }
+    if (beats.has(beat.id)) throw new Error(`Duplicate Beat ID "${beat.id}"`);
+    beats.set(beat.id, beat);
   }
-  const beats = new Map((beatMap.beats ?? []).map((beat) => [beat.id, beat]));
+  const moduleIds = moduleDirectories(directory);
+  for (const beat of beats.values()) {
+    const requiresModule = beatMap.captionMode === "motion-copy" || beat.mgScope === "local";
+    if (requiresModule && !moduleIds.includes(beat.id)) {
+      throw new Error(`${beat.id}: approved motion Beat is missing its MG module`);
+    }
+  }
   const wordsById = transcriptWordsById(transcript);
-  const fullDuration = Number(beatMap.duration ?? 10);
-  const fps = Number(beatMap.fps ?? 30);
-  const frameWindow = options.startFrame != null || options.endFrame != null;
-  if (frameWindow && (!Number.isInteger(Number(options.startFrame)) || !Number.isInteger(Number(options.endFrame)))) {
-    throw new Error("Composition frame windows require integer startFrame and endFrame");
-  }
-  const windowStart = frameWindow ? Number(options.startFrame) / fps : Number(options.windowStart ?? 0);
-  const windowEnd = frameWindow ? Number(options.endFrame) / fps : Number(options.windowEnd ?? fullDuration);
-  const maximumWindowEnd = frameWindow ? Math.ceil(fullDuration * fps) / fps : fullDuration;
-  if (!(windowStart >= 0 && windowEnd > windowStart && windowEnd <= maximumWindowEnd + 1e-9)) {
-    throw new Error(`Invalid composition window ${windowStart}–${windowEnd} for duration ${fullDuration}`);
-  }
-
-  let source = fs.readFileSync(templatePath, "utf8");
+  const sourcePath = path.join(directory, "index.template.html");
+  let source = fs.readFileSync(sourcePath, "utf8");
   for (const marker of [STYLE_MARKER, FRAGMENT_MARKER, TIMELINE_MARKER]) {
     if (!source.includes(marker)) throw new Error(`Composition template is missing ${marker}`);
   }
 
+  const windowStart = seconds(startFrame, fps);
+  const windowEnd = seconds(endFrame, fps);
   const styles = [];
   const fragments = [];
   const timelines = [];
   const includedBeatIds = [];
   let trackIndex = 10;
-  for (const beatId of moduleDirectories(resolvedDirectory)) {
+
+  for (const beatId of moduleIds) {
     const beat = beats.get(beatId);
     if (!beat) throw new Error(`${beatId}: MG module has no matching Beat Map entry`);
-    const moduleDirectory = path.join(resolvedDirectory, "mg", beatId);
-    const required = ["fragment.html", "style.css", "timeline.mjs"];
-    for (const filename of required) {
-      if (!fs.existsSync(path.join(moduleDirectory, filename))) throw new Error(`${beatId}: missing ${filename}`);
-    }
-    let fragment = fs.readFileSync(path.join(moduleDirectory, "fragment.html"), "utf8").trim();
-    const style = fs.readFileSync(path.join(moduleDirectory, "style.css"), "utf8").trim();
-    const timeline = fs.readFileSync(path.join(moduleDirectory, "timeline.mjs"), "utf8").trim();
-    assertModuleSource(beatId, fragment, style, timeline);
-    const renderWindow = resolveBeatRenderWindow(beat, beatMap, wordsById);
-    if (renderWindow.end <= windowStart || renderWindow.start >= windowEnd) continue;
-    fragment = fragment.replace(/data-group-start=["']([0-9.]+)["']/g, (_, value) => (
-      `data-group-start="${decimal(Math.max(0, Number(value) - windowStart))}"`
-    ));
+    const moduleDirectory = path.join(directory, "mg", beatId);
+    const sources = Object.fromEntries(["fragment.html", "style.css", "timeline.mjs"].map((filename) => {
+      const filePath = path.join(moduleDirectory, filename);
+      if (!fs.existsSync(filePath)) throw new Error(`${beatId}: missing ${filename}`);
+      return [filename, fs.readFileSync(filePath, "utf8").trim()];
+    }));
+    assertModuleSource(beatId, sources["fragment.html"], sources["timeline.mjs"]);
 
-    const start = Math.max(renderWindow.start, windowStart);
-    const end = Math.min(renderWindow.end, windowEnd);
-    const relativeBeatStart = decimal(renderWindow.start - windowStart);
-    const entryAnchorTime = decimal(renderWindow.entryAnchorTime - windowStart);
-    const exitAnchorTime = decimal(renderWindow.exitAnchorTime - windowStart);
-    const exitStartTime = decimal(renderWindow.exitStartTime - windowStart);
-    const exitDuration = renderWindow.exitDuration;
+    const renderWindow = resolveBeatRenderWindow(beat, beatMap, wordsById);
+    const renderStartFrame = Math.max(0, Math.floor(renderWindow.start * fps));
+    const renderEndFrame = Math.min(totalFrames, Math.ceil(renderWindow.end * fps));
+    const clipStartFrame = Math.max(renderStartFrame, startFrame);
+    const clipEndFrame = Math.min(renderEndFrame, endFrame);
+    if (clipEndFrame <= clipStartFrame) continue;
+
+    const fragment = sources["fragment.html"].replace(/data-group-start=["']([0-9.]+)["']/g, (_, value) => (
+      `data-group-start="${decimal(Number(value) - windowStart)}"`
+    ));
     const rootSelector = beatRootSelector(beatId);
+    const relative = (value) => decimal(Number(value) - windowStart);
     includedBeatIds.push(beatId);
-    styles.push(`/* ${beatId} */\n${style}`);
+    styles.push(`/* ${beatId} */\n@scope (#mg-${beatId}) {\n${sources["style.css"]}\n}`);
     fragments.push([
-      `<section id="mg-${beatId}" class="clip" data-mg-beat-id="${beatId}" data-start="${decimal(start - windowStart)}" data-duration="${decimal(end - start)}" data-track-index="${trackIndex}">`,
+      `<section id="mg-${beatId}" class="clip" data-mg-beat-id="${beatId}" data-start="${seconds(clipStartFrame - startFrame, fps)}" data-duration="${seconds(clipEndFrame - clipStartFrame, fps)}" data-track-index="${trackIndex}">`,
       fragment,
       "</section>"
     ].join("\n"));
     timelines.push([
       `// ${beatId}`,
       "{",
-      `  const beat = Object.freeze({ id: ${JSON.stringify(beatId)}, start: ${relativeBeatStart}, duration: ${decimal(beat.end - beat.start)}, entryAnchorTime: ${entryAnchorTime}, exitAnchorTime: ${exitAnchorTime}, exitStartTime: ${exitStartTime}, exitDuration: ${exitDuration} });`,
-      `  const rootSelector = ${JSON.stringify(rootSelector)};`,
-      "  const root = document.querySelector(rootSelector);",
+      `  const beat = Object.freeze({ id: ${JSON.stringify(beatId)}, start: ${relative(beat.start)}, duration: ${decimal(beat.end - beat.start)}, entryAnchorTime: ${relative(renderWindow.entryAnchorTime)}, exitAnchorTime: ${relative(renderWindow.exitAnchorTime)}, exitStartTime: ${relative(renderWindow.exitStartTime)}, exitDuration: ${renderWindow.exitDuration} });`,
+      `  const root = document.querySelector(${JSON.stringify(rootSelector)});`,
       `  if (!root) throw new Error(${JSON.stringify(`${beatId}: Beat root is missing`)});`,
-      "  const select = (selector) => root.querySelectorAll(selector);",
-      timeline.split("\n").map((line) => `  ${line}`).join("\n"),
+      "  const select = (selector) => [...root.querySelectorAll(selector)].filter((node) => root.contains(node));",
+      sources["timeline.mjs"].split("\n").map((line) => `  ${line}`).join("\n"),
       "  timeline.to(root, { autoAlpha: 0, duration: beat.exitDuration, ease: \"power2.in\" }, beat.exitStartTime);",
       "}"
     ].join("\n"));
     trackIndex += 1;
   }
 
-  const duration = frameWindow
-    ? (Number(options.endFrame) - Number(options.startFrame)) / fps
-    : decimal(windowEnd - windowStart);
-  const mediaStart = frameWindow ? Number(options.startFrame) / fps : decimal(windowStart);
-  source = transformCaptionLayers(source, windowStart, windowEnd)
+  const duration = seconds(endFrame - startFrame, fps);
+  source = transformCaptionLayers(source, startFrame, endFrame, fps)
     .replaceAll("__CUT_MOTION_DURATION__", String(duration))
-    .replaceAll("__CUT_MOTION_MEDIA_START__", String(mediaStart))
+    .replaceAll("__CUT_MOTION_MEDIA_START__", String(windowStart))
     .replace(STYLE_MARKER, `${STYLE_MARKER}\n${styles.join("\n\n")}`)
     .replace(FRAGMENT_MARKER, `${FRAGMENT_MARKER}\n${fragments.join("\n")}`)
     .replace(TIMELINE_MARKER, `${TIMELINE_MARKER}\n${timelines.join("\n\n")}`);
   if (options.videoOnly === true) {
     source = source.replace(/\s*<audio\b[^>]*\bid=["']source-audio["'][^>]*><\/audio>\s*/i, "\n");
   }
+
   const outputDirectory = path.dirname(outputPath);
-  if (options.localizeResources === true) {
-    fs.mkdirSync(outputDirectory, { recursive: true });
-    for (const resourceName of ["assets", "caption.css"]) {
-      const resourceSource = path.join(resolvedDirectory, resourceName);
-      if (!fs.existsSync(resourceSource)) continue;
-      const resourceTarget = path.join(outputDirectory, resourceName);
-      if (fs.existsSync(resourceTarget)) {
-        if (fs.realpathSync(resourceTarget) !== fs.realpathSync(resourceSource)) {
-          throw new Error(`Localized composition resource conflicts with ${resourceName}`);
-        }
-        continue;
-      }
-      fs.symlinkSync(
-        path.relative(outputDirectory, resourceSource),
-        resourceTarget,
-        fs.statSync(resourceSource).isDirectory() && process.platform === "win32" ? "junction" : undefined
-      );
-    }
-  }
-  const assetPrefix = options.localizeResources === true
-    ? "."
-    : path.relative(outputDirectory, resolvedDirectory).split(path.sep).join("/") || ".";
-  source = rewriteRelativeResources(source, assetPrefix);
+  if (outputDirectory !== directory) ensureLocalResourceLinks(outputDirectory, directory);
   const output = /^\s*<!doctype\b[^>]*>/i.test(source)
     ? source.replace(/^(\s*<!doctype\b[^>]*>)/i, `$1\n${GENERATED_HEADER}`)
     : `${GENERATED_HEADER}\n${source}`;
@@ -554,8 +227,8 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
     duration,
     windowStart,
     windowEnd,
-    startFrame: frameWindow ? Number(options.startFrame) : Math.floor(windowStart * fps),
-    endFrame: frameWindow ? Number(options.endFrame) : Math.ceil(windowEnd * fps),
+    startFrame,
+    endFrame,
     beatIds: includedBeatIds
   };
 };
@@ -564,7 +237,7 @@ const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath
 if (isCli) {
   const [directory, ...args] = process.argv.slice(2);
   if (!directory) {
-    console.error("Usage: node build-composition.mjs <hyperframes-directory> [--window-start <seconds> --window-end <seconds> | --start-frame <frame> --end-frame <frame>] [--video-only] [--output <path>]");
+    console.error("Usage: node build-composition.mjs <hyperframes-directory> [--start-frame <frame> --end-frame <frame>] [--video-only] [--output <path>]");
     process.exit(64);
   }
   const valueAfter = (flag) => {
@@ -572,12 +245,10 @@ if (isCli) {
     return index === -1 ? undefined : args[index + 1];
   };
   const result = buildComposition(directory, {
-    windowStart: valueAfter("--window-start"),
-    windowEnd: valueAfter("--window-end"),
     startFrame: valueAfter("--start-frame"),
     endFrame: valueAfter("--end-frame"),
     videoOnly: args.includes("--video-only"),
     outputPath: valueAfter("--output")
   });
-  console.log(`Built ${result.outputPath} (${result.duration}s, ${result.beatIds.length} MG module(s))`);
+  console.log(`Built ${result.outputPath} (${result.endFrame - result.startFrame} frames, ${result.beatIds.length} MG module(s))`);
 }

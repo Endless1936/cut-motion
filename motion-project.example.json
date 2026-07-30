@@ -2,18 +2,6 @@
   "$schema": "./schemas/project.schema.json",
   "schemaVersion": "1.0.0",
   "id": "my-video",
-  "mode": "review",
-  "captionMode": "subtitles",
-  "captionModeSource": "default",
-  "captionModeAcknowledged": false,
-  "visualAxisMode": "a-axis-overlay",
-  "visualAxisModeSource": "default",
-  "visualAxisModeAcknowledged": false,
-  "referenceScriptStatus": "none",
-  "referenceScriptAcknowledged": false,
-  "referenceScriptPath": null,
-  "referenceScriptSha256": null,
-  "authoritativeMediaPath": "input/source.mov",
   "sourceVideo": "input/source.mov",
   "transcript": null,
   "language": "zh-CN",
@@ -26,6 +14,5 @@
     "noiseDb": -42,
     "minimumSeconds": 0.45,
     "edgePaddingSeconds": 0.08
-  },
-  "status": "intake"
+  }
 }

@@ -7,10 +7,7 @@
     "capture-review-snapshots": "scripts/run-validation-check.mjs",
     "audio-silence-check": "scripts/run-validation-check.mjs",
     "hyperframes-check": "scripts/run-validation-check.mjs",
-    "check-trim-plan": "scripts/check-trim-plan.mjs",
-    "check-visual-plan": "scripts/check-visual-plan.mjs",
     "check-captions": "scripts/check-captions.mjs",
-    "check-motion-copy-coverage": "scripts/check-visual-plan.mjs",
     "ffprobe": "scripts/run-validation-check.mjs"
   },
   "visual": {
@@ -24,7 +21,8 @@
       "kind": "validator-report",
       "validator": "check-layout-constraints",
       "directory": "logs",
-      "subject": "source"
+      "subject": "source",
+      "repositoryInputs": ["schemas/beat-map.schema.json"]
     },
     "information-value": {
       "kind": "validator-report",
@@ -68,7 +66,8 @@
       "kind": "validator-report",
       "validator": "check-layout-constraints",
       "directory": "logs",
-      "subject": "composition"
+      "subject": "composition",
+      "repositoryInputs": ["schemas/beat-map.schema.json"]
     },
     "snapshots": {
       "kind": "snapshot-manifest",
@@ -79,12 +78,6 @@
     "captions": {
       "kind": "validator-report",
       "validator": "check-captions",
-      "directory": "logs",
-      "subject": "composition"
-    },
-    "motion-copy-coverage": {
-      "kind": "validator-report",
-      "validator": "check-motion-copy-coverage",
       "directory": "logs",
       "subject": "composition"
     },
