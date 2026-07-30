@@ -7,6 +7,7 @@ import { deriveRenderManifest, writeRenderManifest } from "./render-manifest.mjs
 import {
   isPathInside,
   readJson,
+  resolveLockedHyperframesCli,
   sha256File,
   sha256Text,
   writeJsonAtomic
@@ -148,12 +149,13 @@ const renderChunk = (jobRoot, manifest, chunk, quality, binary) => {
   if (existing) return { ...existing, reused: true };
   const paths = cachePaths(jobRoot, quality, renderKey);
   fs.mkdirSync(paths.directory, { recursive: true });
-  const compositionDirectory = path.join(jobRoot, "hyperframes", "chunks");
-  const compositionPath = path.join(compositionDirectory, `${chunk.id}.html`);
+  const compositionDirectory = path.join(jobRoot, "hyperframes", "chunks", chunk.id);
+  const compositionPath = path.join(compositionDirectory, "index.html");
   buildComposition(path.join(jobRoot, "hyperframes"), {
     startFrame: chunk.startFrame,
     endFrame: chunk.endFrame,
     videoOnly: true,
+    localizeResources: true,
     outputPath: compositionPath
   });
   const temporaryPath = path.join(paths.directory, `${renderKey}.${process.pid}.tmp.mp4`);
@@ -383,8 +385,7 @@ export const renderChunkedOutput = (jobRootInput, quality, outputPathInput) => {
   const jobRoot = path.resolve(jobRootInput);
   const outputPath = path.resolve(outputPathInput);
   if (!isPathInside(jobRoot, outputPath)) throw new Error("Chunk render output must stay inside the job");
-  const binary = path.join(jobRoot, "hyperframes", "node_modules", ".bin", "hyperframes");
-  if (!fs.existsSync(binary)) throw new Error("Job-local HyperFrames is not installed");
+  const binary = resolveLockedHyperframesCli(jobRoot).binaryPath;
   const workflow = readJson(path.join(jobRoot, "state", "workflow.json"));
   const baselineManifest = approvedBaselineManifest(jobRoot, workflow);
   const templatePath = path.join(jobRoot, "hyperframes", "index.template.html");

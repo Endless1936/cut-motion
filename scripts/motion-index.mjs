@@ -18,6 +18,7 @@ const digestSharedFiles = (paths, compositionSourcePath) => sha256Text(paths.map
 }).join("\n"));
 const buildScriptPath = fileURLToPath(new URL("./build-composition.mjs", import.meta.url));
 const motionWindowUtilsPath = fileURLToPath(new URL("./motion-window-utils.mjs", import.meta.url));
+const beatMapSchemaPath = fileURLToPath(new URL("../schemas/beat-map.schema.json", import.meta.url));
 
 const assetEntry = (jobRoot, value) => {
   if (!value || value.startsWith("data:") || value.startsWith("#") || /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(value)) return null;
@@ -73,6 +74,7 @@ export const deriveMotionIndex = (jobRootInput) => {
     ...sharedSourcePaths,
     buildScriptPath,
     motionWindowUtilsPath,
+    beatMapSchemaPath,
     packagePath,
     ...sharedAssets.map((entry) => path.join(jobRoot, entry.path))
   ].filter((candidate) => fs.existsSync(candidate)))].sort();

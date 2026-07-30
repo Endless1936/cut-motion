@@ -37,4 +37,4 @@ for (const label of forbiddenLabels) {
 for (const error of errors) console.error(`Error: ${error}`);
 if (errors.length > 0) process.exit(1);
 
-console.log(`Information-value check passed: minimum ${minimumTextSize}px; ${forbiddenLabels.length} forbidden self-evident label(s)`);
+console.log(`Information-value check passed: minimum ${minimumTextSize}px; checked ${forbiddenLabels.length} forbidden self-evident label(s), none present`);

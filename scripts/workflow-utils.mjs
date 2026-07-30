@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, "utf8"));
 
@@ -20,6 +21,84 @@ export const sha256File = (filePath) => {
 };
 
 export const sha256Text = (value) => crypto.createHash("sha256").update(value).digest("hex");
+
+export const resolveLockedHyperframesCli = (jobRootInput) => {
+  const jobRoot = path.resolve(jobRootInput);
+  const hyperframesRoot = path.join(jobRoot, "hyperframes");
+  const declaredPackagePath = path.join(hyperframesRoot, "package.json");
+  const installedPackagePath = path.join(hyperframesRoot, "node_modules", "hyperframes", "package.json");
+  if (!fs.existsSync(declaredPackagePath)) throw new Error("Job HyperFrames package.json is missing");
+  if (!fs.existsSync(installedPackagePath)) throw new Error("Job-local HyperFrames is not installed");
+
+  const declaredPackage = readJson(declaredPackagePath);
+  const installedPackage = readJson(installedPackagePath);
+  const expectedVersion = declaredPackage.devDependencies?.hyperframes
+    ?? declaredPackage.dependencies?.hyperframes;
+  if (typeof expectedVersion !== "string" || expectedVersion.length === 0) {
+    throw new Error("Job package.json must declare an exact HyperFrames version");
+  }
+  if (expectedVersion !== installedPackage.version) {
+    throw new Error(`Job-local HyperFrames version mismatch: expected ${expectedVersion}, installed ${installedPackage.version ?? "unknown"}`);
+  }
+
+  const binDeclaration = installedPackage.bin;
+  const binRelativePath = typeof binDeclaration === "string"
+    ? binDeclaration
+    : binDeclaration?.hyperframes;
+  if (typeof binRelativePath !== "string" || binRelativePath.length === 0) {
+    throw new Error("Installed HyperFrames package does not declare its CLI binary");
+  }
+  const installedPackageRoot = path.dirname(installedPackagePath);
+  const expectedBinaryPath = path.resolve(installedPackageRoot, binRelativePath);
+  if (!isPathInside(installedPackageRoot, expectedBinaryPath)) {
+    throw new Error("Installed HyperFrames CLI declaration escapes its package");
+  }
+  const localBinaryPath = path.join(hyperframesRoot, "node_modules", ".bin", "hyperframes");
+  if (!fs.existsSync(expectedBinaryPath) || !fs.statSync(expectedBinaryPath).isFile()) {
+    throw new Error("Installed HyperFrames CLI binary is missing");
+  }
+  if (!fs.existsSync(localBinaryPath)) throw new Error("Job-local HyperFrames CLI link is missing");
+  const expectedBinaryRealPath = fs.realpathSync(expectedBinaryPath);
+  const localBinaryRealPath = fs.realpathSync(localBinaryPath);
+  if (expectedBinaryRealPath !== localBinaryRealPath) {
+    throw new Error("Job-local HyperFrames CLI does not resolve to the declared package binary");
+  }
+
+  return {
+    binaryPath: localBinaryPath,
+    version: installedPackage.version,
+    fingerprint: sha256Text([
+      expectedVersion,
+      installedPackage.version,
+      sha256File(installedPackagePath),
+      sha256File(expectedBinaryRealPath)
+    ].join(":"))
+  };
+};
+
+export const computeValidatorVersion = (repositoryRoot, contracts, validator, jobRoot) => {
+  const implementationPaths = [path.join(repositoryRoot, contracts.implementations[validator])];
+  if (validator === "check-layout-constraints") {
+    implementationPaths.push(path.join(repositoryRoot, "schemas", "beat-map.schema.json"));
+  }
+  const implementationSha256 = implementationPaths.length === 1
+    ? sha256File(implementationPaths[0])
+    : sha256Text(
+      implementationPaths.map((candidate) => `${path.relative(repositoryRoot, candidate)}:${sha256File(candidate)}`).join("\n")
+    );
+  if (validator !== "hyperframes-check") return implementationSha256;
+  const runtime = resolveLockedHyperframesCli(jobRoot);
+  return sha256Text(`${implementationSha256}:${runtime.fingerprint}`);
+};
+
+export const computeValidationRunnerVersion = (repositoryRoot, contracts) => {
+  const runnerPath = path.join(repositoryRoot, contracts.runner);
+  const workflowUtilsPath = fileURLToPath(import.meta.url);
+  return sha256Text([
+    `${path.relative(repositoryRoot, runnerPath)}:${sha256File(runnerPath)}`,
+    `${path.relative(repositoryRoot, workflowUtilsPath)}:${sha256File(workflowUtilsPath)}`
+  ].join("\n"));
+};
 
 export const jobRootForWorkflow = (workflowPath) => path.dirname(path.dirname(path.resolve(workflowPath)));
 
@@ -266,7 +345,7 @@ export const computeValidationBundleSha256 = (jobRoot, phase, subjectRelativePat
   const hyperframesRoot = path.join(jobRoot, "hyperframes");
   const visit = (directory) => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      if (["node_modules", ".hyperframes", "snapshots"].includes(entry.name)) continue;
+      if (["node_modules", ".hyperframes", "snapshots", "cache", "chunks", "delta"].includes(entry.name)) continue;
       const absolutePath = path.join(directory, entry.name);
       if (entry.isDirectory()) visit(absolutePath);
       else if (entry.isFile() && !entry.isSymbolicLink()) relativePaths.add(path.relative(jobRoot, absolutePath));

@@ -15,7 +15,7 @@
         "type": "object",
         "required": ["id", "sceneId", "sourceSegmentIds", "text", "start", "end", "audioAnchorTime", "axis", "recipe", "intent", "motionFamily", "transitionFamily"],
         "properties": {
-          "id": { "type": "string" },
+          "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
           "sceneId": { "type": "string" },
           "sourceSegmentIds": { "type": "array", "minItems": 1, "items": { "type": "string" } },
           "text": { "type": "string", "minLength": 1 },

@@ -20,6 +20,8 @@ import {
   computeCreativeDocumentFingerprints,
   computePendingCreativePackageSha256,
   computeValidationBundleSha256,
+  computeValidationRunnerVersion,
+  computeValidatorVersion,
   computeDesignLanguageFingerprint,
   ensureWorkflowDefaults,
   invalidateCreativeArtifacts,
@@ -426,8 +428,13 @@ const validateEvidenceReceipt = (item, contract, subject, usedPaths, invocation 
   const expectedCommand = contract.phase === "visual"
     ? `node ${evidenceContracts.runner} ${jobRoot} ${contract.phase} ${contract.checkId} ${invocation.sample.path} ${invocation.source.path}`
     : `node ${evidenceContracts.runner} ${jobRoot} ${contract.phase} ${contract.checkId} ${subject.path}`;
-  const expectedRunnerSha256 = sha256File(path.join(repositoryRoot, evidenceContracts.runner));
-  const expectedValidatorVersion = sha256File(path.join(repositoryRoot, evidenceContracts.implementations[contract.validator]));
+  const expectedRunnerSha256 = computeValidationRunnerVersion(repositoryRoot, evidenceContracts);
+  const expectedValidatorVersion = computeValidatorVersion(
+    repositoryRoot,
+    evidenceContracts,
+    contract.validator,
+    jobRoot
+  );
   const expectedBundleSha256 = computeValidationBundleSha256(jobRoot, contract.phase, subject.path, workflow.captionMode);
   if (item.kind !== contract.kind || item.validator !== contract.validator) {
     throw new Error(`Evidence contract mismatch for ${contract.validator}`);

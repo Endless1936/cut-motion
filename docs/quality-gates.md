@@ -41,6 +41,7 @@
 - Every MG keeps one horizontal or vertical primary flow; the main chain does not turn 90 degrees.
 - Copy, timing, and size-only revisions inherit the approved visual reference.
 - `scripts/check-layout-constraints.mjs` passes: Chinese copy has no one-character orphan line, and every B-axis PIP uses its declared exclusion zone.
+- Every `data-motion-role="label"` declares `data-information-role` as one of the Beat Map support roles: `evidence`, `explanation`, `calibration`, `organization`, `action`, or `consequence`.
 - HyperFrames runtime layout passes at sampled motion states; every authored visual belongs to a timed motion group, and bounds, protected regions, A-axis accumulation, face-cover duration, connector flow, borders, labels, caption weight, and caption bottom ratio match the browser contract.
 - Phrase entrances land within three frames of acoustic onset unless documented.
 - No caption wrapping, single-line overflow, or transformed-glyph clipping.

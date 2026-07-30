@@ -10,6 +10,12 @@ if (!compositionPath || !designSystemPath) {
 
 const composition = fs.readFileSync(compositionPath, "utf8");
 const designSystem = JSON.parse(fs.readFileSync(designSystemPath, "utf8"));
+const beatMapSchema = JSON.parse(fs.readFileSync(new URL("../schemas/beat-map.schema.json", import.meta.url), "utf8"));
+const informationRoles = beatMapSchema.properties.beats.items.properties.supportRole.enum;
+const informationRolePattern = new RegExp(
+  `data-information-role=["'](${informationRoles.join("|")})["']`,
+  "i"
+);
 const errors = [];
 const typography = designSystem.typography ?? {};
 const bAxisPolicy = designSystem.axisPolicies?.B ?? {};
@@ -39,7 +45,9 @@ for (const match of composition.matchAll(/<[^>]+data-motion-role=["']connector["
   if (!/data-flow-axis=["'](horizontal|vertical)["']/i.test(match[0])) errors.push("connectors must declare their rendered flow axis");
 }
 for (const match of composition.matchAll(/<[^>]+data-motion-role=["']label["'][^>]*>/gi)) {
-  if (!/data-information-role=["'](evidence|explanation|calibration|organization|action|consequence)["']/i.test(match[0])) errors.push("labels must declare an information role");
+  if (!informationRolePattern.test(match[0])) {
+    errors.push(`labels must declare data-information-role as one of: ${informationRoles.join(", ")}`);
+  }
 }
 for (const match of composition.matchAll(/<[^>]+data-motion-group=["'][^"']+["'][^>]*>/gi)) {
   for (const declaration of [

@@ -5,15 +5,18 @@ import { fileURLToPath } from "node:url";
 import {
   assertRegularContainedFile,
   computeValidationBundleSha256,
+  computeValidationRunnerVersion,
+  computeValidatorVersion,
   isPathInside,
   readJson,
+  resolveLockedHyperframesCli,
   sha256File,
   writeJsonAtomic
 } from "./workflow-utils.mjs";
 
-const [jobArgument, phase, checkId, sampleOrSubjectRelativePath, sourceRelativePath] = process.argv.slice(2);
-if (!jobArgument || !["visual", "final"].includes(phase) || !checkId || !sampleOrSubjectRelativePath) {
-  console.error("Usage: node scripts/run-validation-check.mjs <job> <visual|final> <check-id> <subject-relative-path> [visual-source-relative-path]");
+const [jobArgument, phase, checkId, suppliedSampleOrSubjectPath, suppliedSourcePath] = process.argv.slice(2);
+if (!jobArgument || !["visual", "final"].includes(phase) || !checkId) {
+  console.error("Usage: node scripts/run-validation-check.mjs <job> <visual|final> <check-id> [subject-relative-path] [visual-source-relative-path]");
   process.exit(64);
 }
 
@@ -22,21 +25,57 @@ const jobRoot = path.resolve(jobArgument);
 const contracts = readJson(path.join(repositoryRoot, "config", "validation-evidence-contracts.json"));
 const contract = contracts[phase]?.[checkId];
 if (!contract) throw new Error(`Unknown validation contract: ${phase}/${checkId}`);
-if (phase === "visual" && !sourceRelativePath) throw new Error("Visual validation requires the independent sample source path");
-const subjectRelativePath = phase === "visual" && contract.subject === "source"
-  ? sourceRelativePath
-  : sampleOrSubjectRelativePath;
+const workflow = readJson(path.join(jobRoot, "state", "workflow.json"));
+const normalizeRelativePath = (value) => path.posix.normalize(value.replaceAll("\\", "/")).replace(/^\.\//, "");
+const expectedPaths = phase === "visual"
+  ? {
+      sample: "previews/visual-sample.mp4",
+      source: "hyperframes/visual-sample/index.html"
+    }
+  : {
+      composition: workflow.compositionArtifactPath || "hyperframes/index.html",
+      preview: workflow.gates?.["final-preview"]?.artifact || "previews/final-preview.mp4"
+    };
+const assertExpectedPath = (supplied, expected, label) => {
+  if (supplied == null) return expected;
+  const normalized = normalizeRelativePath(supplied);
+  if (normalized !== expected) {
+    throw new Error(`${label} must be ${expected}; received ${normalized}`);
+  }
+  return normalized;
+};
+let sampleRelativePath;
+let sourceRelativePath;
+let subjectRelativePath;
+if (phase === "visual") {
+  sampleRelativePath = assertExpectedPath(
+    suppliedSampleOrSubjectPath,
+    expectedPaths.sample,
+    "Visual sample subject"
+  );
+  sourceRelativePath = assertExpectedPath(
+    suppliedSourcePath,
+    expectedPaths.source,
+    "Visual sample source"
+  );
+  subjectRelativePath = contract.subject === "source" ? sourceRelativePath : sampleRelativePath;
+} else {
+  if (suppliedSourcePath != null) throw new Error("Final validation accepts only one subject path");
+  subjectRelativePath = assertExpectedPath(
+    suppliedSampleOrSubjectPath,
+    expectedPaths[contract.subject],
+    `Final ${contract.subject} subject`
+  );
+}
 const subjectPath = path.resolve(jobRoot, subjectRelativePath);
 if (!isPathInside(jobRoot, subjectPath)) throw new Error("Validation subject escapes the job");
 assertRegularContainedFile(jobRoot, subjectPath, "Validation subject");
 const subjectSha256 = sha256File(subjectPath);
-const runnerSha256 = sha256File(path.join(repositoryRoot, contracts.runner));
-const implementationPath = path.join(repositoryRoot, contracts.implementations[contract.validator]);
-const validatorVersion = sha256File(implementationPath);
-const workflow = readJson(path.join(jobRoot, "state", "workflow.json"));
+const runnerSha256 = computeValidationRunnerVersion(repositoryRoot, contracts);
+const validatorVersion = computeValidatorVersion(repositoryRoot, contracts, contract.validator, jobRoot);
 const bundleSha256 = computeValidationBundleSha256(jobRoot, phase, subjectRelativePath, workflow.captionMode);
 const canonicalCommand = phase === "visual"
-  ? `node ${contracts.runner} ${jobRoot} ${phase} ${checkId} ${sampleOrSubjectRelativePath} ${sourceRelativePath}`
+  ? `node ${contracts.runner} ${jobRoot} ${phase} ${checkId} ${sampleRelativePath} ${sourceRelativePath}`
   : `node ${contracts.runner} ${jobRoot} ${phase} ${checkId} ${subjectRelativePath}`;
 const receiptRelativePath = `${contract.directory}/${phase}-${checkId}.json`;
 const receiptPath = path.join(jobRoot, receiptRelativePath);
@@ -129,7 +168,53 @@ switch (contract.validator) {
     ]);
     break;
   case "hyperframes-check":
-    output = run("npx", ["hyperframes", "check"], { cwd: path.dirname(subjectPath) });
+    {
+      const stagingParent = path.join(jobRoot, "checkpoints");
+      fs.mkdirSync(stagingParent, { recursive: true });
+      const stagingDirectory = fs.mkdtempSync(path.join(stagingParent, "hyperframes-check-"));
+      try {
+        fs.copyFileSync(subjectPath, path.join(stagingDirectory, "index.html"));
+        const subjectDirectory = path.dirname(subjectPath);
+        for (const sibling of ["caption.css", "hyperframes.json"]) {
+          const source = path.join(subjectDirectory, sibling);
+          if (!fs.existsSync(source)) continue;
+          assertRegularContainedFile(jobRoot, source, `HyperFrames ${sibling}`);
+          fs.copyFileSync(source, path.join(stagingDirectory, sibling));
+        }
+        const subjectBaseName = path.basename(subjectPath, path.extname(subjectPath));
+        const motionSidecarNames = fs.readdirSync(subjectDirectory, { withFileTypes: true })
+          .filter((entry) => entry.isFile() && entry.name.endsWith(".motion.json"))
+          .map((entry) => entry.name)
+          .sort();
+        const matchingMotionSidecarName = `${subjectBaseName}.motion.json`;
+        const unexpectedMotionSidecars = motionSidecarNames.filter((name) => name !== matchingMotionSidecarName);
+        if (unexpectedMotionSidecars.length > 0) {
+          throw new Error(`Motion sidecar basename must match ${path.basename(subjectPath)}: ${unexpectedMotionSidecars.join(", ")}`);
+        }
+        if (motionSidecarNames.includes(matchingMotionSidecarName)) {
+          const motionSidecar = path.join(subjectDirectory, matchingMotionSidecarName);
+          assertRegularContainedFile(jobRoot, motionSidecar, "HyperFrames motion sidecar");
+          fs.copyFileSync(motionSidecar, path.join(stagingDirectory, "index.motion.json"));
+        }
+        const assetsSource = path.join(subjectDirectory, "assets");
+        if (fs.existsSync(assetsSource)) {
+          const assetsTarget = fs.realpathSync(assetsSource);
+          if (!fs.statSync(assetsTarget).isDirectory()
+            || !isPathInside(fs.realpathSync(jobRoot), assetsTarget)) {
+            throw new Error("HyperFrames assets must resolve to a directory inside the job");
+          }
+          fs.symlinkSync(
+            assetsTarget,
+            path.join(stagingDirectory, "assets"),
+            process.platform === "win32" ? "junction" : "dir"
+          );
+        }
+        const runtime = resolveLockedHyperframesCli(jobRoot);
+        output = run(runtime.binaryPath, ["check"], { cwd: stagingDirectory });
+      } finally {
+        fs.rmSync(stagingDirectory, { recursive: true, force: true });
+      }
+    }
     break;
   case "capture-review-snapshots": {
     const reviewTimes = phase === "final"

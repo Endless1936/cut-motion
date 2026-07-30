@@ -133,10 +133,15 @@ export const buildDeltaCompositions = (jobRootInput, plan) => {
   const directory = path.join(jobRoot, "hyperframes", "delta");
   fs.mkdirSync(directory, { recursive: true });
   return plan.windows.map((window, index) => {
-    const outputPath = path.join(directory, `window-${String(index + 1).padStart(2, "0")}.html`);
+    const outputPath = path.join(
+      directory,
+      `window-${String(index + 1).padStart(2, "0")}`,
+      "index.html"
+    );
     return buildComposition(path.join(jobRoot, "hyperframes"), {
       windowStart: window.start,
       windowEnd: window.end,
+      localizeResources: true,
       outputPath
     });
   });
