@@ -10,6 +10,7 @@ import {
   computeCreativeAuthorities,
   computeCreativeDocumentFingerprints,
   readJson,
+  resolveLockedHyperframesCli,
   sha256File,
   writeJsonAtomic
 } from "./workflow-utils.mjs";
@@ -75,6 +76,25 @@ try {
     path.join(repositoryRoot, "examples", "transcript.example.json"),
     path.join(jobRoot, "state", "transcript.json")
   );
+  const transcript = readJson(path.join(jobRoot, "state", "transcript.json"));
+  const reconciliationItemsPath = path.join(jobRoot, "state", "reconciliation-items.fixture.json");
+  writeJsonAtomic(reconciliationItemsPath, transcript.segments.map((segment, index) => ({
+    id: `speech-${index + 1}`,
+    type: "speech-only",
+    segmentId: segment.id,
+    start: segment.start,
+    end: segment.end,
+    referenceText: null,
+    heardText: segment.text,
+    resolution: "accepted-speech",
+    releaseImpact: true,
+    confidence: segment.confidence ?? 1,
+    evidence: { audioChecked: true, supportsReference: false, note: "Runtime fixture" }
+  })));
+  script("create-transcript-reconciliation.mjs", [jobRoot, "input/source.mp4", reconciliationItemsPath]);
+  script("workflow-state.mjs", [workflowPath, "advance"]);
+  script("workflow-state.mjs", [workflowPath, "advance", "--artifact", "state/transcript.json"]);
+  assert.equal(readJson(workflowPath).sourceTranscriptSha256, sha256File(path.join(jobRoot, "state", "source-transcript.json")));
   const beatMap = readJson(path.join(repositoryRoot, "examples", "beat-map.subtitles.example.json"));
   for (const beat of beatMap.beats) {
     Object.assign(beat, { mgScope: "none", recipe: "caption-only", axis: "A", components: [], microEvents: [] });
@@ -98,22 +118,47 @@ try {
     path.join(jobRoot, "state", "design-system.json")
   ]);
 
-  const transcript = readJson(path.join(jobRoot, "state", "transcript.json"));
-  const reconciliationItemsPath = path.join(jobRoot, "state", "reconciliation-items.fixture.json");
-  writeJsonAtomic(reconciliationItemsPath, transcript.segments.map((segment, index) => ({
-    id: `speech-${index + 1}`,
-    type: "speech-only",
-    segmentId: segment.id,
-    start: segment.start,
-    end: segment.end,
-    referenceText: null,
-    heardText: segment.text,
-    resolution: "accepted-speech",
-    releaseImpact: true,
-    confidence: segment.confidence ?? 1,
-    evidence: { audioChecked: true, supportsReference: false, note: "Runtime fixture" }
-  })));
-  script("create-transcript-reconciliation.mjs", [jobRoot, "input/source.mp4", reconciliationItemsPath]);
+  const collisionBeat = beatMap.beats[0];
+  collisionBeat.mgScope = "local";
+  const collisionModule = path.join(jobRoot, "hyperframes", "mg", collisionBeat.id);
+  fs.mkdirSync(collisionModule, { recursive: true });
+  fs.writeFileSync(path.join(collisionModule, "fragment.html"), `
+<div data-beat-id="${collisionBeat.id}" data-motion-group data-axis="B" data-group-kind="primary"
+  data-group-start="${collisionBeat.start}" data-group-duration="${collisionBeat.end - collisionBeat.start}"
+  data-face-cover="none" data-primary-flow-axis="horizontal">
+  <div class="collision-surface" data-motion-surface="container" data-border-policy="none">
+    <span class="collision-copy" data-information-role="explanation">重叠测试</span>
+    <div class="collision-indicator" data-motion-role="indicator"><svg viewBox="0 0 40 40"><path d="M2 20h36"/></svg></div>
+  </div>
+</div>`.trim());
+  fs.writeFileSync(path.join(collisionModule, "style.css"), `
+[data-beat-id="${collisionBeat.id}"] { opacity: 0; visibility: hidden; }
+.collision-surface { position: absolute; left: 100px; top: 200px; width: 500px; height: 200px; }
+.collision-copy, .collision-indicator { position: absolute; left: 40px; top: 40px; width: 240px; height: 100px; font-size: 64px; }
+.collision-indicator svg { width: 100%; height: 100%; }`.trim());
+  fs.writeFileSync(
+    path.join(collisionModule, "timeline.mjs"),
+    "timeline.set(root, { autoAlpha: 1 }, beat.start);"
+  );
+  buildComposition(path.join(jobRoot, "hyperframes"), {
+    startFrame: 0,
+    endFrame: 45,
+    outputPath: path.join(jobRoot, "hyperframes", "visual-sample", "index.html")
+  });
+  const collisionRuntime = resolveLockedHyperframesCli(jobRoot);
+  const collisionRender = spawnSync(collisionRuntime.binaryPath, [
+    "render",
+    "--composition", "visual-sample/index.html",
+    "--quality", "standard",
+    "--output", path.join(jobRoot, "previews", "collision-must-fail.mp4"),
+    "."
+  ], { cwd: path.join(jobRoot, "hyperframes"), encoding: "utf8" });
+  assert.notEqual(collisionRender.status, 0, "rendered text/SVG collision must fail the browser motion contract");
+  assert.match(`${collisionRender.stdout}\n${collisionRender.stderr}`, /motion_contract_content_collision/);
+  fs.rmSync(collisionModule, { recursive: true, force: true });
+  collisionBeat.mgScope = "none";
+  writeJsonAtomic(path.join(jobRoot, "state", "beat-map.json"), beatMap);
+  buildComposition(path.join(jobRoot, "hyperframes"));
 
   const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
   const confirmation = readJson(confirmationPath);
@@ -130,7 +175,7 @@ try {
 
   const composition = buildComposition(path.join(jobRoot, "hyperframes"));
   const workflow = readJson(workflowPath);
-  workflow.currentState = "qa";
+  workflow.currentState = "visual-sample";
   workflow.pendingGate = null;
   workflow.referenceScriptStatus = "none";
   workflow.referenceScriptAcknowledged = true;
@@ -139,12 +184,80 @@ try {
   workflow.visualAxisModeAcknowledged = true;
   workflow.authoritativeMediaPath = "input/source.mp4";
   workflow.authoritativeMediaSha256 = sha256File(path.join(jobRoot, "input", "source.mp4"));
+  workflow.sourceTranscriptSha256 = sha256File(path.join(jobRoot, "state", "source-transcript.json"));
   workflow.trimPlanSha256 = sha256File(path.join(jobRoot, "state", "trim-plan.json"));
   workflow.visualPlanSha256 = sha256File(path.join(jobRoot, "state", "beat-map.json"));
   workflow.compositionArtifactPath = "hyperframes/index.html";
   workflow.compositionArtifactSha256 = sha256File(composition.outputPath);
   workflow.creativeConfirmationSha256 = sha256File(confirmationPath);
   workflow.creativeDocumentFingerprints = computeCreativeDocumentFingerprints(jobRoot, "subtitles");
+  writeJsonAtomic(workflowPath, workflow);
+
+  const sampleRelativePath = "previews/visual-sample.mp4";
+  const sampleSource = buildComposition(path.join(jobRoot, "hyperframes"), {
+    startFrame: 0,
+    endFrame: 96,
+    outputPath: path.join(jobRoot, "hyperframes", "visual-sample", "index.html")
+  });
+  const runtime = resolveLockedHyperframesCli(jobRoot);
+  run(runtime.binaryPath, [
+    "render",
+    "--composition", "visual-sample/index.html",
+    "--quality", "standard",
+    "--output", path.join(jobRoot, sampleRelativePath),
+    "."
+  ], { cwd: path.join(jobRoot, "hyperframes") });
+  const contracts = readJson(path.join(repositoryRoot, "config", "validation-evidence-contracts.json"));
+  const writeVisualSampleReport = () => {
+    const checks = Object.keys(contracts.visual).map((checkId) => ({
+      id: checkId,
+      status: "pass",
+      evidence: [JSON.parse(script("run-validation-check.mjs", [jobRoot, "visual", checkId]))]
+    }));
+    const snapshotEvidence = checks.find((check) => check.id === "snapshots").evidence[0];
+    const snapshotReceipt = readJson(path.join(jobRoot, snapshotEvidence.path));
+    writeJsonAtomic(path.join(jobRoot, "state", "visual-sample-report.json"), {
+      passed: true,
+      checkedAt: new Date().toISOString(),
+      artifact: {
+        path: sampleRelativePath,
+        sha256: sha256File(path.join(jobRoot, sampleRelativePath))
+      },
+      source: {
+        path: "hyperframes/visual-sample/index.html",
+        sha256: sha256File(sampleSource.outputPath)
+      },
+      creativePackageSha256: workflow.creativeConfirmationSha256,
+      snapshotReviews: snapshotReceipt.snapshots.map(({ path: snapshotPath, sha256 }) => ({
+        path: snapshotPath,
+        sha256,
+        status: "pass",
+        findings: []
+      })),
+      checks
+    });
+  };
+
+  fs.writeFileSync(
+    sampleSource.outputPath,
+    fs.readFileSync(sampleSource.outputPath, "utf8").replace("</style>", ".manual-sample-patch { color: red; }</style>")
+  );
+  writeVisualSampleReport();
+  const tamperedSampleAdvance = spawnSync(process.execPath, [
+    path.join(repositoryRoot, "scripts", "workflow-state.mjs"),
+    workflowPath,
+    "advance",
+    "--artifact",
+    sampleRelativePath
+  ], { encoding: "utf8" });
+  assert.notEqual(tamperedSampleAdvance.status, 0, "a hand-authored visual sample must not advance");
+  assert.match(`${tamperedSampleAdvance.stdout}\n${tamperedSampleAdvance.stderr}`, /current passing validation report/);
+  assert.doesNotMatch(fs.readFileSync(sampleSource.outputPath, "utf8"), /manual-sample-patch/);
+
+  writeVisualSampleReport();
+  script("workflow-state.mjs", [workflowPath, "advance", "--artifact", sampleRelativePath]);
+  assert.equal(readJson(workflowPath).currentState, "visual-sample-review");
+  Object.assign(workflow, readJson(workflowPath), { currentState: "qa", pendingGate: null });
   writeJsonAtomic(workflowPath, workflow);
 
   const revisionWorkflow = structuredClone(workflow);
@@ -229,7 +342,6 @@ try {
   const previewRelativePath = "previews/final-preview.mp4";
   renderChunkedOutput(jobRoot, "standard", path.join(jobRoot, previewRelativePath));
   const checks = [];
-  const contracts = readJson(path.join(repositoryRoot, "config", "validation-evidence-contracts.json"));
   for (const checkId of Object.keys(contracts.final)) {
     checks.push({
       id: checkId,
@@ -282,6 +394,30 @@ try {
   assert.equal(completed.currentState, "complete");
   assert.equal(completed.lastKnownGoodDelivery.path, "output/final.mp4");
   assert.equal(fs.existsSync(path.join(jobRoot, candidateRelativePath)), false);
+
+  fs.copyFileSync(path.join(jobRoot, "input", "source.mp4"), path.join(jobRoot, "roughcut", "a-roll.mp4"));
+  script("workflow-state.mjs", [
+    workflowPath,
+    "reopen",
+    "rough-cut",
+    "--actor",
+    "user",
+    "--note",
+    "verify immutable source transcript"
+  ]);
+  fs.appendFileSync(path.join(jobRoot, "state", "source-transcript.json"), "\n");
+  const tamperedTranscriptAdvance = spawnSync(process.execPath, [
+    path.join(repositoryRoot, "scripts", "workflow-state.mjs"),
+    workflowPath,
+    "advance",
+    "--artifact",
+    "roughcut/a-roll.mp4"
+  ], { encoding: "utf8" });
+  assert.notEqual(tamperedTranscriptAdvance.status, 0);
+  assert.match(
+    `${tamperedTranscriptAdvance.stdout}\n${tamperedTranscriptAdvance.stderr}`,
+    /Source transcript changed after its timeline lock/
+  );
 
   console.log("Delivery workflow runtime test passed.");
 } finally {

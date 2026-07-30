@@ -2,7 +2,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { assertRegularContainedFile, isPathInside } from "./workflow-utils.mjs";
+import { DIAGNOSTIC_SCHEMA_VERSION } from "./diagnostic-contract.mjs";
+import {
+  assertRegularContainedFile,
+  isPathInside,
+  sha256File,
+  writeJsonAtomic
+} from "./workflow-utils.mjs";
 
 const [jobArgument, mediaArgument, startArgument, endArgument, ...rawOptions] = process.argv.slice(2);
 if (!jobArgument || !mediaArgument || startArgument == null || endArgument == null) {
@@ -60,6 +66,7 @@ const mediaName = path.basename(mediaArgument, path.extname(mediaArgument)).repl
 const label = String(options.label ?? "window").replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "window";
 const outputName = `${mediaName}-${label}-${start.toFixed(3)}-${end.toFixed(3)}.png`;
 const outputPath = path.join(outputDirectory, outputName);
+const manifestPath = outputPath.replace(/\.png$/i, ".json");
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-diagnostic-"));
 const frameWidth = 240;
 const frameHeight = 180;
@@ -114,7 +121,22 @@ try {
     "Diagnostic composition failed"
   );
 
-  console.log(path.relative(jobRoot, outputPath));
+  writeJsonAtomic(manifestPath, {
+    schemaVersion: DIAGNOSTIC_SCHEMA_VERSION,
+    kind: "filmstrip-waveform",
+    generator: "inspect-media-window.mjs",
+    media: {
+      path: path.relative(jobRoot, mediaPath),
+      sha256: sha256File(mediaPath)
+    },
+    window: { start, end },
+    frameTimes,
+    image: {
+      path: path.relative(jobRoot, outputPath),
+      sha256: sha256File(outputPath)
+    }
+  });
+  console.log(path.relative(jobRoot, manifestPath));
   console.error(`Frame times: ${frameTimes.map((time) => time.toFixed(3)).join(", ")}`);
 } finally {
   fs.rmSync(temporaryRoot, { recursive: true, force: true });

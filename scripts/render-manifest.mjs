@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  captionFrameWindow,
+  frameWindowsOverlap,
+  quantizeFrameWindow
+} from "./frame-window-utils.mjs";
 import { resolveBeatRenderWindow, transcriptWordsById } from "./motion-window-utils.mjs";
 import {
   computeDesignLanguageFingerprint,
@@ -15,8 +20,8 @@ import {
 export const CHUNK_SECONDS = Object.freeze({ minimum: 8, target: 12, maximum: 18 });
 const buildScriptPath = fileURLToPath(new URL("./build-composition.mjs", import.meta.url));
 const motionWindowUtilsPath = fileURLToPath(new URL("./motion-window-utils.mjs", import.meta.url));
+const frameWindowUtilsPath = fileURLToPath(new URL("./frame-window-utils.mjs", import.meta.url));
 const beatMapSchemaPath = fileURLToPath(new URL("../schemas/beat-map.schema.json", import.meta.url));
-const overlaps = (start, end, window) => start < window.endFrame && end > window.startFrame;
 const boundaryIsSafe = (frame, intervals) => !intervals.some((interval) => interval.startFrame < frame && frame < interval.endFrame);
 const uniqueSorted = (values) => [...new Set(values)].sort((left, right) => left - right);
 const relative = (root, candidate) => path.relative(root, candidate).split(path.sep).join("/");
@@ -34,7 +39,7 @@ const escapeHtml = (value) => String(value)
   .replaceAll('"', "&quot;")
   .replaceAll("'", "&#39;");
 
-const installedCaptionSections = (source, cues) => {
+const installedCaptionSections = (source, cues, fps, totalFrames) => {
   const block = source.match(captionBlockPattern)?.[0];
   if (!block) throw new Error("Composition template requires an installed-caption block");
   const sectionPattern = /<section\b(?=[^>]*\bmotion-caption-layer\b)(?=[^>]*\bdata-caption-id=["']([^"']+)["'])[^>]*>[\s\S]*?<\/section>/gi;
@@ -56,17 +61,26 @@ const installedCaptionSections = (source, cues) => {
     const id = escapeHtml(cue.id);
     const section = sections.get(id);
     if (!section) throw new Error(`Installed caption section is missing: ${cue.id}`);
+    const expected = captionFrameWindow(cue, totalFrames);
+    const startFrame = Number(/\bdata-caption-start-frame=["'](\d+)["']/.exec(section)?.[1]);
+    const endFrame = Number(/\bdata-caption-end-frame=["'](\d+)["']/.exec(section)?.[1]);
+    const start = Number(/\bdata-start=["']([^"']+)["']/.exec(section)?.[1]);
+    const duration = Number(/\bdata-duration=["']([^"']+)["']/.exec(section)?.[1]);
+    if (startFrame !== expected.startFrame || endFrame !== expected.endFrame
+      || Math.abs(start - expected.startFrame / fps) > 0.000001
+      || Math.abs(duration - (expected.endFrame - expected.startFrame) / fps) > 0.000001) {
+      throw new Error(`Installed caption timing differs from captions.json: ${cue.id}`);
+    }
     return [cue.id, section];
   }));
 };
 
-export const quantizeRenderInterval = (start, end, fps, totalFrames) => ({
-  startFrame: Math.max(0, Math.min(totalFrames, Math.floor(Number(start) * fps))),
-  endFrame: Math.max(0, Math.min(totalFrames, Math.ceil(Number(end) * fps)))
-});
-
 const assetEntry = (jobRoot, sourceDirectory, value) => {
-  if (!value || value.startsWith("data:") || value.startsWith("#") || /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(value)) return null;
+  if (!value || value.startsWith("data:") || value.startsWith("#")) return null;
+  if (/^(?:https?:)?\/\//i.test(value)) {
+    throw new Error(`Remote render resources must be localized inside the job: ${value}`);
+  }
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return null;
   const cleanValue = value.split(/[?#]/, 1)[0];
   if (!cleanValue) return null;
   let decodedValue;
@@ -163,12 +177,13 @@ export const deriveRenderInputs = (jobRootInput) => {
 
   const sharedSourcePaths = [templatePath, captionCssPath].filter((candidate) => fs.existsSync(candidate));
   const templateSource = fs.readFileSync(templatePath, "utf8");
-  const captionSections = installedCaptionSections(templateSource, captions.cues ?? []);
+  const captionSections = installedCaptionSections(templateSource, captions.cues ?? [], fps, totalFrames);
   const sharedAssets = assetsForSourcePaths(jobRoot, sharedSourcePaths);
   const sharedPaths = [...new Set([
     ...sharedSourcePaths,
     buildScriptPath,
     motionWindowUtilsPath,
+    frameWindowUtilsPath,
     beatMapSchemaPath,
     packagePath,
     ...sharedAssets.map((entry) => path.join(jobRoot, entry.path))
@@ -183,7 +198,7 @@ export const deriveRenderInputs = (jobRootInput) => {
       const renderWindow = hasModule ? resolveBeatRenderWindow(beat, beatMap, wordsById) : { start: beat.start, end: beat.end };
       const assets = hasModule ? assetsForSourcePaths(jobRoot, sourcePaths, path.join(jobRoot, "hyperframes")) : [];
       const moduleSha256 = hasModule ? digestFiles(sourcePaths) : null;
-      const window = quantizeRenderInterval(renderWindow.start, renderWindow.end, fps, totalFrames);
+      const window = quantizeFrameWindow(renderWindow.start, renderWindow.end, fps, totalFrames);
       return {
         beatId: beat.id,
         modulePath: hasModule ? relative(jobRoot, moduleDirectory) : null,
@@ -195,10 +210,10 @@ export const deriveRenderInputs = (jobRootInput) => {
     });
 
   const captionEntries = [...(captions.cues ?? [])]
-    .sort((left, right) => left.start - right.start || left.id.localeCompare(right.id))
+    .sort((left, right) => left.startFrame - right.startFrame || left.id.localeCompare(right.id))
     .map((cue) => ({
       cueId: cue.id,
-      window: quantizeRenderInterval(cue.start, cue.end, fps, totalFrames),
+      window: captionFrameWindow(cue, totalFrames),
       fingerprint: sha256Text(JSON.stringify({
         cue,
         installedSectionSha256: sha256Text(captionSections.get(cue.id))
@@ -233,7 +248,7 @@ const continuousBAxisIntervals = (beatMap, fps, totalFrames) => {
   const intervals = [];
   let group = [];
   const flush = () => {
-    if (group.length > 1) intervals.push(quantizeRenderInterval(group[0].start, group.at(-1).end, fps, totalFrames));
+    if (group.length > 1) intervals.push(quantizeFrameWindow(group[0].start, group.at(-1).end, fps, totalFrames));
     group = [];
   };
   for (const beat of [...(beatMap.beats ?? [])].sort((left, right) => left.start - right.start || left.id.localeCompare(right.id))) {
@@ -362,8 +377,9 @@ export const deriveRenderManifest = (jobRootInput, options = {}) => {
   });
   const chunks = boundaries.slice(0, -1).map((startFrame, index) => {
     const endFrame = boundaries[index + 1];
-    const beats = inputs.beats.filter((entry) => overlaps(startFrame, endFrame, entry.window));
-    const captions = inputs.captions.filter((entry) => overlaps(startFrame, endFrame, entry.window));
+    const chunkWindow = { startFrame, endFrame };
+    const beats = inputs.beats.filter((entry) => frameWindowsOverlap(chunkWindow, entry.window));
+    const captions = inputs.captions.filter((entry) => frameWindowsOverlap(chunkWindow, entry.window));
     const dependencySha256 = sha256Text(JSON.stringify({ shared, startFrame, endFrame, beats, captions }));
     return {
       id: `f${String(startFrame).padStart(6, "0")}-f${String(endFrame).padStart(6, "0")}`,

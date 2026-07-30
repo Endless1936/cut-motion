@@ -64,6 +64,7 @@
     </div>
 
     <script>
+      /* CUT_MOTION_CONTENT_COLLISION */
       window.__motionContract = (currentTime = null) => {
         const root = document.querySelector("#root");
         const rootRect = root.getBoundingClientRect();
@@ -93,6 +94,16 @@
         const visibleLeaves = [...root.querySelectorAll("*")].filter((element) => element.children.length === 0
           && !excludedLeaves.has(element.tagName)
           && visible(element));
+        for (const surface of document.querySelectorAll('[data-motion-surface="container"]')) {
+          const units = [...surface.querySelectorAll('[data-collision-unit], [data-motion-role="indicator"], svg, img')]
+            .filter(visible)
+            .map((element) => element.closest('[data-collision-unit], [data-motion-role="indicator"]') || element);
+          for (const element of visibleLeaves) {
+            if (element.closest('[data-motion-surface="container"]') !== surface || !element.textContent.trim()) continue;
+            if (!element.closest('[data-collision-unit], [data-motion-role="indicator"]')) units.push(element);
+          }
+          if (findContentCollision([...new Set(units)])) throw new Error("motion_contract_content_collision");
+        }
         for (const element of visibleLeaves) {
           if (!element.closest("[data-motion-group]") && !element.closest("[data-motion-protected]")) {
             throw new Error("motion_contract_ungrouped_visual");
@@ -158,8 +169,20 @@
       };
       window.__motionContract();
       const timeline = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
-      timeline.eventCallback("onUpdate", () => window.__motionContract(timeline.time()));
       /* CUT_MOTION_MG_TIMELINES */
+      let motionContractUpdateSerial = 0;
+      timeline.eventCallback("onUpdate", () => {
+        motionContractUpdateSerial += 1;
+        window.__motionContract(timeline.time());
+      });
+      const seekTimeline = timeline.totalTime.bind(timeline);
+      timeline.totalTime = function checkedTotalTime(value, suppressEvents) {
+        if (arguments.length === 0) return seekTimeline();
+        const serialBeforeSeek = motionContractUpdateSerial;
+        const result = seekTimeline(value, suppressEvents);
+        if (motionContractUpdateSerial === serialBeforeSeek) window.__motionContract(Number(value));
+        return result;
+      };
       window.__timelines = window.__timelines || {};
       window.__timelines.main = timeline;
     </script>

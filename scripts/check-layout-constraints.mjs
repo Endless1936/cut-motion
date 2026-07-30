@@ -31,7 +31,11 @@ if (!/data-layout-constraints\s*=\s*["']enforced["']/i.test(composition)) {
 if (!/data-motion-contract\s*=\s*["']enforced["']/i.test(composition)) errors.push("composition must declare the motion contract");
 if (!/data-runtime-layout\s*=\s*["']hyperframes["']/i.test(composition)) errors.push("composition must delegate peak-frame layout checks to HyperFrames");
 if (!composition.includes("window.__motionContract")) errors.push("composition must execute the browser motion contract");
-if (!composition.includes('timeline.eventCallback("onUpdate", () => window.__motionContract(timeline.time()))')) errors.push("motion contract must run during timeline updates");
+if (!composition.includes('timeline.eventCallback("onUpdate", () => {')
+  || !composition.includes("function checkedTotalTime(value, suppressEvents)")
+  || !composition.includes("if (motionContractUpdateSerial === serialBeforeSeek) window.__motionContract(Number(value))")) {
+  errors.push("motion contract must cover GSAP updates and direct HyperFrames timeline seeks");
+}
 if (motionContract.outerFrameAllowed !== false || motionContract.containerBorderPolicy !== "none") errors.push("design system must forbid generic outer frames and container borders");
 if (!composition.includes(`--${motionContract.connectorColorToken}:`)) errors.push("composition must define the connector color token");
 

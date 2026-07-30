@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 import {
   resolveValidationInvocation,
   validateCanonicalReceipt,
-  validateReceipt
+  validateReceipt,
+  validateSnapshotReviews
 } from "./validation-receipt.mjs";
 import { readJson, sha256File } from "./workflow-utils.mjs";
 
@@ -159,6 +160,20 @@ srcset="assets/srcset-1.png 1x, assets/srcset-2.png 2x"><p>evidence</p></body></
     snapshots
   };
   assert.equal(validateReceipt(jobRoot, snapshotReceipt, snapshotInvocation), true);
+  const snapshotReviews = snapshots.map(({ path: snapshotPath, sha256 }) => ({
+    path: snapshotPath,
+    sha256,
+    status: "pass",
+    findings: []
+  }));
+  assert.equal(validateSnapshotReviews(snapshotReviews, snapshotReceipt), true);
+  assert.equal(validateSnapshotReviews(undefined, snapshotReceipt), false, "capture-only evidence is not a visual review");
+  assert.equal(validateSnapshotReviews(snapshotReviews.map((review, index) => (
+    index === 1 ? { ...review, sha256: "0".repeat(64) } : review
+  )), snapshotReceipt), false, "visual review must bind each snapshot SHA");
+  assert.equal(validateSnapshotReviews(snapshotReviews.map((review, index) => (
+    index === 1 ? { ...review, status: "fail", findings: ["content collision"] } : review
+  )), snapshotReceipt), false, "a failed snapshot cannot pass visual review");
   assert.equal(validateReceipt(jobRoot, {
     ...snapshotReceipt,
     output: { path: "hyperframes/index.html", sha256: sha256File(path.join(jobRoot, "hyperframes/index.html")) }

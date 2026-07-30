@@ -37,13 +37,15 @@ segment_ends=()
 segment_transition_frames=()
 
 for ((remove_index=0; remove_index<remove_count; remove_index++)); do
-  remove_start="$(jq -r ".remove[$remove_index].start" "$trim_plan")"
-  remove_end="$(jq -r ".remove[$remove_index].end" "$trim_plan")"
+  remove_start_frame="$(jq -r ".remove[$remove_index].startFrame" "$trim_plan")"
+  remove_end_frame="$(jq -r ".remove[$remove_index].endFrame" "$trim_plan")"
+  remove_start="$(awk "BEGIN { printf \"%.9f\", $remove_start_frame / $fps }")"
+  remove_end="$(awk "BEGIN { printf \"%.9f\", $remove_end_frame / $fps }")"
 
   if awk "BEGIN { exit !($remove_start > $cursor_seconds) }"; then
     segment_starts+=("$cursor_seconds")
     segment_ends+=("$remove_start")
-    segment_transition_frames+=("$(jq -r ".seams[$remove_index].audioTransitionFrames // .trimProfile.audioTransitionFrames // .audioTransitionFrames // 0" "$trim_plan")")
+    segment_transition_frames+=("$(jq -r ".remove[$remove_index].audioTransitionFrames" "$trim_plan")")
   fi
 
   cursor_seconds="$remove_end"

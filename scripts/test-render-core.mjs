@@ -67,7 +67,7 @@ try {
     ]
   });
   writeJson("captions/captions.json", {
-    cues: [{ id: "cue-1", start: 2, end: 3, text: "测试", lines: ["测试"] }]
+    cues: [{ id: "cue-1", start: 2, end: 3, startFrame: 60, endFrame: 90, text: "测试", lines: ["测试"] }]
   });
   writeJson("state/workflow.json", {
     authoritativeMediaPath: "hyperframes/assets/a-roll.mp4",
@@ -83,6 +83,13 @@ try {
   assert.ok(manifest.captions.every((cue) => cue.window && cue.fingerprint));
   assert.ok(manifest.chunks.every((chunk) => /^[a-f0-9]{64}$/.test(chunk.cacheKey)));
   assert.ok(manifest.chunks.every((chunk) => !("standardKey" in chunk) && !("highKey" in chunk)));
+  writeJson("captions/captions.json", {
+    cues: [{ id: "cue-1", start: 2, end: 3, text: "测试", lines: ["测试"] }]
+  });
+  assert.throws(() => deriveRenderManifest(jobRoot), /half-open integer frame window/);
+  writeJson("captions/captions.json", {
+    cues: [{ id: "cue-1", start: 2, end: 3, startFrame: 60, endFrame: 90, text: "测试", lines: ["测试"] }]
+  });
   write("hyperframes/index.template.html", template(`${captionSection}<div>untracked caption content</div>`));
   assert.throws(() => deriveRenderManifest(jobRoot), /content outside caption sections/);
   write("hyperframes/index.template.html", template());
@@ -100,6 +107,11 @@ try {
   write("hyperframes/index.template.html", template(`${captionSection}${captionSection}`));
   assert.throws(() => deriveRenderManifest(jobRoot), /Duplicate installed caption section/);
   write("hyperframes/index.template.html", template());
+  write("hyperframes/index.template.html", template(captionSection.replace('data-caption-start-frame="60"', 'data-caption-start-frame="59"')));
+  assert.throws(() => deriveRenderManifest(jobRoot), /timing differs from captions\.json/);
+  write("hyperframes/index.template.html", template(captionSection.replace('data-start="2"', 'data-start="2.1"')));
+  assert.throws(() => deriveRenderManifest(jobRoot), /timing differs from captions\.json/);
+  write("hyperframes/index.template.html", template());
   for (const [filename, original] of [
     ["poster.png", "poster"],
     ["one.png", "one"],
@@ -116,6 +128,8 @@ try {
   }
   write("hyperframes/index.template.html", `${template()}<script>fetch("./assets/one.png")</script>`);
   assert.throws(() => deriveRenderManifest(jobRoot), /Dynamic media references are unsupported/);
+  write("hyperframes/index.template.html", template().replace("./assets/poster.png", "https://example.invalid/poster.png"));
+  assert.throws(() => deriveRenderManifest(jobRoot), /Remote render resources must be localized/);
   write("hyperframes/index.template.html", template());
   const raceManifest = deriveRenderManifest(jobRoot);
   const raceCandidate = write("previews/race.tmp.mp4", "candidate");
@@ -129,7 +143,7 @@ try {
   fs.unlinkSync(raceCandidate);
   fs.writeFileSync(path.join(jobRoot, "hyperframes/assets/poster.png"), "poster");
   writeJson("captions/captions.json", {
-    cues: [{ id: "cue-1", start: 2, end: 3, text: "已修改", lines: ["已修改"] }]
+    cues: [{ id: "cue-1", start: 2, end: 3, startFrame: 60, endFrame: 90, text: "已修改", lines: ["已修改"] }]
   });
   const captionRevision = deriveRenderManifest(jobRoot, {
     baselineManifest: manifest,
@@ -144,7 +158,7 @@ try {
     manifest.chunks.map((chunk) => chunk.captionCueIds.includes("cue-1"))
   );
   writeJson("captions/captions.json", {
-    cues: [{ id: "cue-1", start: 2, end: 3, text: "测试", lines: ["测试"] }]
+    cues: [{ id: "cue-1", start: 2, end: 3, startFrame: 60, endFrame: 90, text: "测试", lines: ["测试"] }]
   });
   const anchoredBeatMap = readJson(path.join(jobRoot, "state", "beat-map.json"));
   Object.assign(anchoredBeatMap.beats[0], {

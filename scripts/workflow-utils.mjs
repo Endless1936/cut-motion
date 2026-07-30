@@ -93,6 +93,7 @@ export const assertRegularContainedFile = (parent, candidate, label = "File") =>
 
 export const ensureWorkflowDefaults = (workflow) => {
   workflow.lastKnownGoodDelivery ??= null;
+  workflow.sourceTranscriptSha256 ??= null;
   workflow.history ??= [];
   workflow.previewBaseline ??= null;
   workflow.pendingPreviewBaseline ??= null;

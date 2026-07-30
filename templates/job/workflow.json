@@ -19,6 +19,7 @@
   "creativeDocumentFingerprints": null,
   "authoritativeMediaPath": null,
   "authoritativeMediaSha256": null,
+  "sourceTranscriptSha256": null,
   "trimPlanSha256": null,
   "visualPlanSha256": null,
   "compositionArtifactPath": null,

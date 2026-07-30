@@ -22,6 +22,7 @@ jobs/<job-id>/
 ├── input/
 ├── state/
 │   ├── project.json
+│   ├── source-transcript.json
 │   ├── transcript.json
 │   ├── transcript-reconciliation.json
 │   ├── reference-script-annotations.json
@@ -174,7 +175,8 @@ The `subtitles` mode cannot proceed past rough cut without ChatCut; `motion-copy
 2. Reconcile that result with the optional reference script: remove unspoken script text, restore spoken omissions, and accept reference wording only when audio supports it.
 3. When the reference contains `【】`, preserve the immutable original, use only `speechText` from `state/reference-script-annotations.json` for wording reconciliation, and retain every visual note separately.
 4. Store timestamps in `state/transcript.json` and evidence in `state/transcript-reconciliation.json`; run the reconciliation checker.
-5. Preserve uncertainty. Release-impact ambiguity is shown in the creative package and must be resolved before its approval.
+5. Advancing transcription snapshots the source-timeline word timings to immutable `state/source-transcript.json`; its workflow hash survives rough-cut revisions.
+6. Preserve uncertainty. Release-impact ambiguity is shown in the creative package and must be resolved before its approval.
 
 ### 3. Shared edit lock
 
@@ -198,11 +200,11 @@ If ChatCut is unavailable, record `roughCutEngine: "ffmpeg-fallback"` and perfor
 This procedure is an internal part of `rough-cut`; it is not a second production state or user review.
 
 1. Run `scripts/detect-silence.sh` at `-30`, `-35`, and `-40 dB`; use the median detected speech boundary instead of trusting one threshold or an ASR word endpoint.
-2. Convert candidates into `state/trim-plan.json`; record `trimProfile`, a `seams` entry for every actual edit boundary, and `verification`. Each seam must include semantic and visual evidence, the three acoustic boundary frames, applied frame, classification, reason, confidence, actual audio-transition frames, and completed picture/audio audit.
-3. For the default `tight-talking-head` profile, trim asymmetrically: retain about 20 ms after outgoing speech and 50 ms before incoming speech, quantized to source frames. Tighten the outgoing decay independently; never move the incoming boundary later merely to make both sides equally tight. These are safety handles, not a target pause duration.
+2. Convert candidates into `state/trim-plan.json` as editing decisions only: integer timeline `startFrame`/`endFrame`, explicit classification, reason, semantic evidence, confidence and actual audio-transition frames. Never author derived acoustic boundaries, audit booleans or media hashes.
+3. For the default `tight-talking-head` profile, trim asymmetrically: retain about 20 ms after outgoing speech and 50 ms before incoming speech, quantized to the normalized timeline frame grid. Tighten the outgoing decay independently; never move the incoming boundary later merely to make both sides equally tight. These are safety handles, not a target pause duration.
 4. Preserve a pause when meaning and visible delivery remain continuous. Remove it when the speaker looks at a script, stops articulating, resets posture or gaze, or prepares a restart. A topic boundary alone does not justify keeping extra dead air.
-5. After the physical cut is correct, inspect the first two to three incoming frames and restore one or two source frames when the onset sounds shaved; do not restore the whole discarded pause. Then apply zero to two frames of audio transition only when it neither attenuates the incoming onset nor restores discarded tail noise. Two frames is a ceiling, not a requirement.
-6. Run the structural trim-plan check, apply the plan, and record the picture/audio seam audit. Advancing `rough-cut` automatically measures each seam against the final media at `-30`, `-35`, and `-40 dB`; removable resets and false starts may retain at most 80ms, quantized down to source frames. Natural pauses are exempt.
+5. After the physical cut is correct, inspect the first two to three incoming timeline frames and restore one or two frames when the onset sounds shaved; do not restore the whole discarded pause. Then apply zero to two frames of audio transition only when it neither attenuates the incoming onset nor restores discarded tail noise. Two frames is a ceiling, not a requirement.
+6. Run the structural trim-plan check and apply the plan. Advancing `rough-cut` runs the canonical trim finalizer against the immutable source-timeline transcript, derives both word and three-threshold acoustic handles, binds source and rough-cut hashes, then validates the result. A cut touching a transcript word—including English, numbers, or proper-name tokens—is invalid. Removable resets and false starts may retain at most 80ms, quantized down to timeline frames. Natural pauses are exempt from that ceiling, but a pause above 180ms requires an internal filmstrip-waveform diagnostic and concrete finding.
 7. Re-align every later transcript word and animation cue by the cumulative removed duration. Use `scripts/shift-timestamps.sh` when a late cut changes existing state files.
 
 Natural pauses inside continuous delivery remain at their performed length; they are not normalized to an arbitrary 80 ms. A cut is invalid if it clips a phoneme, removes a breath needed for comprehension, retains a visible reading/reset action, or creates a mismatched jump. A low-confidence boundary falls back to 50–120 ms of conservative padding and must be marked for review.
@@ -250,7 +252,7 @@ Create a 3–5 second HyperFrames sample only when explicitly requested or when 
 
 When a subtitle sample uses a time window from the approved full caption track, derive it with `scripts/slice-captions.mjs`; do not hand-copy or retime sample cues.
 
-Bind sample static checks to the independent sample HTML source and media checks to the rendered sample video. Approval stores the visual-language fingerprint. Reuse it when later revisions do not change visual language, axis behavior, typography, or high-attention MG.
+Build `hyperframes/visual-sample/index.html` from the canonical `hyperframes/mg/<beat-id>/` modules with `scripts/build-composition.mjs --start-frame ... --end-frame ... --output ...`; never hand-copy a second sample implementation. Bind sample static checks to that generated sample source and media checks to the rendered sample video. The snapshot receipt proves capture only; record one path-and-SHA-bound pass/fail review with findings for every sample snapshot before advancing. Approval stores the visual-language fingerprint. Reuse it when later revisions do not change visual language, axis behavior, typography, or high-attention MG.
 
 ### 7. HyperFrames composition
 
@@ -265,7 +267,7 @@ Bind sample static checks to the independent sample HTML source and media checks
 9. Run `scripts/check-information-value.mjs`; visible text below the design-system floor and self-evident labels are blocking failures.
 10. Run `scripts/check-layout-constraints.mjs`; a one-character final line and any B-axis content that intrudes into the protected PIP zone are blocking failures.
 11. Preserve `data-motion-contract="enforced"` and the browser contract from the scaffold. Generic container borders, non-token connector colors, decorative labels, and caption-offset drift are blocking failures; HyperFrames remains responsible for computed peak-frame bounds.
-12. Put every authored visual inside one `data-motion-group` that declares axis, primary/auxiliary role, active time, face-cover policy, primary flow, and topology. Mark connectors with their reveal group and rendered flow axis. Every `data-motion-role="label"` declares `data-information-role` as `evidence`, `explanation`, `calibration`, `organization`, `action`, or `consequence`; these values match Beat Map `supportRole`. The existing browser contract enforces bounds, protected-region separation, A-axis replacement, group lifetime, and primary-flow continuity during timeline updates.
+12. Put every authored visual inside one `data-motion-group` that declares axis, primary/auxiliary role, active time, face-cover policy, primary flow, and topology. Mark connectors with their reveal group and rendered flow axis. Mark icon/status roots as `data-motion-role="indicator"` and other composite collision boxes as `data-collision-unit`; an intentional overlap exception applies only to the exact unit carrying `data-overlap-policy="intentional"`. Every `data-motion-role="label"` declares `data-information-role` as `evidence`, `explanation`, `calibration`, `organization`, `action`, or `consequence`; these values match Beat Map `supportRole`. The existing browser contract enforces bounds, protected-region separation, A-axis replacement, group lifetime, and primary-flow continuity during timeline updates.
 13. Author each MG Beat under `hyperframes/mg/<beat-id>/` as `fragment.html`, `style.css`, and `timeline.mjs`. Beat IDs match `^[a-z0-9][a-z0-9-]*$`; `mg-<beat-id>` is reserved for the generated wrapper. The builder encloses each stylesheet in `@scope (#mg-<beat-id>)`; keep shared declarations in `index.template.html`. Start the authored Beat root hidden, reveal it explicitly on the shared timeline, and let the builder own its hard exit. Run `scripts/build-composition.mjs` before checks or renders; `hyperframes/index.html` is deterministic generated output and must not be edited. Do not ship a placeholder `*.motion.json`; any motion sidecar must match the checked HTML basename and reference real composition selectors.
 
 ### 8. A/B-axis direction

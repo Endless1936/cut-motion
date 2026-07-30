@@ -62,12 +62,14 @@ Use `scripts/inspect-media-window.mjs` only for conflicting or low-confidence ev
 
 ## Required trim-plan record
 
-`state/trim-plan.json` must identify:
+Before finalization, the Agent-authored portion of `state/trim-plan.json` contains only:
 
-- `profile`, source FPS, acoustic thresholds, outgoing and incoming handles, and transition length;
-- each seam or removal with semantic evidence, visual evidence, three acoustic boundaries, applied frame, classification, reason, confidence, and actual audio-transition frames;
-- any deliberate pause retained as an exception;
-- continuity verification and the cumulative removed duration used for timestamp migration.
+- the authoritative source path and integer timeline FPS;
+- each removed range as integer `startFrame`/`endFrame`;
+- an explicit classification, reason, semantic evidence, confidence and actual transition frames;
+- for a retained natural pause flagged above 180ms, the existing filmstrip-waveform diagnostic manifest path and the Agent's concrete finding.
+
+Advancing transcription locks `state/source-transcript.json` before timestamps are shifted. Run `scripts/finalize-trim-plan.mjs` against the promoted rough cut before edit lock; it refuses a changed snapshot and replaces all derived sections deterministically with source and rough-cut hashes, transcript-word and three-threshold acoustic handles, output frames, residual silence and any diagnostic hash. Diagnostic manifests bind their filmstrip and waveform to the exact media hash and audited time window. Job-local scripts must not author or preserve derived seam evidence.
 
 ## Blocking acceptance checks
 
@@ -78,7 +80,8 @@ Use `scripts/inspect-media-window.mjs` only for conflicting or low-confidence ev
 - No audio transition restores discarded tail noise or weak decay.
 - The timeline is contiguous, source order is correct, and there are no black frames, overlaps, frozen items, or detached audio.
 - Every seam has been listened to and inspected at the frame before and after the cut.
+- `natural-pause` is an explicit editorial classification, never a generator default. A long natural pause triggers an internal diagnostic, not an automatic rejection or a new user gate.
 
 The rough-cut review artifact must already pass these checks. Review is for editorial judgment, not for discovering routine boundary cleanup.
 
-Before review, `audit-roughcut-seams.mjs` measures the final export around every seam at `-30`, `-35`, and `-40 dB` and records its SHA-256. Removed reset, false-start, restart, body-reset, and duplicate-take seams use an 80ms ceiling quantized down to source frames. Natural or intentional pauses remain exempt. `audioAudited: true` means both edges and the applied transition were heard: the outgoing phoneme is complete, the incoming onset is intact, and discarded audio was not restored. Automated measurement supplements rather than replaces picture and phoneme review.
+Before review, `finalize-trim-plan.mjs` measures both source-side cut boundaries and final-export seam silence at `-30`, `-35`, and `-40 dB`, then binds the results to both media hashes. Removed reset, false-start, restart, body-reset, and duplicate-take seams use the 80ms ceiling quantized down to timeline frames; it is not silently widened. Natural or intentional pauses remain exempt from that ceiling, but a measured pause above 180ms requires a hash-bound filmstrip-waveform diagnostic. Automated measurement supplements rather than replaces picture and phoneme review.

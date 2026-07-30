@@ -66,6 +66,6 @@ if [[ "$caption_mode" == "motion-copy" ]]; then
 fi
 mv "$job_directory/state/creative-confirmation.json.tmp" "$job_directory/state/creative-confirmation.json"
 cp -p "$repository_root/assets/design-system.default.json" "$job_directory/state/design-system.json"
-printf '{"source":"roughcut/a-roll.mp4","fps":30,"remove":[]}\n' > "$job_directory/state/trim-plan.json"
+jq -n --arg source "$source_relative_path" '{source:$source,fps:30,remove:[]}' > "$job_directory/state/trim-plan.json"
 
 echo "Created cut-motion job: $job_directory ($workflow_mode, $caption_mode)"

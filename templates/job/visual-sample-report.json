@@ -5,5 +5,6 @@
   "artifact": { "path": null, "sha256": null },
   "source": { "path": null, "sha256": null },
   "creativePackageSha256": null,
+  "snapshotReviews": [],
   "checks": []
 }

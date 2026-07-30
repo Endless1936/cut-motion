@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { resolveCaptionCues } from "./caption-review-utils.mjs";
+import { captionFrameWindow } from "./frame-window-utils.mjs";
 
 const [captionsPath, pagesPath, designSystemPath, compositionPath] = process.argv.slice(2);
 if (!captionsPath || !pagesPath || !designSystemPath) {
@@ -34,7 +35,14 @@ if (captions.style?.fontWeight !== 400) errors.push("Captions must use normal we
 
 let previousEndFrame = 0;
 for (const cue of captions.cues ?? []) {
-  if (cue.startFrame < previousEndFrame) errors.push(`${cue.id}: overlaps the previous caption cue`);
+  let window;
+  try {
+    window = captionFrameWindow(cue);
+  } catch (error) {
+    errors.push(error.message);
+    continue;
+  }
+  if (window.startFrame < previousEndFrame) errors.push(`${cue.id}: overlaps the previous caption cue`);
   if (Math.abs(cue.start - cue.startFrame / captions.source.fps) > 0.000001
     || Math.abs(cue.end - cue.endFrame / captions.source.fps) > 0.000001) {
     errors.push(`${cue.id}: seconds must be quantized from timeline frames`);
@@ -43,7 +51,7 @@ for (const cue of captions.cues ?? []) {
   if (displayUnits(cue.lines?.[0] ?? "") > captions.style.maximumDisplayUnits) {
     errors.push(`${cue.id}: measured line width exceeds ${captions.style.maximumDisplayUnits} display units`);
   }
-  previousEndFrame = cue.endFrame;
+  previousEndFrame = window.endFrame;
 }
 
 const reviewPlanRelativePath = captions.source.reviewPlan ?? "captions/caption-review-plan.json";

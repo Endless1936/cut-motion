@@ -1,85 +1,69 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "cut-motion Trim Plan",
+  "$id": "https://cut-motion.local/schemas/trim-plan.schema.json",
+  "title": "cut-motion Trim Decisions",
+  "description": "Schema for Agent-editable trim decisions. Derived seams and verification are generated and validated only by scripts/trim-contract.mjs.",
   "type": "object",
   "required": ["source", "fps", "remove"],
+  "additionalProperties": false,
   "properties": {
-    "source": { "type": "string" },
-    "fps": { "type": "number", "exclusiveMinimum": 0 },
-    "trimProfile": {
-      "type": "object",
-      "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "acousticThresholdsDb": {
-          "type": "array",
-          "items": { "type": "number" },
-          "minItems": 3,
-          "maxItems": 3
-        },
-        "outgoingHandleSeconds": { "type": "number", "minimum": 0 },
-        "incomingHandleSeconds": { "type": "number", "minimum": 0 },
-        "audioTransitionFrames": { "type": "integer", "minimum": 0 },
-        "maximumResidualSilenceMs": { "type": "number", "minimum": 0 }
-      }
-    },
-    "seams": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "string", "minLength": 1 },
-          "classification": { "enum": ["reading-reset", "false-start", "restart", "body-reset", "reset-removed", "duplicate-take", "natural-pause"] },
-          "reason": { "type": "string", "minLength": 1 },
-          "semanticEvidence": { "type": "string", "minLength": 1 },
-          "visualEvidence": { "type": "string", "minLength": 1 },
-          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
-          "acousticBoundaryFrames": {
-            "type": "array",
-            "items": { "type": "number" },
-            "minItems": 3,
-            "maxItems": 3
-          },
-          "appliedFrame": { "type": "integer", "minimum": 0 },
-          "audioTransitionFrames": { "type": "integer", "minimum": 0 },
-          "outputTime": { "type": "number", "minimum": 0 },
-          "measuredResidualSilenceMs": { "type": "number", "minimum": 0 },
-          "residualSilenceByThresholdMs": { "type": "object" },
-          "pictureAudited": { "type": "boolean" },
-          "audioAudited": { "type": "boolean" }
-        }
-      }
-    },
-    "verification": {
-      "type": "object",
-      "properties": {
-        "everySeamAudited": { "type": "boolean" },
-        "contiguous": { "type": "boolean" },
-        "mediaAudit": {
-          "type": "object",
-          "required": ["path", "sha256", "duration", "thresholdsDb", "minimumSilenceMs", "checkedAt"],
-          "properties": {
-            "path": { "type": "string", "minLength": 1 },
-            "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-            "duration": { "type": "number", "exclusiveMinimum": 0 },
-            "thresholdsDb": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "type": "number" } },
-            "minimumSilenceMs": { "type": "number", "minimum": 1 },
-            "checkedAt": { "type": "string", "minLength": 1 }
-          }
-        }
-      }
-    },
+    "schemaVersion": { "const": 2 },
+    "source": { "type": "string", "minLength": 1, "pattern": "^(?!/).+" },
+    "fps": { "type": "integer", "minimum": 1 },
     "remove": {
       "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["start", "end", "reason", "confidence"],
-        "properties": {
-          "start": { "type": "number", "minimum": 0 },
-          "end": { "type": "number", "exclusiveMinimum": 0 },
-          "reason": { "enum": ["dead-air", "false-start", "duplicate", "manual"] },
-          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
-          "paddingBefore": { "type": "number", "minimum": 0 },
-          "paddingAfter": { "type": "number", "minimum": 0 }
+      "items": { "$ref": "#/$defs/editDecision" }
+    },
+    "trimProfile": { "type": "object" },
+    "seams": {
+      "type": "array",
+      "items": { "type": "object" }
+    },
+    "verification": { "type": "object" }
+  },
+  "$defs": {
+    "editDecision": {
+      "type": "object",
+      "required": [
+        "startFrame",
+        "endFrame",
+        "classification",
+        "reason",
+        "semanticEvidence",
+        "confidence",
+        "audioTransitionFrames"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "startFrame": { "type": "integer", "minimum": 0 },
+        "endFrame": { "type": "integer", "minimum": 1 },
+        "classification": {
+          "enum": [
+            "reading-reset",
+            "false-start",
+            "restart",
+            "body-reset",
+            "reset-removed",
+            "duplicate-take",
+            "natural-pause"
+          ]
+        },
+        "reason": { "type": "string", "minLength": 1 },
+        "semanticEvidence": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "audioTransitionFrames": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "diagnostic": {
+          "type": "object",
+          "required": ["path", "finding"],
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^checkpoints/diagnostics/.+\\.json$"
+            },
+            "finding": { "type": "string", "minLength": 8 }
+          }
         }
       }
     }

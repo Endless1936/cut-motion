@@ -2,10 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { buildComposition } from "./build-composition.mjs";
+import { buildComposition, rebuildVisualSample } from "./build-composition.mjs";
 import { snapshotRenderManifest } from "./render-manifest.mjs";
 import { pruneChunkCache, verifyAssemblyReceipt } from "./render-chunks.mjs";
-import { validateCanonicalReceipt } from "./validation-receipt.mjs";
+import { validateCanonicalReceipt, validateSnapshotReviews } from "./validation-receipt.mjs";
 import {
   assertCreativeAuthorities,
   assertRegularContainedFile,
@@ -140,6 +140,7 @@ const runCheck = (scriptName, argumentsList, failurePrefix) => {
 };
 
 const reconciliationPath = path.join(jobRoot, "state", "transcript-reconciliation.json");
+const sourceTranscriptPath = path.join(jobRoot, "state", "source-transcript.json");
 const checkReconciliation = (allowPending, expectedMedia = null) => {
   if (!fs.existsSync(reconciliationPath)) throw new Error("Transcript reconciliation is missing");
   runCheck(
@@ -147,6 +148,24 @@ const checkReconciliation = (allowPending, expectedMedia = null) => {
     [reconciliationPath, ...(allowPending ? ["--allow-review-pending"] : []), ...(expectedMedia ? ["--expected-media", expectedMedia] : [])],
     "Transcript reconciliation failed"
   );
+};
+const assertSourceTranscriptLock = () => {
+  if (!workflow.sourceTranscriptSha256) throw new Error("Source transcript has not been locked");
+  assertRegularContainedFile(path.join(jobRoot, "state"), sourceTranscriptPath, "Source transcript");
+  if (sha256File(sourceTranscriptPath) !== workflow.sourceTranscriptSha256) {
+    throw new Error("Source transcript changed after its timeline lock");
+  }
+};
+const lockSourceTranscript = (transcriptPath) => {
+  if (workflow.sourceTranscriptSha256) {
+    assertSourceTranscriptLock();
+    return;
+  }
+  if (fs.existsSync(sourceTranscriptPath)) {
+    throw new Error("Unbound source transcript already exists");
+  }
+  writeJsonAtomic(sourceTranscriptPath, readJson(transcriptPath));
+  workflow.sourceTranscriptSha256 = sha256File(sourceTranscriptPath);
 };
 
 const recordCreativeAuthorities = () => {
@@ -288,6 +307,7 @@ const validateFinalQa = (previewRelativePath) => {
   if (!workflow.trimPlanSha256 || sha256File(trimPlanPath) !== workflow.trimPlanSha256) {
     throw new Error("Approved trim plan changed after edit lock");
   }
+  assertSourceTranscriptLock();
   if (!workflow.visualPlanSha256 || sha256File(beatMapPath) !== workflow.visualPlanSha256) {
     throw new Error("Approved visual plan changed after planning validation");
   }
@@ -326,12 +346,17 @@ const validateVisualSampleReport = (sampleRelativePath) => {
     || requiredChecks.some((id) => checks.get(id)?.status !== "pass")) {
     throw new Error("Visual sample requires a current passing validation report");
   }
+  let snapshotReceipt = null;
   for (const id of requiredChecks) {
     const evidence = checks.get(id)?.evidence ?? [];
     if (evidence.length !== 1) {
       throw new Error(`Visual-sample check ${id} requires one canonical receipt`);
     }
-    validateCanonicalReceipt(jobRoot, "visual", id, evidence[0]);
+    const receipt = validateCanonicalReceipt(jobRoot, "visual", id, evidence[0]);
+    if (id === "snapshots") snapshotReceipt = receipt;
+  }
+  if (!validateSnapshotReviews(report.snapshotReviews, snapshotReceipt)) {
+    throw new Error("Visual sample requires a passing visual review bound to every captured snapshot");
   }
 };
 
@@ -347,6 +372,7 @@ const validateGateArtifact = (gate) => {
   const recordedArtifactPath = assertJobArtifact(recordedArtifact, expectedDirectory);
   if (gate === "rough-cut-review") {
     probeReviewVideo(recordedArtifactPath, "Rough cut");
+    assertSourceTranscriptLock();
     const trimPlanPath = path.join(jobRoot, "state", "trim-plan.json");
     if (!workflow.trimPlanSha256 || sha256File(trimPlanPath) !== workflow.trimPlanSha256) {
       throw new Error("Rough-cut trim audit changed after the locked edit was produced");
@@ -758,18 +784,30 @@ if (command === "advance") {
       render: "output"
     }[workflow.currentState];
     const artifactPath = assertJobArtifact(artifact, expectedDirectory);
+    if (workflow.currentState === "transcription") {
+      const transcriptPath = path.join(jobRoot, "state", "transcript.json");
+      if (artifactPath !== transcriptPath) throw new Error("Transcription must use state/transcript.json");
+      checkReconciliation(true);
+      lockSourceTranscript(transcriptPath);
+    }
     if (workflow.currentState === "rough-cut") {
       if (path.resolve(jobRoot, artifact) !== path.join(jobRoot, "roughcut", "a-roll.mp4")) throw new Error("Rough cut must use roughcut/a-roll.mp4");
       const trimPlanPath = path.join(jobRoot, "state", "trim-plan.json");
       probeReviewVideo(artifactPath, "Rough cut");
-      runCheck("audit-roughcut-seams.mjs", [trimPlanPath, artifactPath], "Locked edit failed final-media seam measurement");
-      runCheck("check-trim-plan.mjs", [trimPlanPath, "--require-audit", "--media", artifactPath], "Locked edit requires a complete seam audit");
+      assertSourceTranscriptLock();
       checkReconciliation(true, artifact);
+      runCheck("finalize-trim-plan.mjs", [
+        trimPlanPath,
+        artifactPath,
+        "--expected-source-transcript-sha",
+        workflow.sourceTranscriptSha256
+      ], "Locked edit failed canonical trim finalization");
+      assertSourceTranscriptLock();
+      runCheck("check-trim-plan.mjs", [trimPlanPath, "--require-audit", "--media", artifactPath], "Locked edit requires a complete seam audit");
       workflow.authoritativeMediaPath = artifact;
       workflow.authoritativeMediaSha256 = sha256File(artifactPath);
       workflow.trimPlanSha256 = sha256File(trimPlanPath);
     }
-    if (workflow.currentState === "transcription") checkReconciliation(true);
     if (workflow.currentState === "motion-plan") {
       if (!workflow.captionModeAcknowledged || !workflow.visualAxisModeAcknowledged || !workflow.referenceScriptAcknowledged) {
         throw new Error("Motion planning requires preferences accepted with the locked rough cut");
@@ -840,6 +878,7 @@ if (command === "advance") {
       checkReconciliation(false);
     }
     if (workflow.currentState === "visual-sample") {
+      rebuildVisualSample(path.join(jobRoot, "hyperframes"));
       probeReviewVideo(artifactPath, "Visual sample");
       validateVisualSampleReport(artifact);
     }

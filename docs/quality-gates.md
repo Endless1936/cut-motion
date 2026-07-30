@@ -7,7 +7,7 @@
 - The default `tight-talking-head` profile in `docs/talking-head-trim-standard.md` was applied before rough-cut review, unless a user-requested rhythm profile is recorded.
 - Every seam has transcript-semantic, multi-threshold acoustic, and visible-performance evidence, or an explicit documented exception.
 - Removed and deliberately retained pauses are documented in `trim-plan.json` with reasons and confidence.
-- `scripts/check-trim-plan.mjs state/trim-plan.json --require-audit --media roughcut/a-roll.mp4` passes with a matching final-media hash and measured residual silence.
+- `scripts/finalize-trim-plan.mjs state/trim-plan.json roughcut/a-roll.mp4` derives source/rough-cut evidence against the workflow-locked source transcript, then `scripts/check-trim-plan.mjs state/trim-plan.json --require-audit --media roughcut/a-roll.mp4` passes with matching hashes, real boundary handles and measured residual silence.
 - Default safety handles are asymmetric: about 20 ms after outgoing speech and 50 ms before incoming speech; tightening a tail must not move the incoming boundary later. Low-confidence boundaries use documented conservative padding.
 - Every seam passes picture-and-sound inspection: no clipped or prematurely faded outgoing phoneme, shaved incoming onset, comprehension-critical breath removal, reading/reset tail, black frame, gap, overlap, or detached audio.
 - Timeline transitions are zero to two frames at 30 fps and never mask an incorrect physical cut, attenuate an incoming onset, or restore discarded tail audio.

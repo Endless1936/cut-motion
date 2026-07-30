@@ -332,3 +332,20 @@ export const validateCanonicalReceipt = (
   if (!validateReceipt(jobRoot, receipt, invocation)) throw new Error(`${phase}/${checkId} validation receipt is stale or invalid`);
   return receipt;
 };
+
+export const validateSnapshotReviews = (reviews, snapshotReceipt) => {
+  const snapshots = snapshotReceipt?.snapshots;
+  if (!Array.isArray(reviews) || !Array.isArray(snapshots) || reviews.length !== snapshots.length) return false;
+  const expected = new Map(snapshots.map((snapshot) => [snapshot.path, snapshot.sha256]));
+  const reviewed = new Set();
+  for (const review of reviews) {
+    if (!review || Object.keys(review).sort().join(",") !== "findings,path,sha256,status"
+      || reviewed.has(review.path)
+      || expected.get(review.path) !== review.sha256
+      || review.status !== "pass"
+      || !Array.isArray(review.findings)
+      || review.findings.length !== 0) return false;
+    reviewed.add(review.path);
+  }
+  return reviewed.size === expected.size;
+};
