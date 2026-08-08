@@ -18,6 +18,14 @@ import {
 } from "./workflow-utils.mjs";
 
 export const CHUNK_SECONDS = Object.freeze({ minimum: 8, target: 12, maximum: 18 });
+export const MONOLITHIC_MAX_SECONDS = 5 * 60;
+const RENDER_MODES = new Set(["auto", "monolithic", "chunked"]);
+export const resolveRenderMode = (requestedMode = "auto", duration) => {
+  if (!RENDER_MODES.has(requestedMode)) throw new Error(`Unknown render mode: ${requestedMode}`);
+  if (requestedMode !== "auto") return requestedMode;
+  if (!Number.isFinite(duration) || duration <= 0) throw new Error("Render mode requires a positive duration");
+  return duration <= MONOLITHIC_MAX_SECONDS ? "monolithic" : "chunked";
+};
 const buildScriptPath = fileURLToPath(new URL("./build-composition.mjs", import.meta.url));
 const motionWindowUtilsPath = fileURLToPath(new URL("./motion-window-utils.mjs", import.meta.url));
 const frameWindowUtilsPath = fileURLToPath(new URL("./frame-window-utils.mjs", import.meta.url));
@@ -341,6 +349,18 @@ export const planStableChunkBoundaries = ({
 };
 
 const baselineBoundariesFrom = (baselineManifest) => baselineManifest?.chunks?.slice(0, -1).map((chunk) => chunk.endFrame) ?? [];
+const makeChunk = ({ startFrame, endFrame, beats, captions, shared, runtime }) => {
+  const dependencySha256 = sha256Text(JSON.stringify({ shared, startFrame, endFrame, beats, captions }));
+  return {
+    id: `f${String(startFrame).padStart(6, "0")}-f${String(endFrame).padStart(6, "0")}`,
+    startFrame,
+    endFrame,
+    beatIds: beats.map((entry) => entry.beatId),
+    captionCueIds: captions.map((entry) => entry.cueId),
+    dependencySha256,
+    cacheKey: sha256Text(JSON.stringify({ dependencySha256, rendererFingerprint: runtime.fingerprint }))
+  };
+};
 
 export const deriveRenderManifest = (jobRootInput, options = {}) => {
   const jobRoot = path.resolve(jobRootInput);
@@ -348,6 +368,7 @@ export const deriveRenderManifest = (jobRootInput, options = {}) => {
   const designSystem = readJson(path.join(jobRoot, "state", "design-system.json"));
   const packageJson = readJson(path.join(jobRoot, "hyperframes", "package.json"));
   const inputs = deriveRenderInputs(jobRoot);
+  const renderMode = resolveRenderMode(options.mode ?? "chunked", inputs.duration);
   const authoritativeMediaPath = path.join(jobRoot, workflow.authoritativeMediaPath ?? "");
   if (!workflow.authoritativeMediaPath
     || !isPathInside(jobRoot, authoritativeMediaPath)
@@ -369,28 +390,28 @@ export const deriveRenderManifest = (jobRootInput, options = {}) => {
     rendererFingerprint: runtime.fingerprint,
     cacheContract: 3
   };
-  const boundaries = planStableChunkBoundaries({
-    totalFrames: inputs.totalFrames,
-    fps: inputs.fps,
-    unsafeIntervals: unsafeRenderIntervals(inputs.beatMap, inputs),
-    baselineBoundaries: baselineBoundariesFrom(options.baselineManifest)
-  });
-  const chunks = boundaries.slice(0, -1).map((startFrame, index) => {
-    const endFrame = boundaries[index + 1];
-    const chunkWindow = { startFrame, endFrame };
-    const beats = inputs.beats.filter((entry) => frameWindowsOverlap(chunkWindow, entry.window));
-    const captions = inputs.captions.filter((entry) => frameWindowsOverlap(chunkWindow, entry.window));
-    const dependencySha256 = sha256Text(JSON.stringify({ shared, startFrame, endFrame, beats, captions }));
-    return {
-      id: `f${String(startFrame).padStart(6, "0")}-f${String(endFrame).padStart(6, "0")}`,
-      startFrame,
-      endFrame,
-      beatIds: beats.map((entry) => entry.beatId),
-      captionCueIds: captions.map((entry) => entry.cueId),
-      dependencySha256,
-      cacheKey: sha256Text(JSON.stringify({ dependencySha256, rendererFingerprint: runtime.fingerprint }))
-    };
-  });
+  const chunks = renderMode === "chunked" ? (() => {
+    const boundaries = planStableChunkBoundaries({
+      totalFrames: inputs.totalFrames,
+      fps: inputs.fps,
+      unsafeIntervals: unsafeRenderIntervals(inputs.beatMap, inputs),
+      baselineBoundaries: baselineBoundariesFrom(options.baselineManifest)
+    });
+    return boundaries.slice(0, -1).map((startFrame, index) => {
+      const endFrame = boundaries[index + 1];
+      const chunkWindow = { startFrame, endFrame };
+      const beats = inputs.beats.filter((entry) => frameWindowsOverlap(chunkWindow, entry.window));
+      const captions = inputs.captions.filter((entry) => frameWindowsOverlap(chunkWindow, entry.window));
+      return makeChunk({ startFrame, endFrame, beats, captions, shared, runtime });
+    });
+  })() : [makeChunk({
+    startFrame: 0,
+    endFrame: inputs.totalFrames,
+    beats: inputs.beats,
+    captions: inputs.captions,
+    shared,
+    runtime
+  })];
   const content = {
     schemaVersion: "2.0.0",
     fps: inputs.fps,
@@ -410,23 +431,10 @@ export const deriveRenderManifest = (jobRootInput, options = {}) => {
 
 export const writeRenderManifest = (jobRootInput, options = {}) => {
   const jobRoot = path.resolve(jobRootInput);
-  const manifest = options.manifest ?? deriveRenderManifest(jobRoot, options);
+  const manifest = options.manifest ?? deriveRenderManifest(jobRoot, { ...options, mode: options.mode ?? "auto" });
   const outputPath = path.join(jobRoot, "state", "render-manifest.json");
   writeJsonAtomic(outputPath, manifest);
   return { outputPath, manifest };
-};
-
-export const snapshotRenderManifest = (jobRootInput, manifest, revisionId) => {
-  const jobRoot = path.resolve(jobRootInput);
-  const relativePath = `checkpoints/baselines/revision-${revisionId}-render-manifest.json`;
-  const outputPath = path.join(jobRoot, relativePath);
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  writeJsonAtomic(outputPath, manifest);
-  return {
-    renderManifestPath: relativePath,
-    renderManifestSha256: sha256File(outputPath),
-    contentManifestSha256: manifest.contentManifestSha256
-  };
 };
 
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
@@ -437,7 +445,7 @@ if (isCli) {
     process.exit(64);
   }
   const outputPath = path.join(path.resolve(jobRoot), "state", "render-manifest.json");
-  const expected = deriveRenderManifest(jobRoot);
+  const expected = deriveRenderManifest(jobRoot, { mode: "auto" });
   if (command === "generate") writeJsonAtomic(outputPath, expected);
   else if (!fs.existsSync(outputPath) || JSON.stringify(readJson(outputPath)) !== JSON.stringify(expected)) {
     throw new Error("Render Manifest is missing or stale");

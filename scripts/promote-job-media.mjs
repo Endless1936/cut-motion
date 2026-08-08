@@ -6,12 +6,10 @@ import { isPathInside, readJson, sha256File, writeJsonAtomic } from "./workflow-
 const [jobArgument, kind, sourceArgument, ...rawOptions] = process.argv.slice(2);
 const targets = {
   roughcut: "roughcut/a-roll.mp4",
-  "visual-sample": "previews/visual-sample.mp4",
-  "final-preview": "previews/final-preview.mp4",
-  final: "output/final.mp4"
+ final: "output/final.mp4"
 };
 if (!jobArgument || !targets[kind] || !sourceArgument) {
-  console.error("Usage: node promote-job-media.mjs <job> <roughcut|visual-sample|final-preview|final> <source-media> [--consume-source]");
+  console.error("Usage: node promote-job-media.mjs <job> <roughcut|final> <source-media> [--consume-source]");
   process.exit(64);
 }
 
@@ -38,10 +36,9 @@ if (consumeSource) {
 }
 if (fs.existsSync(workflowPath)) {
   const workflow = readJson(workflowPath);
-  const gateByKind = { roughcut: "rough-cut-review", "visual-sample": "visual-sample-review", "final-preview": "final-preview" };
-  const gate = workflow.gates?.[gateByKind[kind]];
-  if (["approved", "auto-approved"].includes(gate?.status) && gate.artifact === targets[kind]) {
-    throw new Error(`Cannot replace approved ${kind} media before reopening its producing stage`);
+  const gate = workflow.gates?.["rough-cut-review"];
+  if (kind === "roughcut" && gate?.status === "approved" && gate.artifact === targets[kind]) {
+    throw new Error("Cannot replace approved roughcut media before reopening its producing stage");
   }
   if (kind === "final" && workflow.lastKnownGoodDelivery?.path === targets.final) {
     throw new Error("Render a delivery revision to output/final.candidate.mp4 and let the workflow promote it after validation");

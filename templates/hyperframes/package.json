@@ -9,7 +9,8 @@
     "preview": "npm run build:composition && hyperframes preview",
     "render:preview": "node ../../../scripts/render-chunks.mjs .. standard ../previews/final-preview.mp4",
     "render": "node ../../../scripts/render-chunks.mjs .. high ../output/final.mp4",
-    "render:revision": "node ../../../scripts/render-chunks.mjs .. high ../output/final.candidate.mp4"
+    "render:revision": "node ../../../scripts/render-chunks.mjs .. high ../output/final.candidate.mp4",
+    "render:chunked": "node ../../../scripts/render-chunks.mjs .. high ../output/final.mp4 --mode chunked"
   },
   "devDependencies": {
     "gsap": "3.13.0",

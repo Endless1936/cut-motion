@@ -42,12 +42,13 @@ try {
     visualAxisMode: "a-axis-overlay",
     currentState: "motion-plan",
     revisionId: 1,
-    gates: { "visual-sample-review": { status: "approved", revisionId: 1 } },
+    gates: { "rough-cut-review": { status: "approved", revisionId: 1 } },
     history: []
   });
-  beginWorkflowRevision(simple, "2026-07-25T00:00:00.000Z", "replan");
+  beginWorkflowRevision(simple);
   assert.equal(simple.revisionId, 2);
-  assert.equal(simple.gates["visual-sample-review"].status, "superseded");
+  assert.equal(simple.gates["rough-cut-review"].status, "approved");
+  assert.deepEqual(Object.keys(simple.gates), ["rough-cut-review"]);
 
   const scaffolded = scaffold("scaffold", "review", "subtitles");
   assert.equal(fs.existsSync(path.join(scaffolded, "hyperframes", "index.html")), true);
@@ -77,9 +78,122 @@ try {
   assert.equal(fs.existsSync(path.join(modeJob, "docs", "caption-plan.md")), false);
   assert.equal(readJson(path.join(modeJob, "state", "creative-confirmation.json")).storyboard.captionPlan, undefined);
   script("workflow-state.mjs", [modeWorkflow, "set-axis-mode", "b-axis-stage", "--actor", "user"]);
-  assert.deepEqual(readJson(path.join(modeJob, "state", "creative-confirmation.json")).visualSample.requiredAxes, ["B"]);
+  assert.equal(readJson(path.join(modeJob, "state", "creative-confirmation.json")).visualAxisMode, "b-axis-stage");
   script("workflow-state.mjs", [modeWorkflow, "set-caption-mode", "subtitles", "--actor", "user"]);
   assert.equal(fs.existsSync(path.join(modeJob, "docs", "caption-plan.md")), true);
+
+  const autoModeJob = scaffold("auto-mode", "auto");
+  const autoModeWorkflow = readJson(path.join(autoModeJob, "state", "workflow.json"));
+  assert.equal(autoModeWorkflow.mode, "auto");
+
+  const prepareChatcutReviewJob = (name, mode = "review") => {
+    const job = scaffold(name, mode);
+    const workflowPath = path.join(job, "state", "workflow.json");
+    const workflow = readJson(workflowPath);
+    const sourceTranscriptPath = path.join(job, "state", "source-transcript.json");
+    writeJsonAtomic(sourceTranscriptPath, { schemaVersion: "1.0.0", revision: 1, segments: [] });
+    workflow.currentState = "rough-cut";
+    workflow.pendingGate = null;
+    workflow.sourceTranscriptSha256 = sha256File(sourceTranscriptPath);
+    workflow.authoritativeMediaPath = null;
+    workflow.authoritativeMediaSha256 = null;
+    workflow.gates["rough-cut-review"] = { status: "not-reached" };
+    writeJsonAtomic(workflowPath, workflow);
+    writeJsonAtomic(path.join(job, "state", "chatcut-roughcut.json"), {
+      schemaVersion: "1.0.0",
+      source: "chatcut",
+      projectId: "project-test",
+      timelineIds: ["timeline-front", "timeline-back"],
+      activeTimelineId: "timeline-back",
+      recordedAt: "2026-08-06T00:00:00.000Z"
+    });
+    return { job, workflowPath };
+  };
+
+  const manualReview = prepareChatcutReviewJob("chatcut-manual-review");
+  const manualProjectPath = path.join(manualReview.job, "state", "project.json");
+  const manualProject = readJson(manualProjectPath);
+  manualProject.mediaArtifacts = {
+    roughcut: {
+      path: "roughcut/a-roll.mp4",
+      sha256: "a".repeat(64),
+      duration: 1,
+      updatedAt: "2026-08-05T00:00:00.000Z"
+    }
+  };
+  writeJsonAtomic(manualProjectPath, manualProject);
+  script("workflow-state.mjs", [
+    manualReview.workflowPath,
+    "advance",
+    "--artifact",
+    "state/chatcut-roughcut.json"
+  ]);
+  let manualWorkflow = readJson(manualReview.workflowPath);
+  assert.equal(manualWorkflow.currentState, "rough-cut-review");
+  assert.equal(readJson(manualProjectPath).mediaArtifacts.roughcut, undefined);
+  assert.equal(fs.existsSync(path.join(manualReview.job, "roughcut", "a-roll.mp4")), false);
+  script("workflow-state.mjs", [manualReview.workflowPath, "set-caption-mode", "subtitles", "--actor", "agent", "--note", "Keep recording-backed captions"]);
+  script("workflow-state.mjs", [manualReview.workflowPath, "set-axis-mode", "a-axis-overlay", "--actor", "agent", "--note", "Keep the talking head full-frame"]);
+  script("workflow-state.mjs", [manualReview.workflowPath, "approve", "--actor", "user", "--note", "ChatCut timeline reviewed and approved"]);
+  manualWorkflow = readJson(manualReview.workflowPath);
+  assert.equal(manualWorkflow.currentState, "rough-cut-export");
+  assert.equal(manualWorkflow.roughCutReviewDecision, "manual-approved");
+  assert.equal(fs.existsSync(path.join(manualReview.job, "roughcut", "a-roll.mp4")), false);
+
+  const unresolvedReference = prepareChatcutReviewJob("chatcut-unresolved-reference");
+  script("workflow-state.mjs", [
+    unresolvedReference.workflowPath,
+    "advance",
+    "--artifact",
+    "state/chatcut-roughcut.json"
+  ]);
+  const unresolvedWorkflow = readJson(unresolvedReference.workflowPath);
+  unresolvedWorkflow.referenceScriptStatus = "unknown";
+  unresolvedWorkflow.referenceScriptAcknowledged = false;
+  writeJsonAtomic(unresolvedReference.workflowPath, unresolvedWorkflow);
+  script("workflow-state.mjs", [unresolvedReference.workflowPath, "set-caption-mode", "subtitles", "--actor", "agent", "--note", "Keep recording-backed captions"]);
+  script("workflow-state.mjs", [unresolvedReference.workflowPath, "set-axis-mode", "a-axis-overlay", "--actor", "agent", "--note", "Keep the talking head full-frame"]);
+  script("workflow-state.mjs", [unresolvedReference.workflowPath, "approve", "--actor", "user", "--note", "Do not infer an absent reference script"], false, /reference-script|unresolved/i);
+
+  const automaticFallback = prepareChatcutReviewJob("chatcut-automatic-fallback");
+  script("workflow-state.mjs", [
+    automaticFallback.workflowPath,
+    "advance",
+    "--artifact",
+    "state/chatcut-roughcut.json"
+  ]);
+  script("workflow-state.mjs", [automaticFallback.workflowPath, "set-caption-mode", "subtitles", "--actor", "agent", "--note", "Keep recording-backed captions"]);
+  script("workflow-state.mjs", [automaticFallback.workflowPath, "set-axis-mode", "a-axis-overlay", "--actor", "agent", "--note", "Keep the talking head full-frame"]);
+  const fallback = script("workflow-state.mjs", [
+    automaticFallback.workflowPath,
+    "fallback-auto",
+    "--actor",
+    "user",
+    "--note",
+    "Skip manual ChatCut review"
+  ]);
+  assert.match(`${fallback.stdout}\n${fallback.stderr}`, /may take a long time/i);
+  const fallbackWorkflow = readJson(automaticFallback.workflowPath);
+  assert.equal(fallbackWorkflow.currentState, "rough-cut-export");
+  assert.equal(fallbackWorkflow.roughCutReviewDecision, "automatic-fallback");
+  assert.equal(fallbackWorkflow.gates["rough-cut-review"].status, "automatic-fallback");
+  assert.equal(fs.existsSync(path.join(automaticFallback.job, "roughcut", "a-roll.mp4")), false);
+
+  const automaticMode = prepareChatcutReviewJob("chatcut-auto-mode", "auto");
+  script("workflow-state.mjs", [automaticMode.workflowPath, "set-caption-mode", "subtitles", "--actor", "agent", "--note", "Keep recording-backed captions"]);
+  script("workflow-state.mjs", [automaticMode.workflowPath, "set-axis-mode", "a-axis-overlay", "--actor", "agent", "--note", "Keep the talking head full-frame"]);
+  const automaticAdvance = script("workflow-state.mjs", [
+    automaticMode.workflowPath,
+    "advance",
+    "--artifact",
+    "state/chatcut-roughcut.json"
+  ]);
+  assert.match(`${automaticAdvance.stdout}\n${automaticAdvance.stderr}`, /may take a long time/i);
+  const automaticWorkflow = readJson(automaticMode.workflowPath);
+  assert.equal(automaticWorkflow.currentState, "rough-cut-export");
+  assert.equal(automaticWorkflow.roughCutReviewDecision, "automatic-fallback");
+  assert.equal(automaticWorkflow.gates["rough-cut-review"].status, "automatic-fallback");
+  assert.equal(fs.existsSync(path.join(automaticMode.job, "roughcut", "a-roll.mp4")), false);
 
   const intakeJob = scaffold("intake", "review");
   const intakeWorkflow = path.join(intakeJob, "state", "workflow.json");
@@ -118,14 +232,54 @@ try {
   script("register-reference-script.mjs", [referenceWorkflow, "provided", reference, "--actor", "user"]);
   const registered = readJson(referenceWorkflow);
   assert.match(registered.referenceScriptPath, /^input\/reference-scripts\/[a-f0-9]{64}\.txt$/);
+  const registeredAnnotations = readJson(path.join(referenceJob, "state", "reference-script-annotations.json"));
+  assert.equal(registeredAnnotations.source.status, "provided");
+  assert.equal(registeredAnnotations.source.path, registered.referenceScriptPath);
+  assert.equal(registeredAnnotations.source.sha256, registered.referenceScriptSha256);
   fs.appendFileSync(path.join(referenceJob, registered.referenceScriptPath), "tampered");
   script("workflow-state.mjs", [referenceWorkflow, "advance"], false, /changed|hash|reference/i);
 
-  for (const [scope, expectedState, superseded] of [
-    ["rough-cut", "rough-cut", ["rough-cut-review", "motion-plan-review", "visual-sample-review", "final-preview"]],
-    ["motion-plan", "motion-plan", ["motion-plan-review", "visual-sample-review", "final-preview"]],
-    ["composition", "composition", ["final-preview"]],
-    ["delivery", "render", []]
+  const defaultRouteJob = scaffold("default-route", "review");
+  const defaultRouteWorkflowPath = path.join(defaultRouteJob, "state", "workflow.json");
+  const defaultRouteWorkflow = readJson(defaultRouteWorkflowPath);
+  defaultRouteWorkflow.currentState = "motion-plan";
+  defaultRouteWorkflow.captionModeAcknowledged = true;
+  defaultRouteWorkflow.visualAxisModeAcknowledged = true;
+  defaultRouteWorkflow.referenceScriptAcknowledged = true;
+  writeJsonAtomic(defaultRouteWorkflowPath, defaultRouteWorkflow);
+  fs.writeFileSync(
+    path.join(defaultRouteJob, "docs", "motion-plan.md"),
+    "| Time | Audio phrase | Axis | Main flow | Visual reference | Visual treatment | Transition |\n"
+      + "| --- | --- | --- | --- | --- | --- | --- |\n"
+      + "| 0.0–1.0 | 示例 | A | horizontal | none | caption-only | cut |\n\n"
+      + "Caption mode: subtitles\n"
+  );
+  writeJsonAtomic(path.join(defaultRouteJob, "state", "beat-map.json"), { fps: 30, captionMode: "subtitles", beats: [] });
+  script("workflow-state.mjs", [defaultRouteWorkflowPath, "advance", "--artifact", "docs/motion-plan.md"]);
+  let defaultRouteState = readJson(defaultRouteWorkflowPath);
+  assert.equal(defaultRouteState.currentState, "composition");
+  assert.deepEqual(Object.keys(defaultRouteState.gates), ["rough-cut-review"]);
+  assert.equal(defaultRouteState.pendingGate, null);
+  script("workflow-state.mjs", [defaultRouteWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
+  defaultRouteState = readJson(defaultRouteWorkflowPath);
+  assert.equal(defaultRouteState.currentState, "render");
+  const defaultRenderPath = path.join(defaultRouteJob, "output", "final.mp4");
+  run("ffmpeg", [
+    "-y", "-loglevel", "error",
+    "-f", "lavfi", "-i", "color=c=blue:s=32x32:r=2:d=1",
+    "-f", "lavfi", "-i", "anullsrc=channel_layout=mono:sample_rate=48000",
+    "-t", "1", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", defaultRenderPath
+  ]);
+  script("workflow-state.mjs", [defaultRouteWorkflowPath, "advance", "--artifact", "output/final.mp4"]);
+  defaultRouteState = readJson(defaultRouteWorkflowPath);
+  assert.equal(defaultRouteState.currentState, "complete");
+  assert.equal(defaultRouteState.lastKnownGoodDelivery.path, "output/final.mp4");
+
+  for (const [scope, expectedState] of [
+    ["rough-cut", "rough-cut"],
+    ["motion-plan", "motion-plan"],
+    ["composition", "composition"],
+    ["delivery", "render"]
   ]) {
     const job = scaffold(`reopen-${scope}`, "review", "subtitles");
     const workflowPath = path.join(job, "state", "workflow.json");
@@ -133,11 +287,9 @@ try {
     workflow.currentState = "complete";
     workflow.completed = true;
     workflow.gates = {
-      "rough-cut-review": { status: "approved", revisionId: 1 },
-      "motion-plan-review": { status: "approved", revisionId: 1 },
-      "visual-sample-review": { status: "approved", revisionId: 1 },
-      "final-preview": { status: "approved", revisionId: 1 }
+      "rough-cut-review": { status: "approved", revisionId: 1 }
     };
+    workflow.roughCutReviewDecision = "manual-approved";
     workflow.visualPlanSha256 = "a".repeat(64);
     workflow.compositionArtifactPath = "hyperframes/index.html";
     workflow.compositionArtifactSha256 = "b".repeat(64);
@@ -147,9 +299,19 @@ try {
     assert.equal(reopened.currentState, expectedState);
     assert.equal(reopened.completed, false);
     assert.equal(reopened.revisionId, 2);
-    for (const gate of Object.keys(workflow.gates)) {
-      assert.equal(reopened.gates[gate].status, superseded.includes(gate) ? "superseded" : "approved");
-    }
+    assert.equal(
+      reopened.visualPlanSha256,
+      ["rough-cut", "motion-plan"].includes(scope) ? null : "a".repeat(64)
+    );
+    assert.deepEqual(Object.keys(reopened.gates), ["rough-cut-review"]);
+    assert.equal(
+      reopened.gates["rough-cut-review"].status,
+      scope === "rough-cut" ? "not-reached" : "approved"
+    );
+    assert.equal(
+      reopened.roughCutReviewDecision,
+      scope === "rough-cut" ? "pending" : "manual-approved"
+    );
   }
 
   const transactionJob = scaffold("transaction", "review", "subtitles");

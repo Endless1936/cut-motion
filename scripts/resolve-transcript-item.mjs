@@ -28,8 +28,8 @@ const reconciliationPath = path.join(jobRoot, "state", "transcript-reconciliatio
 const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
 const captionPlanPath = path.join(jobRoot, "captions", "caption-review-plan.json");
 const workflow = ensureWorkflowDefaults(readJson(workflowPath));
-if (!["motion-plan", "motion-plan-review"].includes(workflow.currentState)) {
-  throw new Error("Transcript ambiguity can only be resolved during creative planning or review");
+if (workflow.currentState !== "motion-plan") {
+  throw new Error("Transcript ambiguity can only be resolved during motion planning");
 }
 const reconciliationCheck = spawnSync(process.execPath, [
   path.join(path.dirname(fileURLToPath(import.meta.url)), "check-transcript-reconciliation.mjs"),
@@ -88,7 +88,6 @@ workflow.currentState = "motion-plan";
 workflow.pendingGate = null;
 workflow.reconciliationReturnState = null;
 workflow.creativeConfirmationSha256 = null;
-workflow.pendingCreativePackageSha256 = null;
 workflow.creativeDocumentFingerprints = null;
 workflow.history.push({ at: now, action: "resolve-transcript-item", actor, from: previousState, to: "motion-plan", artifact: "state/transcript-reconciliation.json", note: options.note, itemId, resolution, revisionId: workflow.revisionId });
 workflow.completed = false;

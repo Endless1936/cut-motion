@@ -84,7 +84,14 @@ for (const [index, cue] of resolvedCues.entries()) {
   if (units > 10.5 && !(cue.fitFontSizePx >= 88 && cue.fitFontSizePx <= 96)) errors.push(`${cue.id}: long cue requires fitFontSizePx between 88 and 96`);
   const fixedForbidden = ["的", "了", "着", "过", "啊", "吧", "吗", "呢", "与", "和", "但", "所以", "因为", "而"];
   if (fixedForbidden.includes(normalizedText) || plan.rules.forbiddenStandaloneCues.includes(normalizedText)) errors.push(`${cue.id}: function word cannot stand alone`);
-  if (/^[，。；：！？、,.!?]/u.test(cue.text) || /[、，,:：;；]$/u.test(cue.text)) errors.push(`${cue.id}: punctuation indicates an invalid phrase boundary`);
+  const endsWithQuestion = /[?？]$/u.test(cue.text);
+  const punctuationBody = endsWithQuestion ? cue.text.slice(0, -1) : cue.text;
+  if (/[，。；：！!、,.!?;:'"“”‘’（）()《》〈〉—–\-]/u.test(punctuationBody)) {
+    errors.push(`${cue.id}: punctuation is only allowed as a final question mark`);
+  }
+  if (!endsWithQuestion && /[?？]/u.test(cue.text)) {
+    errors.push(`${cue.id}: question marks are only allowed at the end of a cue`);
+  }
   previousEnd = cue.end;
 }
 const fullText = normalize(referenceText);

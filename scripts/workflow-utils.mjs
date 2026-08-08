@@ -92,15 +92,13 @@ export const assertRegularContainedFile = (parent, candidate, label = "File") =>
 };
 
 export const ensureWorkflowDefaults = (workflow) => {
+  workflow.roughCutReviewDecision ??= "pending";
   workflow.lastKnownGoodDelivery ??= null;
   workflow.sourceTranscriptSha256 ??= null;
   workflow.history ??= [];
-  workflow.previewBaseline ??= null;
-  workflow.pendingPreviewBaseline ??= null;
   workflow.gates ??= {};
   return workflow;
 };
-
 export const computeDesignLanguageFingerprint = (jobRoot, captionMode) => {
   const confirmation = readJson(path.join(jobRoot, "state", "creative-confirmation.json"));
   const beatMap = readJson(path.join(jobRoot, "state", "beat-map.json"));
@@ -148,30 +146,11 @@ export const computeDesignLanguageFingerprint = (jobRoot, captionMode) => {
   }));
 };
 
-export const beginWorkflowRevision = (workflow, now, reason, options = {}) => {
+export const beginWorkflowRevision = (workflow, { invalidateVisualPlan = true } = {}) => {
   ensureWorkflowDefaults(workflow);
-  const gates = options.gates ?? ["motion-plan-review", "visual-sample-review", "final-preview"];
-  const superseded = [];
-  for (const gate of gates) {
-    const record = workflow.gates?.[gate];
-    if (!record || ["not-reached", "superseded"].includes(record.status)) continue;
-    superseded.push({ gate, status: record.status, artifact: record.artifact ?? null });
-    workflow.gates[gate] = {
-      ...record,
-      previousStatus: record.status,
-      status: "superseded",
-      supersededAt: now,
-      supersededByRevision: workflow.revisionId + 1,
-      note: reason
-    };
-  }
-  if (superseded.length > 0) {
-    workflow.history.push({ at: now, action: "supersede-gates", actor: "agent", from: workflow.currentState, to: workflow.currentState, note: reason, revisionId: workflow.revisionId, gates: superseded });
-  }
   workflow.revisionId += 1;
-  if (options.invalidateVisualPlan !== false) workflow.visualPlanSha256 = null;
+  if (invalidateVisualPlan) workflow.visualPlanSha256 = null;
 };
-
 export const saveWorkflow = (workflowPath, workflow, now = new Date().toISOString()) => {
   workflow.completed = workflow.currentState === "complete";
   workflow.updatedAt = now;
@@ -225,14 +204,6 @@ export const computeCreativeDocumentFingerprints = (jobRoot, captionMode) => {
     name,
     { path: relativePath, sha256: sha256File(path.join(jobRoot, relativePath)) }
   ]));
-};
-
-export const computePendingCreativePackageSha256 = (jobRoot, captionMode) => {
-  const parts = [
-    sha256File(path.join(jobRoot, "state", "creative-confirmation.json")),
-    ...Object.values(computeCreativeDocumentFingerprints(jobRoot, captionMode)).map((entry) => entry.sha256)
-  ];
-  return sha256Text(parts.join(":"));
 };
 
 export const assertCreativeAuthorities = (jobRoot, workflow, { requireApproved = true } = {}) => {

@@ -66,12 +66,6 @@
       }
     }
   },
-  "visualSample": {
-    "required": false,
-    "scope": "caption-only",
-    "requiredAxes": [],
-    "purpose": "verify-caption-layout"
-  },
   "review": {
     "required": false,
     "status": "draft"

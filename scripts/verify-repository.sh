@@ -34,6 +34,7 @@ required_files=(
   docs/quality-gates.md
   assets/design-system.default.json
   config/validation-evidence-contracts.json
+  schemas/chatcut-roughcut.schema.json
   schemas/workflow.schema.json
   schemas/render-manifest.schema.json
   schemas/validation-receipt.schema.json

@@ -105,7 +105,7 @@ try {
 }
 const requiredReapprovalFields = new Set(["caption-segmentation", "mg-node-set", "mg-count", "on-screen-copy", "support-role", "visual-style", "primary-flow-axis", "visual-reference", "axis-mode"]);
 const actualReapprovalFields = new Set(confirmation.changeControl?.reapprovalFields ?? []);
-if (!["creative-package-approved", "motion-plan-review-approved"].includes(confirmation.changeControl?.implementationMayStartAfter)
+if (confirmation.changeControl?.implementationMayStartAfter !== "creative-package-approved"
   || confirmation.changeControl?.planChangesRequireReapproval !== true
   || [...requiredReapprovalFields].some((field) => !actualReapprovalFields.has(field))) {
   errors.push("change control must block implementation before plan approval and require reapproval for every plan field");
@@ -135,19 +135,6 @@ if (confirmation.visualAxisMode === "a-axis-overlay" && (usedAxes.size !== 1 || 
 if (confirmation.visualAxisMode === "b-axis-stage" && (usedAxes.size !== 1 || !usedAxes.has("B"))) errors.push("B-axis stage mode may only contain B-axis beats");
 if (confirmation.visualAxisMode === "hybrid" && (!usedAxes.has("A") || !usedAxes.has("B"))) errors.push("Hybrid visual axis mode must contain both A-axis and B-axis beats");
 
-const visualSample = confirmation.visualSample;
-const visualSampleScope = visualSample?.scope ?? (confirmation.captionMode === "motion-copy" ? "axis-behavior" : null);
-if (!Array.isArray(visualSample?.requiredAxes)) errors.push("visual sample must declare required axes");
-if (confirmation.captionMode === "subtitles") {
-  if (!['caption-only', 'selective-mg'].includes(visualSampleScope)) errors.push("subtitles visual sample scope must be caption-only or selective-mg");
-  if (visualSampleScope === "caption-only" && (visualSample.requiredAxes?.length !== 0 || visualSample.purpose !== "verify-caption-layout")) errors.push("caption-only sample must verify caption layout without axis requirements");
-  if (visualSampleScope === "selective-mg" && (visualSample.requiredAxes?.length < 1 || visualSample.purpose !== "verify-selected-mg")) errors.push("selective MG sample must name its used axes and verify selected MG");
-} else if (visualSampleScope !== "axis-behavior"
-  || visualSample.purpose !== "verify-axis-behavior-and-surface"
-  || visualSample.requiredAxes?.length !== usedAxes.size
-  || [...usedAxes].some((axis) => !visualSample.requiredAxes?.includes(axis))) {
-  errors.push("motion-copy visual sample axes must match the approved beat map");
-}
 if (!["ready", "approved"].includes(confirmation.review?.status)) errors.push("creative confirmation must be ready before plan review");
 
 if (!document.includes("# 创意确认包")) errors.push("creative confirmation document is missing its title");

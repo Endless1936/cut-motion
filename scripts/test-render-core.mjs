@@ -4,13 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { deriveMotionIndex } from "./motion-index.mjs";
-import { deriveRenderManifest, unsafeRenderIntervals } from "./render-manifest.mjs";
+import { deriveRenderManifest, resolveRenderMode, unsafeRenderIntervals } from "./render-manifest.mjs";
 import {
   assertPinnedArtifacts,
-  compareFrames,
   pinRenderedArtifacts,
   probeVideoArtifact,
   promoteRenderedCandidate,
+  renderOutput,
   renderChunkedOutput,
   validateCacheReceipt,
   verifyAssemblyReceipt
@@ -255,7 +255,7 @@ try {
     /high render output must be a direct MP4 child of output/
   );
 
-  const outputPath = path.join(jobRoot, "previews/final-preview.mp4");
+  const outputPath = path.join(jobRoot, "previews/standard-output.mp4");
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   const receiptRender = spawnSync("ffmpeg", [
     "-v", "error",
@@ -282,39 +282,74 @@ try {
     totalFrames: receiptProbe.actualFrames,
     streamSignature: receiptProbe.streamSignature
   });
-  assert.equal(verifyAssemblyReceipt(jobRoot, "previews/final-preview.mp4", {
+  assert.equal(verifyAssemblyReceipt(jobRoot, "previews/standard-output.mp4", {
     quality: "standard",
     contentManifestSha256: manifest.contentManifestSha256
   }).mode, "chunked");
   assert.throws(
-    () => verifyAssemblyReceipt(jobRoot, "previews/final-preview.mp4", { quality: "high" }),
+    () => verifyAssemblyReceipt(jobRoot, "previews/standard-output.mp4", { quality: "high" }),
     /Expected high/
   );
   const staleReceipt = readJson(`${outputPath}.render.json`);
   staleReceipt.streamSignature.pixelFormat = "yuv444p";
   writeJsonAtomic(`${outputPath}.render.json`, staleReceipt);
   assert.throws(
-    () => verifyAssemblyReceipt(jobRoot, "previews/final-preview.mp4"),
+    () => verifyAssemblyReceipt(jobRoot, "previews/standard-output.mp4"),
     /stream signature is stale/
   );
 
-  const renderColor = (filename, color) => {
-    const output = path.join(temporaryRoot, filename);
-    const result = spawnSync("ffmpeg", [
-      "-v", "error", "-f", "lavfi", "-i", `color=${color}:s=160x284:r=30:d=1`,
-      "-c:v", "libx264", "-pix_fmt", "yuv420p", output
-    ], { encoding: "utf8" });
-    assert.equal(result.status, 0, result.stderr);
-    return output;
-  };
-  const approvedVideo = renderColor("approved.mp4", "black");
-  const matchingVideo = renderColor("matching.mp4", "black");
-  const changedVideo = renderColor("changed.mp4", "red");
-  compareFrames(matchingVideo, approvedVideo, [0, 14, 29], [0, 14, 29], "matching");
-  assert.throws(
-    () => compareFrames(changedVideo, approvedVideo, [0, 14, 29], [0, 14, 29], "changed"),
-    /differs from the approved standard preview/
-  );
+  assert.equal(resolveRenderMode("auto", 30), "monolithic");
+  assert.equal(resolveRenderMode("chunked", 30), "chunked");
+  writeJson("state/beat-map.json", { fps: 30, duration: 30, beats: [] });
+  writeJson("captions/captions.json", { cues: [] });
+  fs.rmSync(path.join(jobRoot, "hyperframes/mg"), { recursive: true, force: true });
+  write("hyperframes/index.template.html", `${template("")}
+<style>/* CUT_MOTION_MG_STYLES */</style>
+<main><!-- CUT_MOTION_MG_FRAGMENTS --></main>
+<script>/* CUT_MOTION_MG_TIMELINES */
+/* CUT_MOTION_CONTENT_COLLISION */</script>`);
+  writeJson("state/design-system.json", { canvas: { width: 160, height: 284 } });
+  const renderLogPath = path.join(jobRoot, "render-invocations.log");
+  writeJson("state/workflow.json", {
+    authoritativeMediaPath: "hyperframes/assets/a-roll.mp4",
+    authoritativeMediaSha256: sha256File(mediaPath),
+    captionMode: "subtitles",
+    mode: "review",
+    roughCutReviewDecision: "manual-approved"
+  });
+  fs.writeFileSync(cliPath, `#!/usr/bin/env node
+const fs = require("node:fs");
+const { spawnSync } = require("node:child_process");
+const output = process.argv[process.argv.indexOf("--output") + 1];
+fs.appendFileSync(${JSON.stringify(renderLogPath)}, "render\\n");
+const result = spawnSync("ffmpeg", [
+  "-v", "error", "-f", "lavfi", "-i", "color=black:s=160x284:r=30:d=30",
+  "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo:d=30", "-t", "30", "-shortest",
+  "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", output
+], { stdio: "inherit" });
+process.exit(result.status ?? 1);
+`);
+  fs.chmodSync(cliPath, 0o755);
+  const defaultOutput = path.join(jobRoot, "previews", "default.mp4");
+  const defaultRender = renderOutput(jobRoot, "standard", defaultOutput);
+  assert.equal(defaultRender.mode, "monolithic");
+  assert.deepEqual(defaultRender.manifest.chunks.map(({ startFrame, endFrame }) => [startFrame, endFrame]), [[0, 900]]);
+  assert.equal(fs.readFileSync(renderLogPath, "utf8").trim().split("\n").length, 1);
+  assert.equal(defaultRender.receipt, null);
+  assert.equal(fs.existsSync(`${defaultOutput}.render.json`), false);
+
+  const reviewHighOutput = path.join(jobRoot, "output/review-high.mp4");
+  const reviewHighRender = renderOutput(jobRoot, "high", reviewHighOutput);
+  assert.equal(reviewHighRender.receipt, null);
+  assert.equal(fs.existsSync(`${reviewHighOutput}.render.json`), false);
+
+  const auditWorkflow = readJson(path.join(jobRoot, "state/workflow.json"));
+  auditWorkflow.mode = "auto";
+  writeJson("state/workflow.json", auditWorkflow);
+  const auditOutput = path.join(jobRoot, "previews/audit.mp4");
+  const auditRender = renderOutput(jobRoot, "standard", auditOutput);
+  assert.equal(auditRender.receipt.mode, "monolithic");
+  assert.equal(verifyAssemblyReceipt(jobRoot, "previews/audit.mp4", { quality: "standard" }).mode, "monolithic");
 
   console.log("Render core tests passed");
 } finally {

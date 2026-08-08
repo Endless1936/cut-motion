@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   resolveValidationInvocation,
+  resolveCanonicalSubject,
   validateCanonicalReceipt,
   validateReceipt,
   validateSnapshotReviews
@@ -24,7 +25,7 @@ try {
   write("state/workflow.json", JSON.stringify({
     captionMode: "subtitles",
     compositionArtifactPath: "hyperframes/index.html",
-    gates: { "final-preview": { artifact: "previews/final-preview.mp4" } }
+    gates: { "rough-cut-review": { status: "approved", artifact: "state/chatcut-roughcut.json" } }
   }));
   write("state/design-system.json", JSON.stringify({
     typography: {
@@ -96,6 +97,8 @@ srcset="assets/srcset-1.png 1x, assets/srcset-2.png 2x"><p>evidence</p></body></
     "information-value",
     "hyperframes/index.html"
   );
+  assert.equal(resolveCanonicalSubject(jobRoot, "final", { subject: "composition" }), "hyperframes/index.html");
+  assert.equal(resolveCanonicalSubject(jobRoot, "final", { subject: "preview" }), "output/final.mp4");
   assert.equal(validateReceipt(jobRoot, receipt, invocation), true);
   assert.equal(
     validateCanonicalReceipt(jobRoot, "final", "information-value", evidence).validator,

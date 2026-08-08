@@ -1,6 +1,6 @@
 # Talking-Head Precision Trim Standard
 
-This is cut-motion's default first-pass standard for direct-to-camera talking-head videos. It is designed to produce a reviewable cut without waiting for the user to identify long seam pauses.
+This is cut-motion's automatic-fallback standard for direct-to-camera talking-head videos. The default `review` workflow first lets the user inspect the live ChatCut timeline; this standard is not run until the user selects `fallback-auto`.
 
 ## Default profile
 
@@ -24,9 +24,9 @@ Finish every removable seam asymmetrically:
 
 Do not create a separate trim profile for this behavior. It is the default meaning of `tight-talking-head`.
 
-## Three-layer decision
+## Three-layer decision for automatic fallback
 
-1. **Semantic selection:** use the transcript and complete spoken thought to choose the valid take, remove false starts and duplicates, and preserve connective language. ASR timestamps do not set physical cut frames.
+1. **Semantic selection:** use the settled release wording and complete spoken thought to choose the valid take, remove false starts and duplicates, and preserve connective language. A persisted reference script supplies release wording when available; ASR timestamps do not set physical cut frames.
 2. **Acoustic boundary:** run silence or speech-boundary detection at all three default thresholds and use the median result. This avoids late cuts caused by room tone, breath noise, or one permissive threshold.
 3. **Performance classification:** inspect gaze, mouth, head, and torso around the candidate. Preserve continuous delivery; remove reading, searching, restart preparation, and visible reset behavior.
 
@@ -69,9 +69,9 @@ Before finalization, the Agent-authored portion of `state/trim-plan.json` contai
 - an explicit classification, reason, semantic evidence, confidence and actual transition frames;
 - for a retained natural pause flagged above 180ms, the existing filmstrip-waveform diagnostic manifest path and the Agent's concrete finding.
 
-Advancing transcription locks `state/source-transcript.json` before timestamps are shifted. Run `scripts/finalize-trim-plan.mjs` against the promoted rough cut before edit lock; it refuses a changed snapshot and replaces all derived sections deterministically with source and rough-cut hashes, transcript-word and three-threshold acoustic handles, output frames, residual silence and any diagnostic hash. Diagnostic manifests bind their filmstrip and waveform to the exact media hash and audited time window. Job-local scripts must not author or preserve derived seam evidence.
+Advancing transcription locks `state/source-transcript.json` before timestamps are shifted. On the automatic fallback, run `scripts/finalize-trim-plan.mjs` against the promoted rough cut after `fallback-auto`; it refuses a changed snapshot and replaces all derived sections deterministically with source and rough-cut hashes, transcript-word and three-threshold acoustic handles, output frames, residual silence and any diagnostic hash. Diagnostic manifests bind their filmstrip and waveform to the exact media hash and audited time window. In the manual-first path, do not create derived seam evidence before the user reviews ChatCut. Job-local scripts must not author or preserve derived seam evidence.
 
-## Blocking acceptance checks
+## Full-audit acceptance checks
 
 - Every seam has acoustic evidence or an explicit documented exception.
 - No cut is based only on a transcript or ASR word endpoint.
@@ -82,6 +82,6 @@ Advancing transcription locks `state/source-transcript.json` before timestamps a
 - Every seam has been listened to and inspected at the frame before and after the cut.
 - `natural-pause` is an explicit editorial classification, never a generator default. A long natural pause triggers an internal diagnostic, not an automatic rejection or a new user gate.
 
-The rough-cut review artifact must already pass these checks. Review is for editorial judgment, not for discovering routine boundary cleanup.
+In the automatic-fallback or explicit full-audit path, the exported rough-cut artifact must pass these checks. In the manual-first path, the ChatCut timeline is the review artifact, and the user decision precedes export; only the basic media probe is required after approval. The user, not this automated seam audit, decides whether the resulting edit is good.
 
-Before review, `finalize-trim-plan.mjs` measures both source-side cut boundaries and final-export seam silence at `-30`, `-35`, and `-40 dB`, then binds the results to both media hashes. Removed reset, false-start, restart, body-reset, and duplicate-take seams use the 80ms ceiling quantized down to timeline frames; it is not silently widened. Natural or intentional pauses remain exempt from that ceiling, but a measured pause above 180ms requires a hash-bound filmstrip-waveform diagnostic. Automated measurement supplements rather than replaces picture and phoneme review.
+During the automatic fallback or explicit full audit, `finalize-trim-plan.mjs` measures both source-side cut boundaries and final-export seam silence at `-30`, `-35`, and `-40 dB`, then binds the results to both media hashes. Removed reset, false-start, restart, body-reset, and duplicate-take seams use the 80ms ceiling quantized down to timeline frames; it is not silently widened. Natural or intentional pauses remain exempt from that ceiling, but a measured pause above 180ms requires a hash-bound filmstrip-waveform diagnostic. Automated measurement supplements rather than replaces picture and phoneme review.

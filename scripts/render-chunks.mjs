@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { buildComposition } from "./build-composition.mjs";
 import { writeMotionIndex } from "./motion-index.mjs";
-import { deriveRenderManifest, writeRenderManifest } from "./render-manifest.mjs";
+import { deriveRenderManifest, resolveRenderMode, writeRenderManifest } from "./render-manifest.mjs";
 import {
   isPathInside,
   readJson,
@@ -22,24 +22,29 @@ const run = (command, argumentsList, options = {}) => {
   return result;
 };
 
-export const probeVideoArtifact = (filePath) => {
-  const result = run("ffprobe", [
+export const probeVideoArtifact = (filePath, { detailed = true } = {}) => {
+  const probeArguments = [
     "-v", "error",
-    "-count_frames",
-    "-show_data",
+    ...(detailed ? ["-count_frames", "-show_data"] : []),
     "-show_entries",
     "stream=index,codec_type,codec_name,profile,level,codec_tag_string,width,height,pix_fmt,r_frame_rate,avg_frame_rate,time_base,sample_aspect_ratio,field_order,color_range,color_space,color_transfer,color_primaries,nb_read_frames,nb_frames,extradata:stream_tags=encoder",
+    "-show_entries",
+    "format=duration",
     "-of", "json",
     filePath
-  ], { label: "FFprobe" });
+  ];
+  const result = run("ffprobe", probeArguments, { label: "FFprobe" });
   const payload = JSON.parse(result.stdout);
   const video = payload.streams?.find((stream) => stream.codec_type === "video");
   if (!video) throw new Error(`Rendered artifact has no video stream: ${filePath}`);
   const actualFrames = Number(video.nb_read_frames ?? video.nb_frames);
-  if (!Number.isInteger(actualFrames) || actualFrames < 1) throw new Error(`Rendered artifact has no reliable frame count: ${filePath}`);
+  if (detailed && (!Number.isInteger(actualFrames) || actualFrames < 1)) {
+    throw new Error(`Rendered artifact has no reliable frame count: ${filePath}`);
+  }
   return {
-    actualFrames,
-    audioStreamCount: payload.streams.filter((stream) => stream.codec_type === "audio").length,
+    actualFrames: Number.isInteger(actualFrames) && actualFrames > 0 ? actualFrames : null,
+    duration: Number(payload.format?.duration),
+    audioStreamCount: (payload.streams ?? []).filter((stream) => stream.codec_type === "audio").length,
     width: Number(video.width),
     height: Number(video.height),
     streamSignature: {
@@ -141,8 +146,21 @@ const assertFullOutputProbe = (manifest, probe, label) => {
   if (probe.audioStreamCount < 1) throw new Error(`${label} has no audio stream`);
 };
 
-function assertCurrentManifest(jobRoot, manifest) {
-  const current = deriveRenderManifest(jobRoot, { baselineManifest: manifest });
+const assertBasicOutputProbe = (manifest, probe, label) => {
+  const fps = numericRate(probe.streamSignature?.fps);
+  if (probe.width !== manifest.width || probe.height !== manifest.height) throw new Error(`${label} dimensions differ from Render Manifest`);
+  if (!Number.isFinite(fps) || Math.abs(fps - manifest.fps) > 0.001) throw new Error(`${label} FPS differs from Render Manifest`);
+  if (probe.audioStreamCount < 1) throw new Error(`${label} has no audio stream`);
+  if (!Number.isFinite(probe.duration) || Math.abs(probe.duration - manifest.duration) > 1 / manifest.fps) {
+    throw new Error(`${label} duration differs from Render Manifest`);
+  }
+};
+
+function assertCurrentManifest(jobRoot, manifest, mode = manifest.chunks?.length ? "chunked" : "monolithic") {
+  const current = deriveRenderManifest(jobRoot, {
+    mode,
+    baselineManifest: manifest
+  });
   if (current.contentManifestSha256 !== manifest.contentManifestSha256) {
     throw new Error("Render inputs changed while the output was being produced");
   }
@@ -192,72 +210,6 @@ const renderChunk = (jobRoot, manifest, chunk, quality, binary) => {
 };
 
 const compatibleSignature = (left, right) => JSON.stringify(left) === JSON.stringify(right);
-export const compareFrames = (leftPath, rightPath, leftFrames, rightFrames, label) => {
-  const select = (frames) => frames.map((frame) => `eq(n\\,${frame})`).join("+");
-  const comparison = spawnSync("ffmpeg", [
-    "-hide_banner", "-nostats",
-    "-i", leftPath,
-    "-i", rightPath,
-    "-filter_complex",
-    `[0:v]select='${select(leftFrames)}',setpts=N/FRAME_RATE/TB[left];`
-      + `[1:v]select='${select(rightFrames)}',setpts=N/FRAME_RATE/TB[right];`
-      + "[left][right]ssim",
-    "-an", "-f", "null", "-"
-  ], { encoding: "utf8" });
-  const score = Number(/All:([0-9.]+)/.exec(comparison.stderr)?.[1]);
-  if (comparison.status !== 0 || !Number.isFinite(score) || score < 0.9) {
-    throw new Error(`${label} differs from the approved standard preview`);
-  }
-};
-
-const compareHighChunk = (jobRoot, workflow, chunk, item) => {
-  const count = chunk.endFrame - chunk.startFrame;
-  const localFrames = [...new Set([0, Math.floor((count - 1) / 2), count - 1])];
-  const standard = validateCacheReceipt(jobRoot, "standard", chunk);
-  if (standard) {
-    compareFrames(item.artifactPath, standard.artifactPath, localFrames, localFrames, chunk.id);
-    return;
-  }
-  const previewRelativePath = workflow.previewBaseline?.previewPath;
-  const previewPath = previewRelativePath ? path.join(jobRoot, previewRelativePath) : null;
-  if (!previewPath || !isPathInside(jobRoot, previewPath) || !fs.existsSync(previewPath)
-    || sha256File(previewPath) !== workflow.previewBaseline.previewSha256) {
-    throw new Error("Approved standard preview is unavailable for high-Chunk comparison");
-  }
-  compareFrames(
-    item.artifactPath,
-    previewPath,
-    localFrames,
-    localFrames.map((frame) => chunk.startFrame + frame),
-    chunk.id
-  );
-};
-
-const compareMonolithicDelivery = (jobRoot, workflow, candidatePath) => {
-  const previewPath = path.join(jobRoot, workflow.previewBaseline?.previewPath ?? "");
-  if (!isPathInside(jobRoot, previewPath) || !fs.existsSync(previewPath)
-    || sha256File(previewPath) !== workflow.previewBaseline?.previewSha256) {
-    throw new Error("Approved standard preview is unavailable for monolithic comparison");
-  }
-  const video = spawnSync("ffmpeg", [
-    "-hide_banner", "-nostats", "-i", candidatePath, "-i", previewPath,
-    "-filter_complex", "[0:v][1:v]ssim", "-an", "-f", "null", "-"
-  ], { encoding: "utf8" });
-  const videoScore = Number(/All:([0-9.]+)/.exec(video.stderr)?.[1]);
-  if (video.status !== 0 || !Number.isFinite(videoScore) || videoScore < 0.9) {
-    throw new Error("Monolithic high picture differs from the approved standard preview");
-  }
-  const audio = spawnSync("ffmpeg", [
-    "-hide_banner", "-nostats", "-i", candidatePath, "-i", previewPath,
-    "-filter_complex", "[0:a][1:a]apsnr", "-f", "null", "-"
-  ], { encoding: "utf8" });
-  const audioScores = [...audio.stderr.matchAll(/PSNR ch\d+:\s*(inf|[0-9.]+)\s*dB/g)]
-    .map((match) => match[1] === "inf" ? Infinity : Number(match[1]));
-  if (audio.status !== 0 || audioScores.length === 0 || audioScores.some((score) => score < 20)) {
-    throw new Error("Monolithic high audio differs from the approved standard preview");
-  }
-};
-
 const evictCacheEntry = (jobRoot, item) => {
   const cacheRoot = path.join(jobRoot, "hyperframes", "cache");
   for (const candidate of [item.artifactPath, item.receiptPath]) {
@@ -316,8 +268,8 @@ export const singlePassAudioSupported = (jobRoot, manifest) => {
 };
 
 const assemblyReceiptPath = (outputPath) => `${outputPath}.render.json`;
-export const promoteRenderedCandidate = (jobRoot, manifest, candidatePath, outputPath) => {
-  assertCurrentManifest(jobRoot, manifest);
+export const promoteRenderedCandidate = (jobRoot, manifest, candidatePath, outputPath, { mode } = {}) => {
+  assertCurrentManifest(jobRoot, manifest, mode);
   fs.renameSync(candidatePath, outputPath);
 };
 
@@ -405,15 +357,6 @@ export const assembleChunks = (jobRoot, manifest, quality, rendered, outputPath)
   }
 };
 
-const approvedBaselineManifest = (jobRoot, workflow) => {
-  const relativePath = workflow.previewBaseline?.renderManifestPath;
-  if (!relativePath) return null;
-  const manifestPath = path.join(jobRoot, relativePath);
-  if (!isPathInside(jobRoot, manifestPath) || !fs.existsSync(manifestPath)) throw new Error("Approved Render Manifest is missing");
-  if (sha256File(manifestPath) !== workflow.previewBaseline.renderManifestSha256) throw new Error("Approved Render Manifest SHA-256 is stale");
-  return readJson(manifestPath);
-};
-
 export const verifyAssemblyReceipt = (
   jobRootInput,
   outputRelativePath,
@@ -448,7 +391,7 @@ export const verifyAssemblyReceipt = (
   if (receipt.artifactSha256 !== sha256File(outputPath)) throw new Error("Chunk assembly artifact SHA-256 is stale");
   if (quality && receipt.quality !== quality) throw new Error(`Expected ${quality} render receipt`);
   if (receipt.contentManifestSha256 !== expectedContentSha256) {
-    throw new Error("Chunk assembly content differs from the approved standard preview");
+    throw new Error("Chunk assembly content differs from the current Render Manifest");
   }
   if (!["chunked", "monolithic"].includes(receipt.mode)
     || !Number.isInteger(receipt.totalFrames)
@@ -464,8 +407,17 @@ export const verifyAssemblyReceipt = (
   return receipt;
 };
 
-const renderMonolithic = (jobRoot, quality, outputPath, binary, manifest, workflow, reason) => {
-  assertCurrentManifest(jobRoot, manifest);
+const renderMonolithic = (
+  jobRoot,
+  quality,
+  outputPath,
+  binary,
+  manifest,
+  workflow,
+  reason,
+  { mode = "monolithic" } = {}
+) => {
+  assertCurrentManifest(jobRoot, manifest, mode);
   const hyperframesDirectory = path.join(jobRoot, "hyperframes");
   if (!fs.existsSync(path.join(hyperframesDirectory, "index.template.html"))) {
     throw new Error("Monolithic render requires hyperframes/index.template.html");
@@ -481,11 +433,13 @@ const renderMonolithic = (jobRoot, quality, outputPath, binary, manifest, workfl
       "--output", temporaryPath,
       "."
     ], { cwd: path.join(jobRoot, "hyperframes"), stdio: "inherit", label: `HyperFrames ${quality} monolithic render` });
-    assertCurrentManifest(jobRoot, manifest);
-    const probe = probeVideoArtifact(temporaryPath);
-    assertFullOutputProbe(manifest, probe, "Monolithic render");
-    if (quality === "high") compareMonolithicDelivery(jobRoot, workflow, temporaryPath);
-    promoteRenderedCandidate(jobRoot, manifest, temporaryPath, outputPath);
+    assertCurrentManifest(jobRoot, manifest, mode);
+    const fullAudit = workflow.mode === "auto" || workflow.roughCutReviewDecision === "automatic-fallback";
+    const detailedProbe = fullAudit || mode === "chunked";
+    const probe = probeVideoArtifact(temporaryPath, { detailed: detailedProbe });
+    if (detailedProbe) assertFullOutputProbe(manifest, probe, "Monolithic render");
+    else assertBasicOutputProbe(manifest, probe, "Monolithic render");
+    promoteRenderedCandidate(jobRoot, manifest, temporaryPath, outputPath, { mode });
     const receipt = {
       schemaVersion: "2.0.0",
       quality,
@@ -496,17 +450,14 @@ const renderMonolithic = (jobRoot, quality, outputPath, binary, manifest, workfl
       totalFrames: manifest.totalFrames,
       streamSignature: probe.streamSignature
     };
-    writeJsonAtomic(assemblyReceiptPath(outputPath), receipt);
-    return { mode: "monolithic", outputPath, manifest, receipt, reason };
+    if (detailedProbe) writeJsonAtomic(assemblyReceiptPath(outputPath), receipt);
+    return { mode: "monolithic", outputPath, manifest, receipt: detailedProbe ? receipt : null, reason };
   } finally {
     if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
   }
 };
 
-export const renderChunkedOutput = (jobRootInput, quality, outputPathInput) => {
-  if (!["standard", "high"].includes(quality)) throw new Error("Chunk render quality must be standard or high");
-  const jobRoot = path.resolve(jobRootInput);
-  const outputPath = path.resolve(outputPathInput);
+const validateRenderOutputPath = (jobRoot, quality, outputPath) => {
   const outputDirectory = path.join(jobRoot, quality === "standard" ? "previews" : "output");
   if (path.dirname(outputPath) !== outputDirectory || path.extname(outputPath).toLowerCase() !== ".mp4") {
     throw new Error(`${quality} render output must be a direct MP4 child of ${path.relative(jobRoot, outputDirectory)}`);
@@ -516,33 +467,42 @@ export const renderChunkedOutput = (jobRootInput, quality, outputPathInput) => {
     || !isPathInside(fs.realpathSync(jobRoot), fs.realpathSync(outputDirectory))) {
     throw new Error("Render output directory must be a real directory inside the job");
   }
+};
+
+const prepareRender = (jobRootInput, quality, outputPathInput, requestedMode) => {
+  if (!["standard", "high"].includes(quality)) throw new Error("Render quality must be standard or high");
+  const jobRoot = path.resolve(jobRootInput);
+  const outputPath = path.resolve(outputPathInput);
+  validateRenderOutputPath(jobRoot, quality, outputPath);
   const binary = resolveLockedHyperframesCli(jobRoot).binaryPath;
   const workflow = readJson(path.join(jobRoot, "state", "workflow.json"));
-  const baselineManifest = approvedBaselineManifest(jobRoot, workflow);
   const templatePath = path.join(jobRoot, "hyperframes", "index.template.html");
-  if (!fs.existsSync(templatePath)) throw new Error("Chunk render requires hyperframes/index.template.html");
-  const manifest = deriveRenderManifest(jobRoot, { baselineManifest });
-  if (quality === "high") {
-    if (!baselineManifest || !workflow.previewBaseline?.contentManifestSha256) {
-      throw new Error("High render requires an approved standard Render Manifest");
-    }
-    if (manifest.contentManifestSha256 !== workflow.previewBaseline.contentManifestSha256) {
-      throw new Error("Current content differs from the approved standard Render Manifest");
-    }
-  }
+  if (!fs.existsSync(templatePath)) throw new Error("Render requires hyperframes/index.template.html");
+
+  const manifest = deriveRenderManifest(jobRoot, { mode: requestedMode });
+  const renderMode = resolveRenderMode(requestedMode, manifest.duration);
   writeRenderManifest(jobRoot, { manifest });
   writeMotionIndex(jobRoot, manifest);
+  return {
+    jobRoot,
+    outputPath,
+    binary,
+    workflow,
+    manifest,
+    quality,
+    renderMode
+  };
+};
+
+const renderPreparedChunked = ({ jobRoot, outputPath, binary, workflow, manifest, quality }) => {
   if (!singlePassAudioSupported(jobRoot, manifest)) {
-    return renderMonolithic(jobRoot, quality, outputPath, binary, manifest, workflow, "non-pass-through-audio-graph");
+    return renderMonolithic(jobRoot, quality, outputPath, binary, manifest, workflow, "non-pass-through-audio-graph", {
+      mode: "chunked"
+    });
   }
   const rendered = [];
   try {
     for (const chunk of manifest.chunks) rendered.push(renderChunk(jobRoot, manifest, chunk, quality, binary));
-    if (quality === "high") {
-      manifest.chunks.forEach((chunk, index) => {
-        if (!rendered[index].reused) compareHighChunk(jobRoot, workflow, chunk, rendered[index]);
-      });
-    }
     assertCurrentManifest(jobRoot, manifest);
     return {
       mode: "chunked",
@@ -561,34 +521,40 @@ export const renderChunkedOutput = (jobRootInput, quality, outputPathInput) => {
   }
 };
 
-export const pruneChunkCache = (jobRootInput, manifests) => {
-  const jobRoot = path.resolve(jobRootInput);
-  const keep = { standard: new Set(), high: new Set() };
-  for (const manifest of manifests.filter(Boolean)) {
-    for (const chunk of manifest.chunks ?? []) {
-      keep.standard.add(chunk.cacheKey);
-      keep.high.add(chunk.cacheKey);
-    }
+export const renderChunkedOutput = (jobRootInput, quality, outputPathInput) => {
+  const prepared = prepareRender(jobRootInput, quality, outputPathInput, "chunked");
+  return renderPreparedChunked(prepared);
+};
+
+export const renderOutput = (jobRootInput, quality, outputPathInput, { mode = "auto" } = {}) => {
+  const prepared = prepareRender(jobRootInput, quality, outputPathInput, mode);
+  if (prepared.renderMode === "monolithic") {
+    return renderMonolithic(
+      prepared.jobRoot,
+      quality,
+      prepared.outputPath,
+      prepared.binary,
+      prepared.manifest,
+      prepared.workflow,
+      "default-monolithic",
+      { mode: "monolithic" }
+    );
   }
-  for (const quality of ["standard", "high"]) {
-    const directory = path.join(jobRoot, "hyperframes", "cache", quality);
-    if (!fs.existsSync(directory)) continue;
-    for (const filename of fs.readdirSync(directory)) {
-      const match = /^([a-f0-9]{64})\.(?:mp4|receipt\.json)$/.exec(filename);
-      if (match && !keep[quality].has(match[1])) fs.unlinkSync(path.join(directory, filename));
-    }
-  }
+  return renderPreparedChunked(prepared);
 };
 
 const isCli = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isCli) {
-  const [jobRoot, quality, outputPath] = process.argv.slice(2);
-  if (!jobRoot || !quality || !outputPath) {
-    console.error("Usage: node render-chunks.mjs <job-directory> <standard|high> <output-path>");
+  const [jobRoot, quality, outputPath, ...options] = process.argv.slice(2);
+  const modeIndex = options.indexOf("--mode");
+  const mode = modeIndex === -1 ? "auto" : options[modeIndex + 1];
+  if (!jobRoot || !quality || !outputPath
+    || (modeIndex !== -1 && (!mode || options.length !== modeIndex + 2))) {
+    console.error("Usage: node render-chunks.mjs <job-directory> <standard|high> <output-path> [--mode <auto|monolithic|chunked>]");
     process.exit(64);
   }
-  const result = renderChunkedOutput(jobRoot, quality, outputPath);
+  const result = renderOutput(jobRoot, quality, outputPath, { mode });
   console.log(result.mode === "monolithic"
-    ? `Rendered monolithic audio graph: ${result.outputPath}`
+    ? `Rendered monolithic output: ${result.outputPath}`
     : `Chunk render complete: ${result.renderedChunks} rendered, ${result.reusedChunks} reused`);
 }

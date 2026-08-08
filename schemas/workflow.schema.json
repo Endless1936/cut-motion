@@ -2,12 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "cut-motion Workflow State",
   "type": "object",
-  "required": ["schemaVersion", "jobId", "mode", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "reconciliationReturnState", "creativeConfirmationSha256", "pendingCreativePackageSha256", "creativeDocumentFingerprints", "authoritativeMediaPath", "authoritativeMediaSha256", "sourceTranscriptSha256", "trimPlanSha256", "visualPlanSha256", "compositionArtifactPath", "compositionArtifactSha256", "revisionId", "approvedDesignLanguageFingerprint", "previewBaseline", "pendingPreviewBaseline", "currentState", "pendingGate", "completed", "gates", "history"],
+  "required": ["schemaVersion", "jobId", "mode", "roughCutReviewDecision", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "reconciliationReturnState", "creativeConfirmationSha256", "creativeDocumentFingerprints", "authoritativeMediaPath", "authoritativeMediaSha256", "sourceTranscriptSha256", "trimPlanSha256", "visualPlanSha256", "compositionArtifactPath", "compositionArtifactSha256", "revisionId", "currentState", "pendingGate", "completed", "gates", "history"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": "1.0.0" },
     "jobId": { "type": "string" },
     "mode": { "enum": ["review", "auto"] },
+    "roughCutReviewDecision": { "enum": ["pending", "manual-approved", "automatic-fallback"] },
     "captionMode": { "enum": ["motion-copy", "subtitles"] },
     "captionModeSource": { "enum": ["default", "user", "auto"] },
     "captionModeAcknowledged": { "type": "boolean" },
@@ -20,7 +21,6 @@
     "referenceScriptSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
     "reconciliationReturnState": { "enum": [null, "rough-cut", "motion-plan"] },
     "creativeConfirmationSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
-    "pendingCreativePackageSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
     "creativeDocumentFingerprints": { "type": ["object", "null"] },
     "authoritativeMediaPath": { "type": ["string", "null"] },
     "authoritativeMediaSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
@@ -34,25 +34,25 @@
       "properties": {
         "path": { "type": "string", "minLength": 1 },
         "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "validatedAt": { "type": "string", "minLength": 1 },
-        "renderManifestPath": { "type": "string", "minLength": 1 },
-        "renderManifestSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "contentManifestSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        "validatedAt": { "type": "string", "minLength": 1 }
       },
       "required": ["path", "sha256", "validatedAt"]
     },
     "revisionId": { "type": "integer", "minimum": 1 },
-    "approvedDesignLanguageFingerprint": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
-    "previewBaseline": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/previewBaseline" }] },
-    "pendingPreviewBaseline": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/previewBaseline" }] },
     "currentState": {
-      "enum": ["intake", "transcription", "rough-cut", "rough-cut-review", "motion-plan", "motion-plan-review", "visual-sample", "visual-sample-review", "composition", "qa", "final-preview", "render", "complete"]
+      "enum": ["intake", "transcription", "rough-cut", "rough-cut-review", "rough-cut-export", "motion-plan", "composition", "render", "complete"]
     },
     "pendingGate": { "type": ["string", "null"] },
     "completed": { "type": "boolean" },
     "createdAt": { "type": ["string", "null"] },
     "updatedAt": { "type": ["string", "null"] },
-    "gates": { "type": "object" },
+    "gates": {
+      "type": "object",
+      "properties": {
+        "rough-cut-review": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
     "history": {
       "type": "array",
       "items": {
@@ -69,21 +69,6 @@
         },
         "additionalProperties": true
       }
-    }
-  },
-  "$defs": {
-    "previewBaseline": {
-      "type": "object",
-      "properties": {
-        "previewPath": { "type": "string", "minLength": 1 },
-        "previewSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "revisionId": { "type": "integer", "minimum": 1 },
-        "renderManifestPath": { "type": "string", "minLength": 1 },
-        "renderManifestSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-        "contentManifestSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
-      },
-      "required": ["previewPath", "previewSha256", "revisionId", "renderManifestPath", "renderManifestSha256", "contentManifestSha256"],
-      "additionalProperties": false
     }
   },
   "additionalProperties": false

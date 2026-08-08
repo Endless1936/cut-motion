@@ -3,6 +3,7 @@
   "schemaVersion": "1.0.0",
   "jobId": "job",
   "mode": "review",
+  "roughCutReviewDecision": "pending",
   "captionMode": "subtitles",
   "captionModeSource": "default",
   "captionModeAcknowledged": false,
@@ -15,7 +16,6 @@
   "referenceScriptSha256": null,
   "reconciliationReturnState": null,
   "creativeConfirmationSha256": null,
-  "pendingCreativePackageSha256": null,
   "creativeDocumentFingerprints": null,
   "authoritativeMediaPath": null,
   "authoritativeMediaSha256": null,
@@ -26,19 +26,13 @@
   "compositionArtifactSha256": null,
   "lastKnownGoodDelivery": null,
   "revisionId": 1,
-  "approvedDesignLanguageFingerprint": null,
-  "previewBaseline": null,
-  "pendingPreviewBaseline": null,
   "currentState": "intake",
   "pendingGate": null,
   "completed": false,
   "createdAt": null,
   "updatedAt": null,
   "gates": {
-    "rough-cut-review": { "status": "not-reached" },
-    "motion-plan-review": { "status": "not-reached" },
-    "visual-sample-review": { "status": "not-reached" },
-    "final-preview": { "status": "not-reached" }
+    "rough-cut-review": { "status": "not-reached" }
   },
   "history": []
 }

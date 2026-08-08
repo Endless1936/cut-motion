@@ -133,11 +133,10 @@ if (changed && previousState !== "intake") {
   workflow.currentState = "transcription";
   workflow.pendingGate = null;
   invalidated = ["transcript-reconciliation", "creative-fingerprints"];
-  if (!beforeRoughCutApproval) invalidated.push("caption-plan", "beat-map", "visual-sample", "composition", "qa");
+  if (!beforeRoughCutApproval) invalidated.push("caption-plan", "beat-map", "composition");
   beginWorkflowRevision(workflow, now, "Reference script changed");
   invalidateCreativeArtifacts(jobRoot, "Reference script changed");
   workflow.creativeConfirmationSha256 = null;
-  workflow.pendingCreativePackageSha256 = null;
   workflow.creativeDocumentFingerprints = null;
 }
 workflow.history.push({

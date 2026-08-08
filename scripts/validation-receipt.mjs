@@ -232,7 +232,7 @@ export const resolveCanonicalSubject = (jobRootInput, phase, contract) => {
   const workflow = readJson(path.join(path.resolve(jobRootInput), "state", "workflow.json"));
   return contract.subject === "composition"
     ? workflow.compositionArtifactPath || "hyperframes/index.html"
-    : workflow.gates?.["final-preview"]?.artifact || "previews/final-preview.mp4";
+    : "output/final.mp4";
 };
 
 const bindingsEqual = (left, right) => JSON.stringify(left) === JSON.stringify(right);

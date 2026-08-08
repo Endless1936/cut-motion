@@ -1,84 +1,43 @@
 # Workflow State Machine
 
-## States
+`state/workflow.json` is authoritative. The only approval gate is `rough-cut-review`; every other step advances after its artifact or check is complete.
+
+## State route
 
 ```text
-intake
-→ transcription
-→ rough-cut
-→ rough-cut-review
-→ motion-plan
-→ motion-plan-review          # conditional
-→ visual-sample               # conditional
-→ visual-sample-review        # conditional
-→ composition
-→ qa
-→ final-preview
-→ render
-→ complete
+intake → transcription → rough-cut → rough-cut-review → rough-cut-export
+       → motion-plan → composition → render → complete
 ```
 
-`rough-cut` includes ChatCut selection, frame-level precision trim, seam audit, and final A-roll export.
+`rough-cut` records the ChatCut project and timeline only. ChatCut does not author released captions, MG, or B-axis scenes. After the user approves the timeline, export once to `roughcut/a-roll.mp4` and run only the basic media lock.
 
-Review states are gates, not production stages. Locked-edit and final-preview reviews are mandatory. Creative review is required for MG, `motion-copy`, B-axis or hybrid treatment, release-impact ambiguity, or an explicit request. Visual-sample review is required for a first or changed motion-bearing visual fingerprint, or an explicit caption-layout precheck; caption-only subtitle work may skip it.
-
-For `subtitles`, the package contains the exact one-line caption plan, MG-to-cue mappings, exhaustive on-screen copy, information gain, style, and intentional no-MG passages. For `motion-copy`, it contains complete designed-speech coverage in the beat map and motion plan without a caption plan. Approval authorizes only those fields.
-
-For subtitles, the plan gate validates recording-backed reconciled wording and semantic caption grouping before approval. Each cue must preserve complete protected terms, avoid isolated particles or conjunctions, remain on one measured line, last at least 0.5 seconds, and cover the approved transcript exactly.
-
-## Intake control
-
-Resolved local source media is the only `intake → transcription` blocker. The Agent asks once for optional caption, reference-script, and axis preferences; missing choices remain deferred. A provided script still requires a matching SHA-256 in job-local `input/`.
-
-Before rough-cut approval, the Agent records reasoned recommendations for every deferred caption and axis choice. The same approval locks the edit and accepts those recommendations; it is not a new gate. Creative confirmation still requires explicit approval for any later B-axis stage or material reduction in speaker visibility.
-
-Record axis choices through the state machine so history, mirrors, and invalidation stay consistent:
+To abandon the manual review explicitly:
 
 ```bash
-node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-axis-mode a-axis-overlay --actor agent --note "Talking head dominates and no usable B-axis media was supplied"
-node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-axis-mode a-axis-overlay --actor user --note "Keep the speaker full-frame"
-node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-axis-mode b-axis-stage --actor user --note "Approve the full MG stage"
-node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-axis-mode hybrid --actor user --note "Approve the named B-axis passages"
+node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json fallback-auto --actor user --note "Skip manual ChatCut review"
 ```
 
-`b-axis-stage` and `hybrid` are valid only when this command records the user's explicit choice.
+The command warns that export, three-threshold seam checking, and repair may take a long time.
 
-## Caption-mode control
+## Preferences and transcript
 
-Caption mode may be selected at intake. If omitted, the Agent records a recommendation after content analysis:
+Ask once for caption, reference-script, and visual-axis preferences. If omitted, record an Agent recommendation before rough-cut approval. A reference script is immutable wording evidence; reconcile it with the recording. ChatCut/ASR supplies timing, while HyperFrames owns released captions and all motion graphics.
 
-```bash
-node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-caption-mode subtitles --actor agent --note "Readable captions fit this information-dense talking head"
-```
+Use `set-caption-mode` and `set-axis-mode` so changes are recorded. A caption or axis change at or after planning returns to `motion-plan`.
 
-The user may choose directly with:
+## Modes
 
-```bash
-node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-caption-mode subtitles --actor user --note "Use recording-backed semantic captions"
-```
+`review` is the default: wait at `rough-cut-review`, export once after approval, build HyperFrames, render once, and let the user judge the result.
 
-or:
+`auto` uses the same states, automatically selects the rough-cut fallback when the rough-cut reaches review, and runs the explicit structural/technical checks during planning and delivery. It is slower by design; passing checks is not an aesthetic approval.
 
-```bash
-node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json set-caption-mode motion-copy --actor user --note "Use designed motion copy without a subtitle layer"
-```
+## Revisions
 
-A mode change at or after planning invalidates dependent creative artifacts and returns to `motion-plan`. Reference-script changes return through transcription while preserving already approved edit work when safe.
+Use `reopen` for completed jobs:
 
-## Review mode
+- `rough-cut`: editorial cuts and transcript timing;
+- `motion-plan`: caption segmentation, MG structure/copy, style, or axis;
+- `composition`: parameter-only visual changes;
+- `delivery`: encoding-only changes.
 
-The Agent stops at each required gate. Inapplicable conditional gates are recorded as `skipped`. The creative package is always generated and validated internally even when it is not shown.
-
-Request an otherwise optional review by setting `review.required` or `visualSample.required` in the creative package.
-
-## Automatic mode
-
-Required gates are marked `auto-approved`; inapplicable gates remain `skipped`. Automated mode never skips artifact validation or hides a fallback.
-
-## State authority
-
-`state/workflow.json` is authoritative. `currentState` and `pendingGate` identify the active position. Every replan increments `revisionId`; invalidated decisions remain in `history` as `superseded`. Creative approval stores SHA-256 fingerprints; sample, composition and render stop on drift.
-
-## Completed-job revision
-
-`reopen rough-cut|motion-plan|composition|delivery` keeps revision work in the same job. It increments `revisionId` and supersedes only affected gates. Encoding-only revision preserves final-preview approval; every editorial or visual revision returns through final preview.
+Use a short affected-window preview for parameter changes when useful. Preserve the source and use `output/final.candidate.mp4` for a delivery revision so the last delivery remains available until promotion.

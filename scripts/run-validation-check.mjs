@@ -35,7 +35,7 @@ const expectedPaths = phase === "visual"
     }
   : {
       composition: workflow.compositionArtifactPath || "hyperframes/index.html",
-      preview: workflow.gates?.["final-preview"]?.artifact || "previews/final-preview.mp4"
+      preview: "output/final.mp4"
     };
 const assertExpectedPath = (supplied, expected, label) => {
   if (supplied == null) return expected;

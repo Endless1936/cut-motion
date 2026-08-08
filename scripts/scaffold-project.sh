@@ -52,16 +52,14 @@ cp -p "$repository_root/templates/job/caption-lexicon.json" "$job_directory/capt
 cp -p "$repository_root/templates/job/creative-confirmation.json" "$job_directory/state/creative-confirmation.json"
 cp -p "$repository_root/templates/job/transcript-reconciliation.json" "$job_directory/state/transcript-reconciliation.json"
 cp -p "$repository_root/templates/job/reference-script-annotations.json" "$job_directory/state/reference-script-annotations.json"
-cp -p "$repository_root/templates/job/qa-report.json" "$job_directory/state/qa-report.json"
-cp -p "$repository_root/templates/job/visual-sample-report.json" "$job_directory/state/visual-sample-report.json"
 cp -p "$source_video" "$job_directory/$source_relative_path"
 jq --arg job_id "$job_id" --arg source_video "$source_relative_path" '.id = $job_id | .sourceVideo = $source_video' "$repository_root/motion-project.example.json" > "$job_directory/state/project.json"
-jq --arg job_id "$job_id" --arg source_video "$source_relative_path" --arg mode "$workflow_mode" --arg caption_mode "$caption_mode" --arg caption_mode_source "$caption_mode_source" --argjson caption_mode_acknowledged "$caption_mode_acknowledged" --arg created_at "$created_at" '.jobId = $job_id | .authoritativeMediaPath = $source_video | .mode = $mode | .captionMode = $caption_mode | .captionModeSource = $caption_mode_source | .captionModeAcknowledged = $caption_mode_acknowledged | .createdAt = $created_at' "$repository_root/templates/job/workflow.json" > "$job_directory/state/workflow.json"
+jq --arg job_id "$job_id" --arg source_video "$source_relative_path" --arg mode "$workflow_mode" --arg caption_mode "$caption_mode" --arg caption_mode_source "$caption_mode_source" --argjson caption_mode_acknowledged "$caption_mode_acknowledged" --arg created_at "$created_at" '.jobId = $job_id | .authoritativeMediaPath = $source_video | .mode = $mode | .roughCutReviewDecision = "pending" | .captionMode = $caption_mode | .captionModeSource = $caption_mode_source | .captionModeAcknowledged = $caption_mode_acknowledged | .createdAt = $created_at' "$repository_root/templates/job/workflow.json" > "$job_directory/state/workflow.json"
 creative_confirmation_status="default-proposed"
 if [[ "$caption_mode_acknowledged" == "true" ]]; then creative_confirmation_status="acknowledged"; fi
 jq --arg caption_mode "$caption_mode" --arg caption_mode_source "$caption_mode_source" --arg caption_status "$creative_confirmation_status" '.captionMode = $caption_mode | .captionModeDecision.status = $caption_status | .captionModeDecision.source = $caption_mode_source' "$job_directory/state/creative-confirmation.json" > "$job_directory/state/creative-confirmation.json.tmp"
 if [[ "$caption_mode" == "motion-copy" ]]; then
-  jq 'del(.storyboard.captionPlan) | .visualSample = {"required":false,"scope":"axis-behavior","requiredAxes":["A"],"purpose":"verify-axis-behavior-and-surface"}' "$job_directory/state/creative-confirmation.json.tmp" > "$job_directory/state/creative-confirmation.json.motion-copy"
+  jq 'del(.storyboard.captionPlan)' "$job_directory/state/creative-confirmation.json.tmp" > "$job_directory/state/creative-confirmation.json.motion-copy"
   mv "$job_directory/state/creative-confirmation.json.motion-copy" "$job_directory/state/creative-confirmation.json.tmp"
 fi
 mv "$job_directory/state/creative-confirmation.json.tmp" "$job_directory/state/creative-confirmation.json"

@@ -13,7 +13,7 @@ const jobDirectory = path.resolve(jobDirectoryArgument);
 const workflow = ensureWorkflowDefaults(readJson(path.join(jobDirectory, "state", "workflow.json")));
 assertCreativeAuthorities(jobDirectory, workflow);
 const reviewPlan = JSON.parse(fs.readFileSync(path.join(jobDirectory, "captions", "caption-review-plan.json"), "utf8"));
-if (reviewPlan.status !== "approved") throw new Error("Caption review plan must be approved at motion-plan-review before promotion");
+if (reviewPlan.status !== "approved") throw new Error("Caption review plan must be approved before promotion");
 const transcript = JSON.parse(fs.readFileSync(path.join(jobDirectory, "state", "transcript.json"), "utf8"));
 const resolvedCues = resolveCaptionCues(reviewPlan, transcript);
 const pages = JSON.parse(fs.readFileSync(path.join(jobDirectory, "captions", "chatcut-pages.json"), "utf8"));

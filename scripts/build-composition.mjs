@@ -238,6 +238,7 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
     .replace(FRAGMENT_MARKER, `${FRAGMENT_MARKER}\n${fragments.join("\n")}`)
     .replace(COLLISION_MARKER, `const findContentCollision = ${findContentCollision.toString()};`)
     .replace(TIMELINE_MARKER, `${TIMELINE_MARKER}\n${timelines.join("\n\n")}`);
+  source = source.replaceAll("data-template-composition-id", "data-composition-id");
   if (options.videoOnly === true) {
     source = source.replace(/\s*<audio\b[^>]*\bid=["']source-audio["'][^>]*><\/audio>\s*/i, "\n");
   }
