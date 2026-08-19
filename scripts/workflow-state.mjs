@@ -3,6 +3,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { buildComposition } from "./build-composition.mjs";
+import { verifyAssemblyReceipt } from "./render-chunks.mjs";
 import {
   assertCreativeAuthorities,
   assertRegularContainedFile,
@@ -608,8 +609,12 @@ if (command === "advance") {
       const canonicalDeliveryPath = path.join(jobRoot, "output", "final.mp4");
       const delivery = probeReviewVideo(artifactPath, "Final delivery");
       const receiptPath = `${artifactPath}.render.json`;
-      if (fullAuditRequested && !fs.existsSync(receiptPath)) {
-        throw new Error("Automatic delivery requires the render receipt produced by HyperFrames");
+      if (fullAuditRequested) {
+        try {
+          verifyAssemblyReceipt(jobRoot, artifact);
+        } catch (error) {
+          throw new Error(`Automatic delivery requires a current HyperFrames render receipt: ${error.message}`);
+        }
       }
       if (artifactPath === canonicalDeliveryPath) {
         if (workflow.lastKnownGoodDelivery && sha256File(artifactPath) !== workflow.lastKnownGoodDelivery.sha256) {
