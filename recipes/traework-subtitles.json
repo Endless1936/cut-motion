@@ -1,0 +1,67 @@
+{
+  "id": "traework-subtitles-reference",
+  "intent": "Use the TraeWork episode's subtitle-led hybrid motion grammar as the preferred reference for talking-head edits with real evidence assets.",
+  "bestFor": ["subtitles", "talking-head", "product workflow", "screen evidence"],
+  "captionMode": "subtitles",
+  "axis": "hybrid",
+  "defaultAxis": "A",
+  "phases": [
+    "talking head and one-line caption establish the claim",
+    "localized MG adds one concrete relationship or proof",
+    "real evidence enters as a complete aspect-ratio-preserving replacement",
+    "B-axis stage is reserved for a semantically marked showcase or demonstration range",
+    "the information group exits as one unit before the next group"
+  ],
+  "patterns": [
+    {
+      "id": "evidence-swap",
+      "axis": "A",
+      "flow": "horizontal",
+      "bestFor": ["real screenshots", "logos", "product proof"],
+      "treatment": "Show the evidence at its original aspect ratio, then replace it with the next evidence or relationship state.",
+      "timing": { "entranceFrames": [6, 12], "holdMinimumFrames": 18, "exitFrames": [6, 10] },
+      "avoid": ["cropping", "stretching", "white letterbox panels", "stacking unrelated evidence"]
+    },
+    {
+      "id": "masked-focus",
+      "axis": "A",
+      "flow": "vertical",
+      "bestFor": ["search results", "real UI controls", "small regions inside a large screenshot"],
+      "treatment": "Keep the screenshot at one scale and use synchronized top and bottom masks or external shading to narrow the visible attention window.",
+      "timing": { "focusFrames": [10, 18], "holdMinimumFrames": 15, "exitFrames": [8, 12] },
+      "avoid": ["zooming into the evidence", "horizontal crop", "perspective distortion", "focus labels covering the target"]
+    },
+    {
+      "id": "vertical-build",
+      "axis": "A",
+      "flow": "vertical",
+      "bestFor": ["ordered workflows", "input-to-output relationships", "short option lists"],
+      "treatment": "Reveal dependent items from top to bottom and keep the resolved order visible until the semantic unit completes.",
+      "timing": { "entryGapFrames": [8, 20], "holdMinimumFrames": 20, "groupExitFrames": [8, 12] },
+      "avoid": ["long horizontal rows", "shrinking prior items", "revealing all items before the spoken cue"]
+    },
+    {
+      "id": "protected-stage",
+      "axis": "B",
+      "flow": "vertical",
+      "bestFor": ["hands-on demonstrations", "dense screen recordings", "full-frame product showcases"],
+      "treatment": "Let the evidence own the frame while the live speaker remains a visibly moving protected circular window; exit the whole stage at the marked semantic boundary.",
+      "timing": { "minimumSceneFrames": 90, "pipSampleIntervalFrames": 12, "groupExitFrames": [8, 14] },
+      "avoid": ["rapid A/B alternation", "static speaker portrait", "MG covering the PiP exclusion zone", "separate caption removal"]
+    }
+  ],
+  "style": {
+    "typography": "Large 得意黑-style primary MG with normal-weight, single-line white captions kept separate.",
+    "surface": "Clean talking-head footage with bounded translucent panels only where they carry evidence or structure.",
+    "palette": "Inherit assets/design-system.default.json; use warm neutral surfaces with restrained green, violet, coral, yellow, and blue accents.",
+    "shadow": "Broad, low-contrast shadows; no opaque subtitle bar and no global haze."
+  },
+  "globalRules": [
+    "The original evidence aspect ratio is authoritative: contain it, do not crop or stretch it.",
+    "A-axis groups replace one another; the previous group exits before the next unrelated group enters.",
+    "MG is supplemental meaning, never a duplicate of the complete subtitle sentence.",
+    "Every visual entrance is anchored to the spoken phrase that gives it meaning.",
+    "If a complete asset cannot fit clearly, shorten the hold or switch faster instead of shrinking it into illegibility.",
+    "Use the reference grammar, not its project-specific coordinates, copy, assets, or timing."
+  ]
+}

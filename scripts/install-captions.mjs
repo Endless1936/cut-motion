@@ -50,11 +50,14 @@ const customProperties = [
 
 const layers = captions.cues.map((cue, index) => {
   const duration = Number((cue.end - cue.start).toFixed(6));
+  const cueProperties = Number.isFinite(cue.fitFontSizePx)
+    ? `${customProperties};--caption-size:${cue.fitFontSizePx}px`
+    : customProperties;
   const lines = cue.lines
     .map((line) => `          <p class="motion-caption-line" data-layout-guard="canvas">${escapeHtml(line)}</p>`)
     .join("\n");
   return [
-    `      <section id="motion-caption-${String(index + 1).padStart(4, "0")}" class="clip motion-caption-layer" data-motion-protected="caption" data-caption-id="${escapeHtml(cue.id)}" data-caption-page-id="${escapeHtml(cue.sourcePageId)}" data-caption-start-frame="${cue.startFrame}" data-caption-end-frame="${cue.endFrame}" data-start="${cue.start}" data-duration="${duration}" data-track-index="80" style="${customProperties}">`,
+    `      <section id="motion-caption-${String(index + 1).padStart(4, "0")}" class="clip motion-caption-layer" data-motion-protected="caption" data-caption-id="${escapeHtml(cue.id)}" data-caption-page-id="${escapeHtml(cue.sourcePageId)}" data-caption-start-frame="${cue.startFrame}" data-caption-end-frame="${cue.endFrame}" data-start="${cue.start}" data-duration="${duration}" data-track-index="80" style="${cueProperties}">`,
     lines,
     "      </section>"
   ].join("\n");

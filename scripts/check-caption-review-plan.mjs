@@ -85,7 +85,8 @@ for (const [index, cue] of resolvedCues.entries()) {
   const fixedForbidden = ["的", "了", "着", "过", "啊", "吧", "吗", "呢", "与", "和", "但", "所以", "因为", "而"];
   if (fixedForbidden.includes(normalizedText) || plan.rules.forbiddenStandaloneCues.includes(normalizedText)) errors.push(`${cue.id}: function word cannot stand alone`);
   const endsWithQuestion = /[?？]$/u.test(cue.text);
-  const punctuationBody = endsWithQuestion ? cue.text.slice(0, -1) : cue.text;
+  const punctuationBody = (endsWithQuestion ? cue.text.slice(0, -1) : cue.text)
+    .replace(/(?<=[A-Za-z0-9])\.(?=[A-Za-z0-9])/g, "");
   if (/[，。；：！!、,.!?;:'"“”‘’（）()《》〈〉—–\-]/u.test(punctuationBody)) {
     errors.push(`${cue.id}: punctuation is only allowed as a final question mark`);
   }

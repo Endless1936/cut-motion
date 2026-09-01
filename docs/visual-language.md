@@ -1,12 +1,19 @@
 # Gold-Standard Visual Language
 
+The repository uses mode-specific references rather than one fixed template:
+
+- `examples/traework-reference/` is the preferred reference for `captionMode: subtitles`: independent captions, localized supplemental MG, evidence-first composition, and selective B-axis staging.
+- `examples/gold-standard/` is the legacy runnable reference for `captionMode: motion-copy`: spoken wording is designed into the animation without a separate caption layer.
+
+Both references provide motion grammar, not reusable coordinates, copy, assets, or timecodes.
+
 ## What made the final reference work
 
 The successful version did not come from one fixed animation template. It came from a coherent motion grammar applied sentence by sentence:
 
 - the talking-head video remained the primary photographic background;
 - full B-axis scenes were reserved for moments that needed a visual stage;
-- typography became the effect instead of sitting in a subtitle band;
+- in `motion-copy`, typography became the effect instead of sitting in a subtitle band; in `subtitles`, captions stayed separate and MG supplied only missing relationships or proof;
 - components were large enough to command the frame and could cover the face;
 - GSAP provided controlled depth, stagger, elasticity, and accumulation;
 - colors stayed lively but softened by warm neutrals and restrained shadows;

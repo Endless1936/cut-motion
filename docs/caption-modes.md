@@ -2,7 +2,7 @@
 
 ## Motion-copy mode
 
-This is the high-density style used by the gold-standard video. Every spoken phrase appears as motion typography. There is no additional caption layer. The beat map must cover every transcript segment exactly.
+This is the high-density style demonstrated by the legacy `examples/gold-standard` video. Every spoken phrase appears as motion typography. There is no additional caption layer. The beat map must cover every transcript segment exactly.
 
 ## Subtitles mode
 
@@ -38,3 +38,7 @@ Caption-only HyperFrames is the first publishable result. Only add MG when a sel
 Creative confirmation calls these treatments **A-axis overlay mode** and **B-axis stage mode**, defines both for the user, and records any B-axis or hybrid choice before approval.
 
 `docs/subtitle-mg-standard.md` is the binding selection rule. A local MG must close a documented viewer cognition gap; merely adding a new fact, technical term, visual stimulus, or subtitle paraphrase is insufficient.
+
+### Preferred subtitle-led reference
+
+Use `examples/traework-reference/` and `recipes/traework-subtitles.json` as the default visual reference for subtitle-led talking-head work. The talking head remains full-frame on the A-axis, captions carry the complete wording, real evidence is shown at its original aspect ratio, and B-axis staging is reserved for a coherent demonstration range with a protected moving speaker window.

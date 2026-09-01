@@ -30,7 +30,8 @@ const cues = resolvedCues.map((cue) => {
     start: Number((startFrame / fps).toFixed(6)),
     end: Number((endFrame / fps).toFixed(6)),
     viewerText: cue.text,
-    lines: [cue.text]
+    lines: [cue.text],
+    ...(Number.isFinite(cue.fitFontSizePx) ? { fitFontSizePx: cue.fitFontSizePx } : {})
   };
 });
 

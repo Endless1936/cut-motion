@@ -1,0 +1,14 @@
+{
+  "id": "traework-subtitles-reference",
+  "captionMode": "subtitles",
+  "axis": "hybrid",
+  "scenes": [
+    { "id": "opening-proof", "axis": "A", "flow": "horizontal", "pattern": "evidence-swap", "purpose": "real proof before explanation" },
+    { "id": "brand-and-relationship", "axis": "A", "flow": "horizontal", "pattern": "evidence-swap", "purpose": "identify the product and show the tool-to-model relationship" },
+    { "id": "search-choice", "axis": "A", "flow": "vertical", "pattern": "masked-focus", "purpose": "guide the viewer to the correct regional entry without cropping the screenshot" },
+    { "id": "github-controls", "axis": "A", "flow": "horizontal", "pattern": "masked-focus", "purpose": "locate real copy and download controls without covering terminal evidence" },
+    { "id": "workflow-and-process", "axis": "A", "flow": "vertical", "pattern": "vertical-build", "purpose": "turn spoken ordered steps into a persistent sequence" },
+    { "id": "demonstration", "axis": "B", "flow": "vertical", "pattern": "protected-stage", "purpose": "let a dense screen recording own the frame while the speaker remains in protected PiP" },
+    { "id": "capability-result", "axis": "A", "flow": "horizontal", "pattern": "evidence-swap", "purpose": "move from product evidence to the specific AI-video result" }
+  ]
+}

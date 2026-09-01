@@ -319,6 +319,8 @@ Only canonical large media persists: immutable `input/source.*`, `roughcut/a-rol
 
 The finished reference is not a fixed template. It is a reusable motion grammar.
 
+For `captionMode: subtitles`, use `examples/traework-reference/` and `recipes/traework-subtitles.json` as the preferred reference profile. Keep `examples/gold-standard/` as the runnable `motion-copy` reference; do not merge its embedded-speech behavior into subtitle-led jobs.
+
 Use recipes from `recipes/` as semantic building blocks, then redesign their layout and choreography for the current sentence. Never paste the same card, transition, or palette across an entire video.
 
 Required qualities:

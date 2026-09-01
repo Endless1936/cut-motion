@@ -1,6 +1,6 @@
 # Density and Layout Specification
 
-This document converts the gold-standard reference into measurable planning constraints. It does not replace visual judgment.
+This document converts the mode-appropriate reference into measurable planning constraints. Use `examples/traework-reference` for subtitle-led work and `examples/gold-standard` for motion-copy work. It does not replace visual judgment.
 
 ## Three rhythm layers
 
@@ -34,4 +34,4 @@ Runtime layout checks must use the rendered DOM, not only planned dimensions. Th
 
 For every visual scene, inspect the states required by `docs/quality-gates.md`. Do not expand pure-caption beats into per-beat snapshot sets.
 
-Compare the grid with the gold-standard references. Reject scenes that are materially smaller, emptier, dirtier, or more crowded without a semantic reason.
+Compare the grid with the mode-appropriate reference. For subtitle-led work use `examples/traework-reference`; for motion-copy work use `examples/gold-standard`. Reject scenes that are materially smaller, emptier, dirtier, or more crowded without a semantic reason.

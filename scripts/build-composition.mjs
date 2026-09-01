@@ -240,7 +240,7 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
     .replace(TIMELINE_MARKER, `${TIMELINE_MARKER}\n${timelines.join("\n\n")}`);
   source = source.replaceAll("data-template-composition-id", "data-composition-id");
   if (options.videoOnly === true) {
-    source = source.replace(/\s*<audio\b[^>]*\bid=["']source-audio["'][^>]*><\/audio>\s*/i, "\n");
+    source = source.replace(/\s*<audio\b[^>]*><\/audio>\s*/gi, "\n");
   }
 
   const outputDirectory = path.dirname(outputPath);

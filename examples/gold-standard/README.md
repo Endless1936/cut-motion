@@ -1,6 +1,8 @@
 # Gold-standard example
 
-This example preserves the source composition and design logic of the successful 33.9-second reference video.
+This example preserves the source composition and design logic of the successful 33.9-second `motion-copy` reference video.
+
+For `captionMode: subtitles`, use [`examples/traework-reference`](../traework-reference/) and [`recipes/traework-subtitles.json`](../../recipes/traework-subtitles.json) instead. This example intentionally keeps the high-density motion-copy behavior: spoken wording is designed into the animation and there is no separate subtitle layer.
 
 It is included to prevent visual drift, not to become a universal template. New projects should reuse its motion grammar and quality thresholds while redesigning each sentence for the new meaning.
 
