@@ -275,6 +275,37 @@ try {
   assert.equal(defaultRouteState.currentState, "complete");
   assert.equal(defaultRouteState.lastKnownGoodDelivery.path, "output/final.mp4");
 
+  const staleReceiptJob = scaffold("stale-render-receipt", "auto");
+  const staleReceiptWorkflowPath = path.join(staleReceiptJob, "state", "workflow.json");
+  const staleReceiptWorkflow = readJson(staleReceiptWorkflowPath);
+  staleReceiptWorkflow.currentState = "render";
+  writeJsonAtomic(staleReceiptWorkflowPath, staleReceiptWorkflow);
+  const staleReceiptOutput = path.join(staleReceiptJob, "output", "final.mp4");
+  fs.copyFileSync(defaultRenderPath, staleReceiptOutput);
+  writeJsonAtomic(path.join(staleReceiptJob, "state", "render-manifest.json"), {
+    contentManifestSha256: "b".repeat(64),
+    totalFrames: 2,
+    fps: 2,
+    width: 32,
+    height: 32
+  });
+  writeJsonAtomic(`${staleReceiptOutput}.render.json`, {
+    schemaVersion: "2.0.0",
+    quality: "high",
+    mode: "monolithic",
+    reason: "test",
+    artifactSha256: "a".repeat(64),
+    contentManifestSha256: "b".repeat(64),
+    totalFrames: 2,
+    streamSignature: {}
+  });
+  script(
+    "workflow-state.mjs",
+    [staleReceiptWorkflowPath, "advance", "--artifact", "output/final.mp4"],
+    false,
+    /render receipt.*SHA-256 is stale/i
+  );
+
   for (const [scope, expectedState] of [
     ["rough-cut", "rough-cut"],
     ["motion-plan", "motion-plan"],
