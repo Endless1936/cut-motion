@@ -26,6 +26,7 @@ Never cut raw text at a character limit before the language pass.
 ## Blocking rules
 
 - Exactly one rendered line per cue.
+- Cues are mutually exclusive half-open integer frame windows; touching endpoints are valid, crossfades between cues are not. Installation/build must enforce this even when an optional audit is skipped.
 - A protected term, product name, number-plus-unit, or fixed phrase cannot cross cues.
 - A particle, conjunction, or other function word cannot stand alone. One-character cues are forbidden.
 - Do not leave `的`, `了`, `着`, `过`, `啊`, `吧`, `吗`, `呢`, `与`, `和`, `但`, `所以`, `因为`, or `而` as an isolated cue.
@@ -34,6 +35,8 @@ Never cut raw text at a character limit before the language pass.
 - A meaningful short closing phrase may be accepted only with an explicit exception reason.
 - The concatenated cue text must reproduce the approved transcript after punctuation and spacing normalization.
 - Approved cue boundaries cannot change during composition.
+
+For user-edited segmentation, rebind word anchors to the new text before filling blank timestamps; missing/null/blank means align, not zero. Keep counting, punctuation, version notation, and official-name exceptions in the job rather than silently normalizing them away. See [Editorial revisions](revision-standard.md#captions-and-small-text-revisions) for size changes and targeted checks.
 
 ## Review workflow
 

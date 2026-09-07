@@ -98,6 +98,21 @@ try {
   assert.match(fullHtml, /motion_contract_content_collision/);
   assert.match(fullHtml, /\[data-motion-role="indicator"\]/);
   assert.match(fullHtml, /dataset\.overlapPolicy === "intentional"/);
+  const templatePath = path.join(fixture.hyperframes, "index.template.html");
+  const validTemplate = fs.readFileSync(templatePath, "utf8");
+  fs.writeFileSync(templatePath, validTemplate.replace('data-caption-start-frame="15"', 'data-caption-start-frame="14"'));
+  assert.throws(() => buildComposition(fixture.hyperframes), /overlaps/);
+  assert.equal(fs.readFileSync(full.outputPath, "utf8"), fullHtml, "failed caption build must preserve the last built output");
+  fs.writeFileSync(templatePath, validTemplate);
+
+  {
+    const fragmentPath = path.join(fixture.moduleDirectory, "fragment.html");
+    const originalFragment = fs.readFileSync(fragmentPath, "utf8");
+    fs.writeFileSync(fragmentPath, originalFragment.replace('data-beat-id="beat-001"', 'data-beat-id="beat-001" data-motion-group="proof" data-axis="A" data-face-cover-approval="user"'));
+    assert.throws(() => buildComposition(fixture.hyperframes), /recorded user instruction/);
+    assert.equal(fs.readFileSync(full.outputPath, "utf8"), fullHtml);
+    fs.writeFileSync(fragmentPath, originalFragment);
+  }
 
   const chunkPath = path.join(fixture.hyperframes, "chunks", "f000030-f000060", "index.html");
   const chunk = buildComposition(fixture.hyperframes, { startFrame: 30, endFrame: 60, videoOnly: true, outputPath: chunkPath });

@@ -31,11 +31,11 @@ node scripts/check-captions.mjs jobs/<job-id>/captions/captions.json jobs/<job-i
 node scripts/install-captions.mjs jobs/<job-id>/captions/captions.json jobs/<job-id>/hyperframes/index.html jobs/<job-id>/state/design-system.json
 ```
 
-Before promotion, lock the ChatCut rough cut, reconcile wording against the recording, author semantic one-line cues, and approve them in the creative package. Disable ChatCut caption rendering before exporting clean A-roll. The installer uses only the approved promoted cues and replaces prior generated clips idempotently.
+Before promotion, lock the ChatCut rough cut, reconcile wording against the recording, and mark the settled semantic cue plan `status: approved`. This records the Agent's completed preparation, not a new user gate. Promotion validates transcript freshness, complete semantic coverage, timing, and clean-export evidence before replacing captions; `auto` and `fallback-auto` additionally retain the full creative-package authority check. Disable ChatCut caption rendering before exporting clean A-roll. The installer uses only the approved promoted cues and replaces prior generated clips idempotently.
 
-Caption-only HyperFrames is the first publishable result. Only add MG when a selected semantic node has room outside the caption, face, PiP, and evidence regions; it must be local, brief, and supplemental. Keep the talking-head video full-frame beneath MG by default. A full-screen MG stage with speaker PiP requires explicit user approval. Never add a global MG treatment in this mode.
+Caption-only HyperFrames is the composition baseline, not a required separate export or approval. Only add MG when a selected semantic node has room outside the caption, face, PiP, and evidence regions; it must be local, brief, and supplemental. Keep the talking-head video full-frame beneath MG by default. A full-screen MG stage with speaker PiP follows the axis decision accepted at rough-cut review, including a recorded decision on the explicitly authorized automatic path; it adds no approval gate. Never add a global MG treatment in this mode.
 
-Creative confirmation calls these treatments **A-axis overlay mode** and **B-axis stage mode**, defines both for the user, and records any B-axis or hybrid choice before approval.
+Creative confirmation calls these treatments **A-axis overlay mode** and **B-axis stage mode**, defines both for the user, and records any accepted B-axis or hybrid choice before implementation.
 
 `docs/subtitle-mg-standard.md` is the binding selection rule. A local MG must close a documented viewer cognition gap; merely adding a new fact, technical term, visual stimulus, or subtitle paraphrase is insufficient.
 

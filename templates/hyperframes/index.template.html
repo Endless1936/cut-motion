@@ -70,7 +70,7 @@
         const rootRect = root.getBoundingClientRect();
         const visible = (element) => {
           const style = getComputedStyle(element);
-          const rect = element.getBoundingClientRect();
+          const rect = clippedContentRect(element, root);
           return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) > 0.01 && rect.width > 0 && rect.height > 0;
         };
         for (const element of document.querySelectorAll('[data-motion-surface="container"][data-border-policy="none"]')) {
@@ -102,14 +102,14 @@
             if (element.closest('[data-motion-surface="container"]') !== surface || !element.textContent.trim()) continue;
             if (!element.closest('[data-collision-unit], [data-motion-role="indicator"]')) units.push(element);
           }
-          if (findContentCollision([...new Set(units)])) throw new Error("motion_contract_content_collision");
+          if (findContentCollision([...new Set(units)], (element) => clippedContentRect(element, root))) throw new Error("motion_contract_content_collision");
         }
         for (const element of visibleLeaves) {
           if (!element.closest("[data-motion-group]") && !element.closest("[data-motion-protected]")) {
             throw new Error("motion_contract_ungrouped_visual");
           }
           if (!visible(element)) continue;
-          const rect = element.getBoundingClientRect();
+          const rect = clippedContentRect(element, root);
           if (rect.left < rootRect.left - 1 || rect.top < rootRect.top - 1 || rect.right > rootRect.right + 1 || rect.bottom > rootRect.bottom + 1) {
             throw new Error("motion_contract_canvas_overflow");
           }
@@ -128,7 +128,7 @@
         }
         const protectedRects = [...document.querySelectorAll("[data-motion-protected]")].filter(visible).map((element) => element.getBoundingClientRect());
         for (const element of visibleLeaves.filter((candidate) => !candidate.closest("[data-motion-protected]"))) {
-          const rect = element.getBoundingClientRect();
+          const rect = clippedContentRect(element, root);
           if (protectedRects.some((protectedRect) => rect.left < protectedRect.right && rect.right > protectedRect.left
             && rect.top < protectedRect.bottom && rect.bottom > protectedRect.top)) {
             throw new Error("motion_contract_protected_overlap");
@@ -142,7 +142,8 @@
         for (const group of visibleGroups) {
           const start = Number(group.dataset.groupStart);
           const duration = Number(group.dataset.groupDuration);
-          if (group.dataset.axis === "A" && group.dataset.faceCover !== "none" && duration > 3) throw new Error("motion_contract_face_cover_duration");
+          if (group.dataset.axis === "A" && group.dataset.faceCover !== "none" && duration > 3
+            && group.dataset.faceCoverApproval !== "user") throw new Error("motion_contract_face_cover_duration");
           if (currentTime !== null && (currentTime < start - 1 / 30 || currentTime > start + duration + 1 / 30)) {
             throw new Error("motion_contract_group_lifetime");
           }

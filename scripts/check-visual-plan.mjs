@@ -48,7 +48,7 @@ for (let index = 0; index < beats.length; index += 1) {
     if (normalize(sourceText) !== normalize(beat.text)) errors.push(`${beat.id}: displayed copy does not exactly cover its transcript segments`);
   }
 
-  if (captionMode === "subtitles" && sourceSegments.every(Boolean) && !beat.copyException) {
+  if (captionMode === "subtitles" && beat.mgScope === "local" && sourceSegments.every(Boolean) && !beat.copyException) {
     const sourceText = sourceSegments.map((segment) => segment.text).join("");
     if (normalize(sourceText) === normalize(beat.text)) errors.push(`${beat.id}: subtitles mode motion must add information instead of duplicating caption copy`);
   }
@@ -246,7 +246,8 @@ for (let index = 0; index < beats.length; index += 1) {
 const aAxisMotionBeats = beats.filter((beat) => beat.axis === "A" && !(captionMode === "subtitles" && beat.mgScope === "none"));
 for (const [index, beat] of aAxisMotionBeats.entries()) {
   const renderWindow = renderWindows.get(beat.id) ?? { start: beat.start, end: beat.end };
-  if (beat.layout?.faceCover !== "none" && renderWindow.end - renderWindow.start > 3) errors.push(`${beat.id}: A-axis face coverage exceeds three seconds`);
+  const userFaceCoverage = beat.layout?.faceCoverApproval === "user" && typeof beat.layout?.faceSafetyNote === "string" && beat.layout.faceSafetyNote.trim();
+  if (beat.layout?.faceCover !== "none" && renderWindow.end - renderWindow.start > 3 && !userFaceCoverage) errors.push(`${beat.id}: A-axis face coverage exceeds three seconds without recorded user approval`);
   const previousWindow = index > 0
     ? renderWindows.get(aAxisMotionBeats[index - 1].id) ?? {
       start: aAxisMotionBeats[index - 1].start,

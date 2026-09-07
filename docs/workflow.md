@@ -35,3 +35,5 @@ The recording remains authoritative for spoken content. A supplied reference scr
 ## Revisions
 
 Use `reopen rough-cut|motion-plan|composition|delivery` for completed jobs. Parameter-only changes should use an affected-window preview before a full delivery render. Delivery revisions render to `output/final.candidate.mp4` and are promoted by the workflow after media verification.
+
+See [Editorial revisions](revision-standard.md) for preserving user decisions, repairing a whole feedback family, sizing evidence, and applying a shared frame edit after a late cut. A timing candidate or a flattened-master edit is not a rebuilt editable composition; keep the current delivery and its reproducible source explicit.

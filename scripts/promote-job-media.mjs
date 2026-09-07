@@ -65,13 +65,7 @@ const probeMedia = (mediaPath) => {
 const sourceProbe = probeMedia(sourcePath);
 const sourceSha256 = sha256File(sourcePath);
 fs.mkdirSync(path.dirname(targetPath), { recursive: true });
-if (sourcePath === targetPath) {
-  project.mediaArtifacts ??= {};
-  project.mediaArtifacts[kind] = { path: targets[kind], sha256: sourceSha256, ...sourceProbe, updatedAt: new Date().toISOString() };
-  writeJsonAtomic(projectPath, project);
-  console.log(`Media already canonical: ${targets[kind]}`);
-  process.exit(0);
-}
+const sourceIsCanonical = sourcePath === targetPath;
 
 const pendingPath = path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.${process.pid}.pending`);
 const previousPath = path.join(path.dirname(targetPath), `.${path.basename(targetPath)}.${process.pid}.previous`);
@@ -107,17 +101,19 @@ const restore = () => {
 };
 
 try {
-  if (consumeSource && sourceStat.dev === fs.statSync(path.dirname(targetPath)).dev) {
-    fs.renameSync(sourcePath, pendingPath);
-    sourceMoved = true;
-  } else {
-    fs.copyFileSync(sourcePath, pendingPath, fs.constants.COPYFILE_EXCL);
+  if (!sourceIsCanonical) {
+    if (consumeSource && sourceStat.dev === fs.statSync(path.dirname(targetPath)).dev) {
+      fs.renameSync(sourcePath, pendingPath);
+      sourceMoved = true;
+    } else {
+      fs.copyFileSync(sourcePath, pendingPath, fs.constants.COPYFILE_EXCL);
+    }
+    if (sha256File(pendingPath) !== sourceSha256) throw new Error("Temporary media hash differs from source");
+    probeMedia(pendingPath);
+    backupFile(targetPath, previousPath);
+    fs.renameSync(pendingPath, targetPath);
+    targetReplaced = true;
   }
-  if (sha256File(pendingPath) !== sourceSha256) throw new Error("Temporary media hash differs from source");
-  probeMedia(pendingPath);
-  backupFile(targetPath, previousPath);
-  fs.renameSync(pendingPath, targetPath);
-  targetReplaced = true;
 
   if (hyperframesAsset) {
     assertOwnedDirectory(path.join(jobRoot, "hyperframes"));
@@ -141,7 +137,9 @@ try {
   for (const obsoletePath of [
     previousPath,
     previousAsset,
-    consumeSource && !sourceMoved ? sourcePath : null
+    // POSIX rename can be a no-op when the asset already links to the target.
+    pendingAsset,
+    consumeSource && !sourceMoved && !sourceIsCanonical ? sourcePath : null
   ].filter(Boolean)) {
     try {
       if (fs.existsSync(obsoletePath)) fs.rmSync(obsoletePath);
@@ -154,4 +152,4 @@ try {
   throw error;
 }
 
-console.log(`Promoted ${kind}: ${targets[kind]}${consumeSource ? " and consumed source" : ""}`);
+console.log(`${sourceIsCanonical ? "Media already canonical" : `Promoted ${kind}`}: ${targets[kind]}${consumeSource && !sourceIsCanonical ? " and consumed source" : ""}`);

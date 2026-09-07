@@ -36,6 +36,47 @@ const scaffold = (name, ...options) => {
   return job;
 };
 
+const prepareCaptionPlan = (job, axisMode = "a-axis-overlay") => {
+  const transcriptPath = path.join(job, "state", "transcript.json");
+  fs.copyFileSync(path.join(repositoryRoot, "examples", "transcript.example.json"), transcriptPath);
+  const transcript = readJson(transcriptPath);
+  const plan = readJson(path.join(repositoryRoot, "examples", "caption-review-plan.example.json"));
+  plan.status = "approved";
+  plan.transcriptSha256 = sha256File(transcriptPath);
+  writeJsonAtomic(path.join(job, "captions", "caption-review-plan.json"), plan);
+  fs.copyFileSync(path.join(repositoryRoot, "examples", "chatcut-caption-pages.example.json"), path.join(job, "captions", "chatcut-pages.json"));
+  const beats = transcript.segments.map((segment, index) => ({
+    id: `caption-beat-${index + 1}`, start: segment.start, end: segment.end,
+    text: segment.text, audioAnchorTime: segment.start, sourceSegmentIds: [segment.id],
+    axis: axisMode === "b-axis-stage" || (axisMode === "hybrid" && index === 1) ? "B" : "A",
+    axisException: "Short synthetic regression fixture", sceneId: "caption-scene",
+    mgScope: "none", recipe: "caption-only", components: [], microEvents: []
+  }));
+  writeJsonAtomic(path.join(job, "state", "beat-map.json"), { fps: 30, captionMode: "subtitles", beats });
+  fs.writeFileSync(path.join(job, "docs", "motion-plan.md"), "Caption mode: subtitles\n| Time | Text |\n| --- | --- |\n"
+    + beats.map((beat) => `| ${beat.start} | ${beat.text} |`).join("\n"));
+  fs.appendFileSync(path.join(job, "docs", "caption-plan.md"), "\n" + plan.cues.map((cue) => `| ${cue.id} | ${cue.text} |`).join("\n"));
+  const workflow = readJson(path.join(job, "state", "workflow.json"));
+  const confirmationPath = path.join(job, "state", "creative-confirmation.json");
+  const confirmation = readJson(confirmationPath);
+  confirmation.captionModeDecision = { status: "acknowledged", source: workflow.captionModeSource };
+  confirmation.visualAxisMode = axisMode;
+  confirmation.visualAxisModeDecision = { status: "acknowledged", source: workflow.visualAxisModeSource };
+  confirmation.storyboard.beatCount = beats.length;
+  confirmation.review.status = "ready";
+  writeJsonAtomic(confirmationPath, confirmation);
+  const reconciliation = readJson(path.join(job, "state", "transcript-reconciliation.json"));
+  reconciliation.mediaFingerprint = sha256File(path.join(job, "input", "source.mov"));
+  reconciliation.verification = { ...reconciliation.verification, audioChecked: true, mediaFingerprintMatches: true, transcriptRevisionMatches: true };
+  reconciliation.items = transcript.segments.map((segment) => ({
+    id: `reconcile-${segment.id}`, segmentId: segment.id, type: "speech-only", resolution: "accepted-speech",
+    start: segment.start, end: segment.end, heardText: segment.text, confidence: 1, releaseImpact: false,
+    evidence: { audioChecked: true, note: "Synthetic fixture wording" }
+  }));
+  writeJsonAtomic(path.join(job, "state", "transcript-reconciliation.json"), reconciliation);
+  return plan;
+};
+
 try {
   const simple = ensureWorkflowDefaults({
     captionMode: "subtitles",
@@ -247,20 +288,44 @@ try {
   defaultRouteWorkflow.visualAxisModeAcknowledged = true;
   defaultRouteWorkflow.referenceScriptAcknowledged = true;
   writeJsonAtomic(defaultRouteWorkflowPath, defaultRouteWorkflow);
-  fs.writeFileSync(
-    path.join(defaultRouteJob, "docs", "motion-plan.md"),
-    "| Time | Audio phrase | Axis | Main flow | Visual reference | Visual treatment | Transition |\n"
-      + "| --- | --- | --- | --- | --- | --- | --- |\n"
-      + "| 0.0–1.0 | 示例 | A | horizontal | none | caption-only | cut |\n\n"
-      + "Caption mode: subtitles\n"
-  );
-  writeJsonAtomic(path.join(defaultRouteJob, "state", "beat-map.json"), { fps: 30, captionMode: "subtitles", beats: [] });
+  const settledPlan = prepareCaptionPlan(defaultRouteJob);
   script("workflow-state.mjs", [defaultRouteWorkflowPath, "advance", "--artifact", "docs/motion-plan.md"]);
   let defaultRouteState = readJson(defaultRouteWorkflowPath);
   assert.equal(defaultRouteState.currentState, "composition");
   assert.deepEqual(Object.keys(defaultRouteState.gates), ["rough-cut-review"]);
   assert.equal(defaultRouteState.pendingGate, null);
+  assert.equal(defaultRouteState.creativeConfirmationSha256, null);
+  script("promote-caption-review-plan.mjs", [defaultRouteJob]);
+  const promotedPath = path.join(defaultRouteJob, "captions", "captions.json");
+  const promoted = fs.readFileSync(promotedPath, "utf8");
+  const planPath = path.join(defaultRouteJob, "captions", "caption-review-plan.json");
+  for (const [mutate, failure] of [
+    [(plan) => { plan.status = "proposed"; }, /must be approved/],
+    [(plan) => { plan.transcriptSha256 = "0".repeat(64); }, /fingerprint is stale/],
+    [(plan) => { plan.cues.pop(); }, /complete transcript|preserve/],
+    [(plan) => { plan.cues[0].text = "错误字幕内容"; }, /preserve|does not match/],
+    [(plan) => { plan.cues[1].start = 1; }, /overlap/]
+  ]) {
+    const invalid = structuredClone(settledPlan);
+    mutate(invalid);
+    writeJsonAtomic(planPath, invalid);
+    script("promote-caption-review-plan.mjs", [defaultRouteJob], false, failure);
+    assert.equal(fs.readFileSync(promotedPath, "utf8"), promoted, "failed promotion preserves released captions");
+  }
+  writeJsonAtomic(planPath, settledPlan);
+  const pagesPath = path.join(defaultRouteJob, "captions", "chatcut-pages.json");
+  const lockedPages = readJson(pagesPath);
+  writeJsonAtomic(pagesPath, { ...lockedPages, captionRenderDisabled: false });
+  script("promote-caption-review-plan.mjs", [defaultRouteJob], false, /timing evidence is not locked/);
+  assert.equal(fs.readFileSync(promotedPath, "utf8"), promoted);
+  writeJsonAtomic(pagesPath, { ...lockedPages, fps: 0 });
+  script("promote-caption-review-plan.mjs", [defaultRouteJob], false, /fps must be positive/);
+  assert.equal(fs.readFileSync(promotedPath, "utf8"), promoted);
+  assert.equal(fs.readdirSync(path.dirname(promotedPath)).some((name) => name.startsWith(".captions-")), false);
+  writeJsonAtomic(pagesPath, lockedPages);
+  script("install-captions.mjs", [promotedPath, path.join(defaultRouteJob, "hyperframes", "index.html"), path.join(defaultRouteJob, "state", "design-system.json")]);
   script("workflow-state.mjs", [defaultRouteWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
+  script("check-captions.mjs", [promotedPath, pagesPath, path.join(defaultRouteJob, "state", "design-system.json"), path.join(defaultRouteJob, "hyperframes", "index.html")]);
   defaultRouteState = readJson(defaultRouteWorkflowPath);
   assert.equal(defaultRouteState.currentState, "render");
   const defaultRenderPath = path.join(defaultRouteJob, "output", "final.mp4");
@@ -274,6 +339,45 @@ try {
   defaultRouteState = readJson(defaultRouteWorkflowPath);
   assert.equal(defaultRouteState.currentState, "complete");
   assert.equal(defaultRouteState.lastKnownGoodDelivery.path, "output/final.mp4");
+
+  for (const [axisMode, mode] of [["b-axis-stage", "auto"], ["hybrid", "review"]]) {
+    const fixture = prepareChatcutReviewJob(`accepted-${axisMode}`, mode);
+    script("workflow-state.mjs", [fixture.workflowPath, "set-caption-mode", "subtitles", "--actor", "agent", "--note", "Caption fixture"]);
+    script("workflow-state.mjs", [fixture.workflowPath, "set-axis-mode", axisMode, "--actor", "agent", "--note", "Recorded B-axis recommendation"]);
+    script("workflow-state.mjs", [fixture.workflowPath, "advance", "--artifact", "state/chatcut-roughcut.json"]);
+    if (mode === "review") script("workflow-state.mjs", [fixture.workflowPath, "fallback-auto", "--actor", "user", "--note", "Explicit automatic fallback"]);
+    const state = readJson(fixture.workflowPath);
+    assert.equal(state.visualAxisModeSource, "auto");
+    assert.equal(state.visualAxisModeAcknowledged, true);
+    // Supply the locked-edit planning inputs; no real media export is needed for these regressions.
+    state.currentState = "motion-plan";
+    writeJsonAtomic(fixture.workflowPath, state);
+    prepareCaptionPlan(fixture.job, axisMode);
+    const advance = [fixture.workflowPath, "advance", "--artifact", "docs/motion-plan.md"];
+    writeJsonAtomic(fixture.workflowPath, { ...state, visualAxisModeAcknowledged: false });
+    script("workflow-state.mjs", advance, false, /preferences accepted/);
+    writeJsonAtomic(fixture.workflowPath, { ...state, visualAxisModeSource: "default" });
+    script("workflow-state.mjs", advance, false, /accepted user or authorized automatic decision/);
+    writeJsonAtomic(fixture.workflowPath, state);
+    const reconciliationPath = path.join(fixture.job, "state", "transcript-reconciliation.json");
+    const reconciliation = readJson(reconciliationPath);
+    writeJsonAtomic(reconciliationPath, { ...reconciliation, verification: { ...reconciliation.verification, audioChecked: false } });
+    script("workflow-state.mjs", advance, false, /audioChecked must be true/);
+    writeJsonAtomic(reconciliationPath, reconciliation);
+    script("workflow-state.mjs", advance);
+    const approved = readJson(fixture.workflowPath);
+    assert.equal(approved.currentState, "composition");
+    assert.equal(approved.pendingGate, null);
+    const approvedPlanPath = path.join(fixture.job, "captions", "caption-review-plan.json");
+    const planHash = sha256File(approvedPlanPath);
+    script("promote-caption-review-plan.mjs", [fixture.job]);
+    assert.equal(sha256File(approvedPlanPath), planHash, "promotion must not drift the approved plan hash");
+    assert.equal(sha256File(path.join(fixture.job, "state", "creative-confirmation.json")), approved.creativeConfirmationSha256);
+    const driftedPlan = readJson(approvedPlanPath);
+    driftedPlan.approvalNote += " changed";
+    writeJsonAtomic(approvedPlanPath, driftedPlan);
+    script("promote-caption-review-plan.mjs", [fixture.job], false, /Creative authority drift/);
+  }
 
   for (const [scope, expectedState] of [
     ["rough-cut", "rough-cut"],

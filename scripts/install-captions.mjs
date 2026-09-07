@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { buildComposition } from "./build-composition.mjs";
+import { assertCaptionSequence, frameWindowTiming } from "./frame-window-utils.mjs";
 
 const [captionsPath, compositionPath, designSystemPath] = process.argv.slice(2);
 if (!captionsPath || !compositionPath || !designSystemPath) {
@@ -9,6 +10,7 @@ if (!captionsPath || !compositionPath || !designSystemPath) {
 }
 
 const captions = JSON.parse(fs.readFileSync(captionsPath, "utf8"));
+assertCaptionSequence(captions.cues);
 const designSystem = JSON.parse(fs.readFileSync(designSystemPath, "utf8"));
 const templateCandidate = path.join(path.dirname(compositionPath), "index.template.html");
 const authoredCompositionPath = path.basename(compositionPath) === "index.html" && fs.existsSync(templateCandidate)
@@ -49,7 +51,10 @@ const customProperties = [
 ].join(";");
 
 const layers = captions.cues.map((cue, index) => {
-  const duration = Number((cue.end - cue.start).toFixed(6));
+  const { start, duration } = frameWindowTiming(cue, captions.source?.fps);
+  if (!Array.isArray(cue.lines) || cue.lines.length !== 1 || /[\r\n]/.test(cue.lines[0])) {
+    throw new Error(`${cue.id}: must contain exactly one rendered line`);
+  }
   const cueProperties = Number.isFinite(cue.fitFontSizePx)
     ? `${customProperties};--caption-size:${cue.fitFontSizePx}px`
     : customProperties;
@@ -57,7 +62,7 @@ const layers = captions.cues.map((cue, index) => {
     .map((line) => `          <p class="motion-caption-line" data-layout-guard="canvas">${escapeHtml(line)}</p>`)
     .join("\n");
   return [
-    `      <section id="motion-caption-${String(index + 1).padStart(4, "0")}" class="clip motion-caption-layer" data-motion-protected="caption" data-caption-id="${escapeHtml(cue.id)}" data-caption-page-id="${escapeHtml(cue.sourcePageId)}" data-caption-start-frame="${cue.startFrame}" data-caption-end-frame="${cue.endFrame}" data-start="${cue.start}" data-duration="${duration}" data-track-index="80" style="${cueProperties}">`,
+    `      <section id="motion-caption-${String(index + 1).padStart(4, "0")}" class="clip motion-caption-layer" data-motion-protected="caption" data-caption-id="${escapeHtml(cue.id)}" data-caption-page-id="${escapeHtml(cue.sourcePageId)}" data-caption-start-frame="${cue.startFrame}" data-caption-end-frame="${cue.endFrame}" data-start="${start}" data-duration="${duration}" data-track-index="80" style="${cueProperties}">`,
     lines,
     "      </section>"
   ].join("\n");

@@ -118,7 +118,9 @@
               "emptyComponentCount": { "const": 0 },
               "panelPaddingPx": { "type": "number", "minimum": 0 },
               "safeAreaPass": { "const": true },
-              "faceCover": { "enum": ["none", "partial", "intentional"] }
+              "faceCover": { "enum": ["none", "partial", "intentional"] },
+              "faceCoverApproval": { "const": "user" },
+              "faceSafetyNote": { "type": "string", "minLength": 1 }
             }
           },
           "typography": {

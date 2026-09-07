@@ -9,6 +9,9 @@ mode="${1:---static}"
   exit 64
 }
 
+node "$repository_root/scripts/check-repository-privacy.mjs"
+node "$repository_root/scripts/test-repository-privacy.mjs"
+
 while IFS= read -r json_file; do
   jq -e . "$json_file" >/dev/null
 done < <(
@@ -60,6 +63,7 @@ done
 }
 
 node "$repository_root/scripts/test-composition-builder.mjs"
+node "$repository_root/scripts/test-revision-contracts.mjs"
 node "$repository_root/scripts/test-render-core.mjs"
 node "$repository_root/scripts/test-validation-receipts.mjs"
 node "$repository_root/scripts/test-planning-contracts.mjs"
@@ -73,6 +77,7 @@ if [[ "$mode" == "--runtime" ]]; then
     exit 66
   }
   bash "$repository_root/scripts/test-media-pipeline.sh" --runtime
+  node "$repository_root/scripts/test-media-promotion.mjs"
   node "$repository_root/scripts/test-delivery-workflow.mjs" "$runtime_font"
 fi
 

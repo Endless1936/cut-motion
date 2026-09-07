@@ -38,6 +38,19 @@ try {
   script("check-visual-plan.mjs", [validMotion, transcript, design]);
   script("check-visual-plan.mjs", [validSubtitles, transcript, design]);
 
+  const faceCoverage = readJson(validSubtitles);
+  faceCoverage.beats = [faceCoverage.beats[0]];
+  Object.assign(faceCoverage.beats[0], { axis: "A", end: 3.2, sourceSegmentIds: ["seg-001", "seg-002"], exitAnchorWordId: "seg-002:word-003", staticHoldReason: "Read the source evidence" });
+  const facePath = path.join(temporaryRoot, "face-coverage.json");
+  writeJson(facePath, faceCoverage);
+  script("check-visual-plan.mjs", [facePath, transcript, design], false, /without recorded user approval/);
+  faceCoverage.beats[0].layout.faceCoverApproval = "user";
+  writeJson(facePath, faceCoverage);
+  script("check-visual-plan.mjs", [facePath, transcript, design], false, /without recorded user approval/);
+  faceCoverage.beats[0].layout.faceSafetyNote = "User explicitly permits covering eyes and nose to keep evidence legible";
+  writeJson(facePath, faceCoverage);
+  script("check-visual-plan.mjs", [facePath, transcript, design]);
+
   const mutationCases = [
     {
       name: "duplicate-caption-copy",
@@ -87,6 +100,7 @@ try {
   const captionOnly = readJson(validSubtitles);
   for (const beat of captionOnly.beats) {
     Object.assign(beat, { mgScope: "none", recipe: "caption-only", axis: "A", components: [], microEvents: [] });
+    beat.text = beat.sourceSegmentIds.map((id) => readJson(transcript).segments.find((segment) => segment.id === id).text).join("");
   }
   const captionOnlyPath = path.join(temporaryRoot, "caption-only.json");
   writeJson(captionOnlyPath, captionOnly);
@@ -116,6 +130,14 @@ try {
   script("install-captions.mjs", [captions, composition, design]);
   script("install-captions.mjs", [captions, composition, design]);
   script("check-captions.mjs", [captions, pages, design, composition]);
+
+  const installed = fs.readFileSync(composition, "utf8");
+  const overlapCaptions = readJson(captions);
+  overlapCaptions.cues[1].startFrame = overlapCaptions.cues[0].endFrame - 1;
+  const overlapPath = path.join(job, "captions", "overlap.json");
+  writeJson(overlapPath, overlapCaptions);
+  script("install-captions.mjs", [overlapPath, composition, design], false, /overlaps/);
+  assert.equal(fs.readFileSync(composition, "utf8"), installed, "invalid caption installation must not replace the current composition");
 
   const boldCaptions = readJson(captions);
   boldCaptions.style.fontWeight = 700;

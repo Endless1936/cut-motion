@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  assertCaptionSequence,
   captionFrameWindow,
   frameWindowsOverlap,
   quantizeFrameWindow
@@ -48,6 +49,7 @@ const escapeHtml = (value) => String(value)
   .replaceAll("'", "&#39;");
 
 const installedCaptionSections = (source, cues, fps, totalFrames) => {
+  assertCaptionSequence(cues, totalFrames);
   const block = source.match(captionBlockPattern)?.[0];
   if (!block) throw new Error("Composition template requires an installed-caption block");
   const sectionPattern = /<section\b(?=[^>]*\bmotion-caption-layer\b)(?=[^>]*\bdata-caption-id=["']([^"']+)["'])[^>]*>[\s\S]*?<\/section>/gi;

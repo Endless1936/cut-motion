@@ -13,6 +13,13 @@ export const transcriptWords = (transcript) => {
 };
 
 export const resolveCaptionCues = (plan, transcript) => {
+  const authoredTime = (value, fallback) => {
+    if (value === undefined || value === null || (typeof value === "string" && value.trim() === "")) return fallback;
+    if ((typeof value !== "number" && typeof value !== "string") || !Number.isFinite(Number(value))) {
+      throw new Error("Caption timestamp must be numeric or left blank for word alignment");
+    }
+    return Number(value);
+  };
   const words = transcriptWords(transcript);
   const indexById = new Map(words.map((word, index) => [word.id, index]));
   let previousEndIndex = -1;
@@ -29,8 +36,8 @@ export const resolveCaptionCues = (plan, transcript) => {
     previousEndIndex = endIndex;
     return {
       ...cue,
-      start: Number((Number.isFinite(Number(cue.start)) ? Number(cue.start) : cueWords[0].start).toFixed(6)),
-      end: Number((Number.isFinite(Number(cue.end)) ? Number(cue.end) : cueWords.at(-1).end).toFixed(6)),
+      start: Number(authoredTime(cue.start, cueWords[0].start).toFixed(6)),
+      end: Number(authoredTime(cue.end, cueWords.at(-1).end).toFixed(6)),
       resolvedText: cueWords.map((word) => word.text).join(""),
       startWordIndex: startIndex,
       endWordIndex: endIndex

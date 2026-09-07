@@ -97,6 +97,7 @@ Do not introduce a technical term, formula, or benchmark that creates more unans
 - Prefer a face-safe zone. A meaningful group may briefly cover the face for up to about three seconds, but never accumulates with the next group.
 - Declare one horizontal or vertical primary flow. Do not turn the main chain 90 degrees; branch on the secondary axis only at a terminal node.
 - Reuse the approved visual reference for copy, timing, or size-only changes.
+- Bind supporting material to the exact spoken clause, including its exit anchor and exit animation. Size/crop for the current evidence; use [the revision standard](revision-standard.md#evidence-layout-and-timing) for portrait material, prior-video proof, and in-place spotlight zoom.
 - Repeating a complete visual signature requires an explicit reuse group and semantic reason.
 - In B-axis stage mode, dependent elements may accumulate within one coherent page and exit together when that page resolves.
 - Reveal components in causal or reading order, then hold the resolved state long enough to inspect.
@@ -134,5 +135,5 @@ Every proposed MG must pass:
 - a fixed-cadence pattern interrupt with no semantic purpose;
 - A-axis information groups accumulated into a page instead of being replaced;
 - a transient graphic whose resolved meaning never remains visible;
-- any overlap with captions, PiP, evidence, or protected UI, or prolonged/accumulated face coverage;
+- any overlap with captions, PiP, evidence, or protected UI, or prolonged face coverage without a recorded user instruction, or accumulated face coverage;
 - an MG that cannot state a concrete `removalLoss`.

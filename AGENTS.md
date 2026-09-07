@@ -52,6 +52,8 @@ Never overwrite the original source video. Every destructive-looking operation m
 
 Each job directory is an isolated working directory. Do not place job media, generated state, previews, or logs in the cut-motion repository root.
 
+This is a local open-source workflow, not a production service. Keep jobs, private working data, and credentials out of Git; publish only explicitly approved examples. Follow the repository privacy check in `docs/agent-setup.md` before a commit. Do not add network-security infrastructure or video-workflow gates to solve local editing problems.
+
 ## Toolchain
 
 Use the first available tool in each stage:
@@ -94,6 +96,8 @@ Do not interpret silence as approval in `review` mode.
 
 Completed jobs stay in the same job directory when the user requests revision. Use `reopen`: editorial cuts return to `rough-cut`, MG structure or copy returns to `motion-plan`, parameter-only visual changes return to `composition`, and encoding-only changes return to `render`. A parameter-only change should be rebuilt and checked in a local 1–3 second window before any full delivery render. Render a delivery revision to `output/final.candidate.mp4` when preserving the last delivery matters; otherwise the user may inspect the new output directly.
 
+Follow `docs/revision-standard.md` for feedback scope, evidence layout, caption edits, and late cuts. Preserve settled user choices and fix every affected use of a reported pattern. Targeted checks of a reported defect are allowed in `review`; they do not enable the full automatic pipeline or add a gate.
+
 The fast path renders once at the requested delivery quality and lets the user inspect that file. A temporary affected-window preview is allowed for a parameter-only revision, but it is not a workflow state or a required precursor to delivery.
 
 ## Caption modes
@@ -113,6 +117,7 @@ For `subtitles` mode:
 - inherit `captions.fontWeight`, which defaults to `400`; do not use `700` or synthetic bold unless a confirmed brand requirement changes the design system;
 - use a soft downward black shadow, not an opaque subtitle bar;
 - render exactly one line per cue. Segment by complete lexical units, syntax, clauses, breath, and reading rhythm before applying width constraints. Never split a protected word or fixed phrase, isolate a function word or particle, or create a cue merely to satisfy a raw character count;
+- use mutually exclusive half-open frame windows for captions; the outgoing cue is hidden at its end frame before the incoming cue is shown. Derive rendered seconds from those frames, including after revisions;
 - allow `?` or `？` only as the final character of a cue; replace every other punctuation mark, including internal commas and enumeration commas, with a single space;
 - target 4–10.5 measured display units and 0.8–2.5 seconds per cue; allow up to 11.8 measured units with cue-level fitting between 88–96px. A meaningful short closing phrase may be an explicit exception, but a one-character cue is always invalid;
 - keep captions centered in the lower safe zone;
@@ -198,7 +203,7 @@ This procedure is the automatic rough-cut check. In `review`, the user's ChatCut
 4. Preserve a pause when meaning and visible delivery remain continuous. Remove it when the speaker looks at a script, stops articulating, resets posture or gaze, or prepares a restart. A topic boundary alone does not justify keeping extra dead air.
 5. After the physical cut is correct, inspect the first two to three incoming timeline frames and restore one or two frames when the onset sounds shaved; do not restore the whole discarded pause. Then apply zero to two frames of audio transition only when it neither attenuates the incoming onset nor restores discarded tail noise. Two frames is a ceiling, not a requirement.
 6. Run the structural trim-plan check and apply the plan only on the automatic fallback. Advancing `rough-cut-export` after `fallback-auto` runs the canonical trim finalizer against the immutable source-timeline transcript, derives both word and three-threshold acoustic handles, binds source and rough-cut hashes, then validates the result. A cut touching a transcript word—including English, numbers, or proper-name tokens—is invalid. Removable resets and false starts may retain at most 80ms, quantized down to timeline frames. Natural pauses are exempt from that ceiling, but a pause above 180ms requires an internal filmstrip-waveform diagnostic and concrete finding.
-7. Re-align every later transcript word and animation cue by the cumulative removed duration. Use `scripts/shift-timestamps.sh` when a late cut changes existing state files.
+7. Re-align every later transcript word and animation cue by the cumulative removed duration. Follow the late-cut procedure in `docs/revision-standard.md`; `scripts/shift-timestamps.sh` produces frame-aware caption/Beat Map candidates only, not a complete media or transcript revision.
 
 Natural pauses inside continuous delivery remain at their performed length; they are not normalized to an arbitrary 80 ms. A cut is invalid if it clips a phoneme, removes a breath needed for comprehension, retains a visible reading/reset action, or creates a mismatched jump. A low-confidence boundary falls back to 50–120 ms of conservative padding and must be marked for review.
 
@@ -233,7 +238,7 @@ If `state/reference-script-annotations.json` contains visual notes, bind each no
 
 Any later change to caption segmentation, the MG node set or count, on-screen copy, support role, visual style, or axis mode is a plan change. Use `replan` to return to `motion-plan` and regenerate the package. Only parameter-only corrections that preserve the selected nodes, copy, meaning, style family, and axis—such as a small position, size, or easing adjustment—may return directly to implementation.
 
-In `motion-copy` mode, do not add a separate subtitle band; spoken wording appears inside the designed effects. In `subtitles` mode, the ChatCut-derived caption file carries complete transcript coverage and the beat map contains only supplemental visuals. The first subtitle-mode deliverable is caption-only; continue into local MG only where the creative confirmation package identifies a semantic node and a protected-region-safe placement. English may support Chinese copy, but cannot replace essential Chinese meaning.
+In `motion-copy` mode, do not add a separate subtitle band; spoken wording appears inside the designed effects. In `subtitles` mode, the reconciled captions carry complete transcript coverage and the beat map contains only supplemental visuals. Establish a caption-only composition baseline, then add local MG where the creative confirmation package identifies a semantic node and a protected-region-safe placement; this does not require a separate export or user approval. English may support Chinese copy, but cannot replace essential Chinese meaning.
 
 Every subtitle-mode local MG must close one documented viewer cognition gap and follow `docs/subtitle-mg-standard.md`. Record its viewer question, support role, concrete removal loss, visual encoding, still-frame value, attention cost, factual-claim sources, and plain-language term explanations in `state/beat-map.json`. New information without sufficient editorial value is not a reason to add MG.
 
@@ -260,6 +265,7 @@ For `subtitles`, preserve ChatCut timing pages only as evidence, align the settl
 - A-axis effects use replacement, not accumulation: one primary information group and at most one auxiliary group may remain visible. The prior group exits before the next group enters.
 - Inside an approved subtitles-mode A-axis MG passage, prefer 1.8–3.0 second information groups. Caption-only passages have no MG cadence requirement.
 - Prefer one face-safe A-axis zone. Informative MG may briefly cover the face for up to about three seconds, but the previous group must exit first and groups may not accumulate.
+- An explicit user instruction may override the default face-coverage duration; record it as described in `docs/revision-standard.md` and honor it without repeatedly shrinking useful evidence to preserve the face.
 - Anchor portrait A-axis MG in the upper-middle region and let it expand downward when needed; do not place the default focal group directly at frame center. For landscape A-axis MG, prefer the upper-left or upper-right region according to face and evidence placement.
 - A-axis surfaces may use localized semi-transparent glass with a restrained blur and the existing typography, borders, shadows, palette and easing. Full-frame glass, haze, or blur is forbidden.
 - Every MG declares a horizontal or vertical primary flow. The main chain cannot turn 90 degrees; a secondary-axis branch is allowed only from a terminal node.

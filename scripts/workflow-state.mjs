@@ -223,8 +223,9 @@ const validateRoughCutReview = () => {
 const validateCreativePackage = (approvalNote, approvalActor) => {
   if (!workflow.captionModeAcknowledged) throw new Error("Caption mode requires explicit user acknowledgement");
   if (["b-axis-stage", "hybrid"].includes(workflow.visualAxisMode)
-    && (!workflow.visualAxisModeAcknowledged || workflow.visualAxisModeSource !== "user")) {
-    throw new Error("B-axis or hybrid plans require explicit user acknowledgement");
+    && (!workflow.visualAxisModeAcknowledged
+      || !(workflow.visualAxisModeSource === "user" || (fullAuditRequested && workflow.visualAxisModeSource === "auto")))) {
+    throw new Error("B-axis or hybrid plans require an accepted user or authorized automatic decision");
   }
   checkReconciliation(false);
   approveCaptionReviewPlan(approvalNote);
