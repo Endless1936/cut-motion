@@ -44,24 +44,110 @@ for mutation in \
   fi
 done
 
-cache="$temporary_root/npm-cache"
-dependency_job="$temporary_root/dependency-job"
+cache="$temporary_root/npm cache"
+cache_repository="$temporary_root/cache repository"
+dependency_job="$cache_repository/jobs/dependency-job"
 mkdir -p \
+  "$cache/_npx/incomplete/node_modules/hyperframes/dist" \
+  "$cache/_npx/incomplete/node_modules/gsap" \
   "$cache/_npx/test/node_modules/hyperframes/dist" \
   "$cache/_npx/test/node_modules/gsap/dist" \
+  "$cache_repository/scripts" \
   "$dependency_job/hyperframes/assets"
+printf '{"version":"0.7.60","bin":{"hyperframes":"dist/cli.js"}}\n' > "$cache/_npx/incomplete/node_modules/hyperframes/package.json"
+printf '#!/usr/bin/env node\n' > "$cache/_npx/incomplete/node_modules/hyperframes/dist/cli.js"
+printf '{"version":"3.13.0"}\n' > "$cache/_npx/incomplete/node_modules/gsap/package.json"
 printf '{"version":"0.7.60","bin":{"hyperframes":"dist/cli.js"}}\n' > "$cache/_npx/test/node_modules/hyperframes/package.json"
 printf '#!/usr/bin/env node\n' > "$cache/_npx/test/node_modules/hyperframes/dist/cli.js"
+chmod +x "$cache/_npx/test/node_modules/hyperframes/dist/cli.js"
 printf '{"version":"3.13.0"}\n' > "$cache/_npx/test/node_modules/gsap/package.json"
 printf 'gsap cache fixture\n' > "$cache/_npx/test/node_modules/gsap/dist/gsap.min.js"
+cp "$repository_root/scripts/check-environment.sh" "$cache_repository/scripts/check-environment.sh"
+cp "$repository_root/scripts/workflow-utils.mjs" "$cache_repository/scripts/workflow-utils.mjs"
 cp "$repository_root/templates/hyperframes/package.json" "$dependency_job/hyperframes/package.json"
-npm_config_cache="$cache" bash "$repository_root/scripts/check-environment.sh" install-job "$dependency_job" --yes >/dev/null
+npm_config_cache="$cache" bash "$cache_repository/scripts/check-environment.sh" install-job "$dependency_job" --yes >/dev/null
 [[ -L "$dependency_job/hyperframes/node_modules/hyperframes" ]] || {
   echo "Exact cached HyperFrames was not linked" >&2
   exit 1
 }
 [[ -L "$dependency_job/hyperframes/node_modules/gsap" ]] || {
   echo "Exact cached GSAP was not linked" >&2
+  exit 1
+}
+"$dependency_job/hyperframes/node_modules/.bin/hyperframes" >/dev/null
+
+reuse_repository="$temporary_root/reuse-repository"
+reuse_source="$reuse_repository/jobs/old-job"
+reuse_job="$reuse_repository/jobs/new-job"
+mkdir -p \
+  "$reuse_repository/scripts" \
+  "$reuse_source/hyperframes/node_modules/hyperframes/dist" \
+  "$reuse_source/hyperframes/node_modules/gsap/dist" \
+  "$reuse_source/hyperframes/node_modules/.bin" \
+  "$reuse_source/hyperframes/node_modules/transitive" \
+  "$reuse_job/hyperframes/assets"
+cp "$repository_root/scripts/check-environment.sh" "$reuse_repository/scripts/check-environment.sh"
+cp "$repository_root/scripts/workflow-utils.mjs" "$reuse_repository/scripts/workflow-utils.mjs"
+cp "$repository_root/templates/hyperframes/package.json" "$reuse_job/hyperframes/package.json"
+printf '{"version":"0.7.60","bin":{"hyperframes":"dist/cli.js"}}\n' > "$reuse_source/hyperframes/node_modules/hyperframes/package.json"
+printf '#!/usr/bin/env node\nprocess.stdout.write("reused hyperframes\\n")\n' > "$reuse_source/hyperframes/node_modules/hyperframes/dist/cli.js"
+chmod +x "$reuse_source/hyperframes/node_modules/hyperframes/dist/cli.js"
+ln -s ../hyperframes/dist/cli.js "$reuse_source/hyperframes/node_modules/.bin/hyperframes"
+printf '{"version":"3.13.0"}\n' > "$reuse_source/hyperframes/node_modules/gsap/package.json"
+printf 'reused gsap fixture\n' > "$reuse_source/hyperframes/node_modules/gsap/dist/gsap.min.js"
+printf '{"name":"transitive-fixture"}\n' > "$reuse_source/hyperframes/node_modules/transitive/package.json"
+printf 'stale gsap fixture\n' > "$reuse_job/hyperframes/assets/gsap.min.js"
+npm_config_cache="$cache" bash "$reuse_repository/scripts/check-environment.sh" install-job "$reuse_job" --yes >/dev/null
+[[ ! -L "$reuse_job/hyperframes/node_modules/hyperframes" ]] || {
+  echo "Reusable job dependencies still point at the old job" >&2
+  exit 1
+}
+[[ ! -L "$reuse_job/hyperframes/node_modules/gsap" ]] || {
+  echo "Reusable GSAP still points at the old job" >&2
+  exit 1
+}
+[[ -f "$reuse_job/hyperframes/node_modules/transitive/package.json" ]] || {
+  echo "Reusable HyperFrames dependency tree was incomplete" >&2
+  exit 1
+}
+[[ -L "$reuse_job/hyperframes/node_modules/.bin/hyperframes" ]] || {
+  echo "Reusable HyperFrames CLI link was not rebuilt" >&2
+  exit 1
+}
+grep -Fq 'reused gsap fixture' "$reuse_job/hyperframes/assets/gsap.min.js" || {
+  echo "GSAP browser runtime was not refreshed from the exact reusable package" >&2
+  exit 1
+}
+rm -rf "$reuse_source"
+"$reuse_job/hyperframes/node_modules/.bin/hyperframes" >/dev/null
+rm -rf "$reuse_job"
+
+mismatch_source="$reuse_repository/jobs/mismatched-job"
+mismatch_job="$reuse_repository/jobs/mismatch-target"
+mkdir -p \
+  "$mismatch_source/hyperframes/node_modules/hyperframes/dist" \
+  "$mismatch_source/hyperframes/node_modules/.bin" \
+  "$mismatch_job/hyperframes/assets"
+cp "$repository_root/templates/hyperframes/package.json" "$mismatch_job/hyperframes/package.json"
+printf '{"version":"0.7.59","bin":{"hyperframes":"dist/cli.js"}}\n' > "$mismatch_source/hyperframes/node_modules/hyperframes/package.json"
+printf '#!/usr/bin/env node\n' > "$mismatch_source/hyperframes/node_modules/hyperframes/dist/cli.js"
+chmod +x "$mismatch_source/hyperframes/node_modules/hyperframes/dist/cli.js"
+ln -s ../hyperframes/dist/cli.js "$mismatch_source/hyperframes/node_modules/.bin/hyperframes"
+npm_config_cache="$cache" bash "$reuse_repository/scripts/check-environment.sh" install-job "$mismatch_job" --yes >/dev/null
+[[ -L "$mismatch_job/hyperframes/node_modules/hyperframes" ]] || {
+  echo "Mismatched reusable HyperFrames was not skipped in favor of exact cache" >&2
+  exit 1
+}
+rm -rf "$mismatch_job"
+
+broken_source="$reuse_repository/jobs/broken-job"
+broken_job="$reuse_repository/jobs/broken-target"
+mkdir -p "$broken_source/hyperframes/node_modules" "$broken_job/hyperframes/assets"
+cp "$repository_root/templates/hyperframes/package.json" "$broken_job/hyperframes/package.json"
+ln -s "$broken_source/missing-hyperframes" "$broken_source/hyperframes/node_modules/hyperframes"
+npm_config_cache="$cache" bash "$reuse_repository/scripts/check-environment.sh" install-job "$broken_job" --yes >/dev/null
+[[ -L "$broken_job/hyperframes/node_modules/hyperframes" ]] || {
+  echo "Broken reusable HyperFrames link did not fall back to exact cache" >&2
   exit 1
 }
 

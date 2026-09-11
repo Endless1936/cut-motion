@@ -41,7 +41,7 @@ mkdir -p jobs/<job-id>/hyperframes/assets/fonts
 cp /path/to/smiley-sans-oblique.woff2 jobs/<job-id>/hyperframes/assets/fonts/smiley-sans-oblique.woff2
 ```
 
-`install-job` reuses the exact HyperFrames version from npm's `_npx` cache when available. Otherwise it installs the pinned dependency inside the job. It resolves GSAP independently and never requires a global HyperFrames installation.
+`install-job` first reuses exact-version dependencies already in the current job, then checks valid dependency trees in other jobs under the same repository, then npm's `_npx` cache. A dependency tree copied from another job includes its hoisted dependencies, so the new job does not depend on the old job remaining in place. Invalid links and version mismatches are skipped. GSAP is resolved independently and its browser runtime is regenerated from the verified package. Only when no exact local source exists does it install the pinned dependencies; it never requires a global HyperFrames installation or a user-configured cache path.
 
 ## Render commands
 
