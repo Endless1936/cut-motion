@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 
 export const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -20,6 +21,56 @@ export const sha256File = (filePath) => {
 };
 
 export const sha256Text = (value) => crypto.createHash("sha256").update(value).digest("hex");
+
+const defaultBrowserCachePath = () => {
+  const version = process.env.HYPERFRAMES_BROWSER_VERSION ?? "152.0.7928.2";
+  const platform = process.platform === "darwin"
+    ? (process.arch === "arm64" ? "mac_arm" : "mac")
+    : process.platform === "linux"
+      ? (process.arch === "arm64" ? "linux_arm" : "linux")
+      : process.platform === "win32"
+        ? (process.arch === "arm64" || process.arch === "x64" ? "win64" : "win32")
+        : null;
+  if (!platform) return null;
+  const executableDirectory = platform === "mac_arm"
+    ? "chrome-headless-shell-mac-arm64"
+    : platform === "mac"
+      ? "chrome-headless-shell-mac-x64"
+      : platform === "linux_arm"
+        ? (version.localeCompare("153.0.8001.0", undefined, { numeric: true }) < 0
+          ? "chrome-headless-shell-linux64" : "chrome-headless-shell-linux-arm64")
+        : platform === "linux"
+          ? "chrome-headless-shell-linux64"
+          : platform === "win64"
+            ? "chrome-headless-shell-win64"
+            : "chrome-headless-shell-win32";
+  const executableName = platform.startsWith("win") ? "chrome-headless-shell.exe" : "chrome-headless-shell";
+  const exactPath = path.join(
+    os.homedir(),
+    ".cache",
+    "hyperframes",
+    "chrome",
+    "chrome-headless-shell",
+    `${platform}-${version}`,
+    executableDirectory,
+    executableName
+  );
+  try {
+    if (fs.statSync(exactPath).isFile()) return exactPath;
+    const puppeteerRoot = path.join(os.homedir(), ".cache", "puppeteer", "chrome-headless-shell");
+    const versions = fs.readdirSync(puppeteerRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort((left, right) => right.localeCompare(left, undefined, { numeric: true }));
+    for (const installedVersion of versions) {
+      const candidate = path.join(puppeteerRoot, installedVersion, executableDirectory, executableName);
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) return candidate;
+    }
+  } catch {
+    // Keep the exact HyperFrames cache path in the fingerprint when no browser is installed yet.
+  }
+  return exactPath;
+};
 
 export const resolveLockedHyperframesCli = (jobRootInput) => {
   const jobRoot = path.resolve(jobRootInput);
@@ -53,7 +104,9 @@ export const resolveLockedHyperframesCli = (jobRootInput) => {
     throw new Error("Installed HyperFrames CLI declaration escapes its package");
   }
   const localBinaryPath = path.join(hyperframesRoot, "node_modules", ".bin", "hyperframes");
-  if (!fs.existsSync(expectedBinaryPath) || !fs.statSync(expectedBinaryPath).isFile()) {
+  const expectedBinaryStat = fs.existsSync(expectedBinaryPath) ? fs.statSync(expectedBinaryPath) : null;
+  if (!expectedBinaryStat?.isFile()
+    || (process.platform !== "win32" && (expectedBinaryStat.mode & 0o111) === 0)) {
     throw new Error("Installed HyperFrames CLI binary is missing");
   }
   if (!fs.existsSync(localBinaryPath)) throw new Error("Job-local HyperFrames CLI link is missing");
@@ -63,6 +116,35 @@ export const resolveLockedHyperframesCli = (jobRootInput) => {
     throw new Error("Job-local HyperFrames CLI does not resolve to the declared package binary");
   }
 
+  const rendererEnvironmentKeys = [
+    "HYPERFRAMES_BROWSER_PATH",
+    "HYPERFRAMES_BROWSER_VERSION",
+    "PRODUCER_HEADLESS_SHELL_PATH",
+    "PRODUCER_BROWSER_GPU_MODE",
+    "PRODUCER_EXPERIMENTAL_FAST_CAPTURE",
+    "PRODUCER_MAX_WORKERS",
+    "PRODUCER_ENABLE_BROWSER_POOL"
+  ];
+  const rendererEnvironment = Object.fromEntries(
+    rendererEnvironmentKeys.map((key) => [key, process.env[key] ?? null])
+  );
+  const browserPath = process.env.HYPERFRAMES_BROWSER_PATH
+    ?? process.env.PRODUCER_HEADLESS_SHELL_PATH
+    ?? defaultBrowserCachePath();
+  let browserSha256 = null;
+  let browserMode = null;
+  if (browserPath) {
+    try {
+      const browserStat = fs.statSync(browserPath);
+      if (browserStat.isFile()) {
+        browserSha256 = sha256File(browserPath);
+        browserMode = browserStat.mode & 0o7777;
+      }
+    } catch {
+      // The renderer will report an invalid browser path; keep it in the fingerprint.
+    }
+  }
+
   return {
     binaryPath: localBinaryPath,
     version: installedPackage.version,
@@ -70,7 +152,15 @@ export const resolveLockedHyperframesCli = (jobRootInput) => {
       expectedVersion,
       installedPackage.version,
       sha256File(installedPackagePath),
-      sha256File(expectedBinaryRealPath)
+      sha256File(expectedBinaryRealPath),
+      JSON.stringify({
+        platform: process.platform,
+        architecture: process.arch,
+        browserPath,
+        browserSha256,
+        browserMode,
+        rendererEnvironment
+      })
     ].join(":"))
   };
 };

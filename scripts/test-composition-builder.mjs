@@ -114,6 +114,27 @@ try {
     fs.writeFileSync(fragmentPath, originalFragment);
   }
 
+  {
+    const fragmentPath = path.join(fixture.moduleDirectory, "fragment.html");
+    const originalFragment = fs.readFileSync(fragmentPath, "utf8");
+    fs.writeFileSync(fragmentPath, [
+      '<div data-beat-id="beat-001">',
+      '<div data-motion-group="primary" data-group-start="1" data-group-duration="0.2"></div>',
+      '<div data-motion-group="auxiliary" data-group-start="1.3" data-group-duration="0.1"></div>',
+      '</div>'
+    ].join("\n"));
+    const groupedFull = buildComposition(fixture.hyperframes);
+    const groupedHtml = fs.readFileSync(groupedFull.outputPath, "utf8");
+    assert.match(groupedHtml, /data-motion-group="primary"[^>]*data-group-start="1"[^>]*data-group-duration="0.2"/);
+    assert.match(groupedHtml, /data-motion-group="auxiliary"[^>]*data-group-start="1.3"[^>]*data-group-duration="0.1"/);
+    const groupedChunkPath = path.join(fixture.hyperframes, "chunks", "f000030-f000060-grouped", "index.html");
+    buildComposition(fixture.hyperframes, { startFrame: 30, endFrame: 60, videoOnly: true, outputPath: groupedChunkPath });
+    const groupedChunkHtml = fs.readFileSync(groupedChunkPath, "utf8");
+    assert.match(groupedChunkHtml, /data-motion-group="primary"[^>]*data-group-start="0"[^>]*data-group-duration="0.2"/);
+    assert.match(groupedChunkHtml, /data-motion-group="auxiliary"[^>]*data-group-start="0.3"[^>]*data-group-duration="0.1"/);
+    fs.writeFileSync(fragmentPath, originalFragment);
+  }
+
   const chunkPath = path.join(fixture.hyperframes, "chunks", "f000030-f000060", "index.html");
   const chunk = buildComposition(fixture.hyperframes, { startFrame: 30, endFrame: 60, videoOnly: true, outputPath: chunkPath });
   assert.equal(chunk.duration, 1);

@@ -64,6 +64,8 @@ Use the first available tool in each stage:
 4. **Motion design:** HyperFrames HTML/CSS with a single seek-safe GSAP timeline.
 5. **Validation and render:** HyperFrames build/render and FFprobe. Additional automatic validation is enabled only by the explicit `auto` mode.
 
+For ordinary jobs, use the job package's `npm run render` or `npm run render:revision` entrypoint, which selects the existing automatic render mode. For macOS Apple Silicon jobs with several long media nodes, use the explicit `npm run render:chunked` entrypoint; it resolves the pinned local HyperFrames CLI, binds the exact cached arm64 HeadlessChrome, uses Metal, and renders through `scripts/render-chunks.mjs` in chunked mode. On Linux, Windows/WSL2, and other supported hosts, the normal entrypoint keeps HyperFrames' platform-default browser resolution. Do not fall back to a bare `hyperframes render`: HyperFrames 0.7.60 can block during pre-frame media initialization even when the browser itself launches successfully.
+
 Remotion and Vibe Motion are not part of the default stack. Use them only when the user explicitly requests them and record the deviation in `state/project.json`.
 
 ## Operating modes
@@ -98,7 +100,7 @@ Completed jobs stay in the same job directory when the user requests revision. U
 
 Follow `docs/revision-standard.md` for feedback scope, evidence layout, caption edits, and late cuts. Preserve settled user choices and fix every affected use of a reported pattern. Targeted checks of a reported defect are allowed in `review`; they do not enable the full automatic pipeline or add a gate.
 
-The fast path renders once at the requested delivery quality and lets the user inspect that file. A temporary affected-window preview is allowed for a parameter-only revision, but it is not a workflow state or a required precursor to delivery.
+The fast path renders once at the requested delivery quality and lets the user inspect that file. Before the first delivery-quality render in a delivery round, make one combined confirmation that the reference wording, subtitle text and segmentation, MG/material inventory and deferred items, axis, and output settings are the delivery version. If any of those are still unsettled, continue with planning, building, or targeted checks as needed instead of starting the delivery render. A later change to one of them follows the existing revision path and needs a new combined confirmation before the next delivery render. This is an interaction rule, not an additional workflow state or approval gate. A temporary affected-window preview is allowed for a parameter-only revision, but it is not a workflow state or a required precursor to delivery.
 
 ## Caption modes
 
@@ -124,7 +126,7 @@ For `subtitles` mode:
 - do not repeat the same sentence as a large motion headline;
 - when a reference script is supplied, persist its immutable job-local copy and use its recording-confirmed wording for release; use ChatCut/ASR output for timing and alignment, not released wording. Without a reference script, use the reconciled recording-backed transcript as wording authority;
 - retain `captions/chatcut-pages.json` as raw timing evidence, but do not preserve its `/` pagination blindly. Build `captions/caption-review-plan.json` by aligning the approved wording to word timestamps and authoring semantic one-line groups;
-- run `scripts/check-caption-review-plan.mjs` when preparing or explicitly auditing the plan. Promote the settled wording/timing plan to `captions/captions.json`, then run `scripts/check-captions.mjs` and `scripts/install-captions.mjs <captions> <composition> <design-system>` when captions are installed;
+- run `scripts/check-caption-review-plan.mjs` when preparing or explicitly auditing the plan. `captions/caption-review-plan.json` is the semantic draft and approval authority, not an installable caption file: promote the settled wording/timing plan to `captions/captions.json`, then run `scripts/check-captions.mjs` and `scripts/install-captions.mjs <captions> <composition> <design-system>` when captions are installed;
 - build released captions in HyperFrames. Add MG only at selected semantic nodes after the caption baseline is viable. Never cover captions, PiP, product evidence, or protected UI; face coverage follows the brief-semantic-only A-axis rule below. Global MG is forbidden in `subtitles` mode.
 - default to A-axis overlays in `subtitles` mode: keep the talking-head video full-frame beneath localized MG. A B-axis stage is a recorded motion-plan preference, not a new workflow gate.
 
@@ -242,7 +244,7 @@ In `motion-copy` mode, do not add a separate subtitle band; spoken wording appea
 
 Every subtitle-mode local MG must close one documented viewer cognition gap and follow `docs/subtitle-mg-standard.md`. Record its viewer question, support role, concrete removal loss, visual encoding, still-frame value, attention cost, factual-claim sources, and plain-language term explanations in `state/beat-map.json`. New information without sufficient editorial value is not a reason to add MG.
 
-For `subtitles`, preserve ChatCut timing pages only as evidence, align the settled release wording to word timestamps, and write the proposed semantic segmentation to `captions/caption-review-plan.json`. Validate it for transcript completeness, protected terms, function-word isolation, duration, overlap, and measured single-line width when preparing or when `auto` validation is enabled. Promote that exact plan to `captions/captions.json` and install it as timed `.clip` layers in HyperFrames after wording and timing are settled.
+For `subtitles`, preserve ChatCut timing pages only as evidence, align the settled release wording to word timestamps, and write the proposed semantic segmentation to `captions/caption-review-plan.json`. Validate it for transcript completeness, protected terms, function-word isolation, duration, overlap, and measured single-line width when preparing or when `auto` validation is enabled. The review plan is not directly installable; promote that exact plan to `captions/captions.json` and install the promoted file as timed `.clip` layers in HyperFrames after wording and timing are settled.
 
 ### 6. HyperFrames composition
 
@@ -308,7 +310,7 @@ For `subtitles`, preserve ChatCut timing pages only as evidence, align the settl
 `review` mode:
 
 1. Build the HyperFrames composition and fix failures that prevent it from rendering.
-2. Render once at the requested delivery quality. Use a monolithic render by default; use chunked rendering only for a long video or when the user explicitly asks for it.
+2. Render once at the requested delivery quality through the job's stable render entrypoint; use `npm run render:chunked` for the known macOS multi-media route.
 3. Verify output existence, duration, frame rate, dimensions, and audio stream with FFprobe.
 4. Present the file for direct user inspection. These basic checks mean only that the file is structurally usable; they do not judge the edit, animation, or aesthetics.
 5. Do not run full automatic validation, a standard preview, or a short sample unless the user explicitly requests one.

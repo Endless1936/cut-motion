@@ -169,21 +169,43 @@
         }
       };
       window.__motionContract();
+      const timelineWindowStart = Number("__CUT_MOTION_MEDIA_START__");
+      const timelineWindowDuration = Number("__CUT_MOTION_DURATION__");
       const timeline = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
       /* CUT_MOTION_MG_TIMELINES */
       let motionContractUpdateSerial = 0;
       timeline.eventCallback("onUpdate", () => {
         motionContractUpdateSerial += 1;
-        window.__motionContract(timeline.time());
+        window.__motionContract(toLocalTimelineTime(rawTimelineTime()));
       });
-      const seekTimeline = timeline.totalTime.bind(timeline);
+      const rawTimelineTotalTime = timeline.totalTime.bind(timeline);
+      const rawTimelineTime = timeline.time.bind(timeline);
+      const rawTimelineTotalDuration = timeline.totalDuration.bind(timeline);
+      const toGlobalTimelineTime = (value) => Math.min(
+        rawTimelineTotalDuration(),
+        Math.max(timelineWindowStart, Math.min(timelineWindowStart + timelineWindowDuration, Number(value) + timelineWindowStart))
+      );
+      const toLocalTimelineTime = (value) => Math.min(
+        timelineWindowDuration,
+        Math.max(0, Number(value) - timelineWindowStart)
+      );
+      timeline.seek = function checkedSeek(value, suppressEvents) {
+        if (arguments.length === 0) return toLocalTimelineTime(rawTimelineTime());
+        return rawTimelineTotalTime(toGlobalTimelineTime(value), suppressEvents);
+      };
+      timeline.time = function checkedTime(value, suppressEvents) {
+        if (arguments.length === 0) return toLocalTimelineTime(rawTimelineTime());
+        return rawTimelineTotalTime(toGlobalTimelineTime(value), suppressEvents);
+      };
       timeline.totalTime = function checkedTotalTime(value, suppressEvents) {
-        if (arguments.length === 0) return seekTimeline();
+        if (arguments.length === 0) return toLocalTimelineTime(rawTimelineTotalTime());
         const serialBeforeSeek = motionContractUpdateSerial;
-        const result = seekTimeline(value, suppressEvents);
-        if (motionContractUpdateSerial === serialBeforeSeek) window.__motionContract(Number(value));
+        const result = rawTimelineTotalTime(toGlobalTimelineTime(value), suppressEvents);
+        if (motionContractUpdateSerial === serialBeforeSeek) window.__motionContract(toLocalTimelineTime(value));
         return result;
       };
+      timeline.duration = function chunkDuration() { return timelineWindowDuration; };
+      timeline.totalDuration = function chunkTotalDuration() { return timelineWindowDuration; };
       window.__timelines = window.__timelines || {};
       window.__timelines.main = timeline;
     </script>

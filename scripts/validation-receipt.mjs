@@ -126,7 +126,9 @@ const jobDependencies = (jobRoot, phase, validator, subjectRelativePath) => {
     add("captions/captions.json");
     add("captions/chatcut-pages.json");
     const captions = readJson(path.join(jobRoot, "captions", "captions.json"));
+    const pages = readJson(path.join(jobRoot, "captions", "chatcut-pages.json"));
     add(captions.source?.reviewPlan ?? "captions/caption-review-plan.json");
+    if (pages.source === "ChatCut inspect_asset original source word rows") add(pages.timelineMapping);
     add("state/transcript.json");
   }
   if (validator === "capture-review-snapshots" && phase === "final") add("state/beat-map.json");

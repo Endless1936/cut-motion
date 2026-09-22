@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseReferenceScript } from "./reference-script-annotations.mjs";
+import { sha256File } from "./workflow-utils.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-planning-"));
@@ -121,6 +122,81 @@ try {
   approvedPlan.status = "approved";
   writeJson(reviewPlan, approvedPlan);
   script("check-captions.mjs", [captions, pages, design]);
+
+  const legacyPages = readJson(pages);
+  legacyPages.cleanExport = true;
+  legacyPages.pages = legacyPages.pages.map((page) => ({
+    id: page.id,
+    start: page.startFrame / legacyPages.fps,
+    end: page.endFrame / legacyPages.fps,
+    text: page.viewerText
+  }));
+  const currentCaptions = readJson(captions);
+  writeJson(pages, legacyPages);
+  writeJson(captions, { ...currentCaptions, source: { ...currentCaptions.source, cleanExport: true } });
+  script("check-captions.mjs", [captions, pages, design]);
+  fs.copyFileSync(path.join(repositoryRoot, "examples", "captions.approved-semantic.example.json"), captions);
+  fs.copyFileSync(path.join(repositoryRoot, "examples", "chatcut-caption-pages.example.json"), pages);
+  const cardPages = readJson(pages);
+  cardPages.cleanExport = true;
+  cardPages.cards = cardPages.pages.map((page) => ({
+    id: page.id,
+    startFrame: page.startFrame,
+    endFrame: page.endFrame,
+    text: page.viewerText,
+    wordCount: page.viewerText.length
+  }));
+  delete cardPages.pages;
+  writeJson(pages, cardPages);
+  writeJson(captions, { ...currentCaptions, source: { ...currentCaptions.source, cleanExport: true } });
+  script("check-captions.mjs", [captions, pages, design]);
+  fs.copyFileSync(path.join(repositoryRoot, "examples", "captions.approved-semantic.example.json"), captions);
+  fs.copyFileSync(path.join(repositoryRoot, "examples", "chatcut-caption-pages.example.json"), pages);
+
+  const sourcePages = readJson(pages);
+  sourcePages.source = "ChatCut inspect_asset original source word rows";
+  delete sourcePages.pages;
+  sourcePages.rows = [
+    { startMs: 0, endMs: 1000 },
+    { startMs: 1000, endMs: 4000 }
+  ];
+  sourcePages.timelineMapping = "state/source-timeline-mapping.json";
+  const mappingPath = path.join(job, "state", "source-timeline-mapping.json");
+  writeJson(mappingPath, {
+    schemaVersion: "1.0.0",
+    fps: sourcePages.fps,
+    entries: [
+      { sourceStartMs: 0, sourceEndMs: 1000, timelineStartFrame: 0, timelineEndFrame: 30 },
+      { sourceStartMs: 1000, sourceEndMs: 4000, timelineStartFrame: 30, timelineEndFrame: 120 }
+    ]
+  });
+  sourcePages.timelineMappingSha256 = sha256File(mappingPath);
+  const sourcePagesPath = path.join(job, "captions", "source-word-pages.json");
+  writeJson(sourcePagesPath, sourcePages);
+  script("check-captions.mjs", [captions, sourcePagesPath, design]);
+  const validMapping = readJson(mappingPath);
+  writeJson(mappingPath, { ...validMapping, entries: validMapping.entries.slice(0, 1) });
+  sourcePages.timelineMappingSha256 = sha256File(mappingPath);
+  writeJson(sourcePagesPath, sourcePages);
+  script("check-captions.mjs", [captions, sourcePagesPath, design], false, /one entry per source word row/);
+  writeJson(mappingPath, validMapping);
+  sourcePages.timelineMappingSha256 = sha256File(mappingPath).toUpperCase();
+  writeJson(sourcePagesPath, sourcePages);
+  script("check-captions.mjs", [captions, sourcePagesPath, design]);
+  fs.writeFileSync(mappingPath, "null\n");
+  sourcePages.timelineMappingSha256 = sha256File(mappingPath);
+  writeJson(sourcePagesPath, sourcePages);
+  script("check-captions.mjs", [captions, sourcePagesPath, design], false, /must be a JSON object/);
+  writeJson(mappingPath, validMapping);
+  sourcePages.timelineMappingSha256 = sha256File(mappingPath);
+  writeJson(sourcePagesPath, sourcePages);
+  const escapedMappingPages = { ...sourcePages, timelineMapping: "../outside.json" };
+  writeJson(sourcePagesPath, escapedMappingPages);
+  script("check-captions.mjs", [captions, sourcePagesPath, design], false, /inside the job/);
+  const approvedCaptions = readJson(captions);
+  writeJson(captions, { ...approvedCaptions, source: { ...approvedCaptions.source, reviewPlan: "../outside.json" } });
+  script("check-captions.mjs", [captions, pages, design], false, /review plan inside the job/);
+  writeJson(captions, approvedCaptions);
 
   const composition = path.join(job, "caption-fixture.html");
   fs.writeFileSync(

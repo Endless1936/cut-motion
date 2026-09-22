@@ -16,7 +16,7 @@ while IFS= read -r json_file; do
   jq -e . "$json_file" >/dev/null
 done < <(
   find "$repository_root" \
-    -type d \( -name .git -o -name node_modules -o -name jobs -o -name .hyperframes \) -prune \
+    -type d \( -name .git -o -name node_modules -o -iname jobs -o -name .hyperframes \) -prune \
     -o -name '*.json' -type f -print
 )
 
@@ -40,8 +40,10 @@ required_files=(
   schemas/chatcut-roughcut.schema.json
   schemas/workflow.schema.json
   schemas/render-manifest.schema.json
+  schemas/chatcut-source-word-mapping.schema.json
   schemas/validation-receipt.schema.json
   scripts/build-composition.mjs
+  scripts/render-delivery.mjs
   scripts/render-manifest.mjs
   scripts/render-chunks.mjs
   scripts/run-validation-check.mjs

@@ -177,6 +177,92 @@ const transformCaptionLayers = (source, startFrame, endFrame, fps) => {
   );
 };
 
+const mediaAttribute = (tag, name) => new RegExp(`\\b${name}=["']([^"']*)["']`, "i").exec(tag)?.[1] ?? "";
+const replaceMediaAttribute = (tag, name, value) => {
+  const pattern = new RegExp(`\\b${name}\\s*=\\s*(["'])[^"']*\\1`, "i");
+  if (pattern.test(tag)) return tag.replace(pattern, `${name}="${value}"`);
+  return tag.replace(/\/?\s*>$/, ` ${name}="${value}"$&`);
+};
+
+// Direct media keeps its authored global window, while a chunk receives a
+// local media window and the corresponding source offset. The main GSAP
+// timeline is global; only media attributes need this physical clipping.
+const transformTimedRootMedia = (source, startFrame, endFrame, fps, fullDuration) => {
+  const windowStart = seconds(startFrame, fps);
+  const windowEnd = seconds(endFrame, fps);
+  const windowDuration = windowEnd - windowStart;
+  return source.replace(/<(video|audio)\b[^>]*>/gi, (tag) => {
+    const startValue = mediaAttribute(tag, "data-start");
+    const durationValue = mediaAttribute(tag, "data-duration");
+    const clipStart = Number(startValue);
+    const clipDuration = durationValue === "__CUT_MOTION_DURATION__"
+      ? fullDuration
+      : Number(durationValue);
+    if (!Number.isFinite(clipStart) || !Number.isFinite(clipDuration) || clipDuration <= 0) return tag;
+    const clipEnd = clipStart + clipDuration;
+    const overlapStart = Math.max(clipStart, windowStart);
+    const overlapEnd = Math.min(clipEnd, windowEnd);
+    const sourceStart = Number(mediaAttribute(tag, "data-media-start"));
+    const mediaStart = Number.isFinite(sourceStart) ? sourceStart : 0;
+    if (overlapEnd <= overlapStart) {
+      return replaceMediaAttribute(
+        replaceMediaAttribute(
+          replaceMediaAttribute(tag, "data-start", decimal(windowDuration + 1 / fps)),
+          "data-duration",
+          decimal(1 / fps)
+        ),
+        "data-media-start",
+        decimal(mediaStart)
+      );
+    }
+    return replaceMediaAttribute(
+      replaceMediaAttribute(
+        replaceMediaAttribute(tag, "data-start", decimal(overlapStart - windowStart)),
+        "data-duration",
+        decimal(overlapEnd - overlapStart)
+      ),
+      "data-media-start",
+      decimal(mediaStart + overlapStart - clipStart)
+    );
+  });
+};
+
+// Root media groups use the authored global timeline in the full composition.
+// A localized chunk needs the same group lifetime expressed in local seconds,
+// otherwise the runtime contract compares local playhead time with global
+// group bounds and rejects an otherwise valid preview/render.
+const transformTimedRootMotionGroups = (source, startFrame, endFrame, fps, fullDuration) => {
+  const totalFrames = Math.ceil(fullDuration * fps);
+  if (startFrame === 0 && endFrame === totalFrames) return source;
+  const windowStart = seconds(startFrame, fps);
+  const windowEnd = seconds(endFrame, fps);
+  const windowDuration = windowEnd - windowStart;
+  return source.replace(/<[^>]*\bdata-motion-group(?:\s|=|>)[^>]*>/gi, (tag) => {
+    const groupStartValue = mediaAttribute(tag, "data-group-start");
+    const groupDurationValue = mediaAttribute(tag, "data-group-duration");
+    const groupStart = Number(groupStartValue);
+    const groupDuration = groupDurationValue === "__CUT_MOTION_DURATION__"
+      ? fullDuration
+      : Number(groupDurationValue);
+    if (!Number.isFinite(groupStart) || !Number.isFinite(groupDuration) || groupDuration <= 0) return tag;
+    const groupEnd = groupStart + groupDuration;
+    const overlapStart = Math.max(groupStart, windowStart);
+    const overlapEnd = Math.min(groupEnd, windowEnd);
+    if (overlapEnd <= overlapStart) {
+      return replaceMediaAttribute(
+        replaceMediaAttribute(tag, "data-group-start", decimal(windowDuration + 1 / fps)),
+        "data-group-duration",
+        decimal(1 / fps)
+      );
+    }
+    return replaceMediaAttribute(
+      replaceMediaAttribute(tag, "data-group-start", decimal(overlapStart - windowStart)),
+      "data-group-duration",
+      decimal(overlapEnd - overlapStart)
+    );
+  });
+};
+
 const ensureLocalResourceLinks = (compositionDirectory, sourceDirectory) => {
   fs.mkdirSync(compositionDirectory, { recursive: true });
   for (const name of ["assets", "caption.css"]) {
@@ -221,6 +307,7 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
   }
 
   const totalFrames = Math.ceil(fullDuration * fps);
+  const frameGridDuration = totalFrames / fps;
   const startFrame = options.startFrame == null ? 0 : Number(options.startFrame);
   const endFrame = options.endFrame == null ? totalFrames : Number(options.endFrame);
   if (!Number.isInteger(startFrame) || !Number.isInteger(endFrame)
@@ -277,11 +364,30 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
     const clipEndFrame = Math.min(renderEndFrame, endFrame);
     if (clipEndFrame <= clipStartFrame) continue;
 
-    const fragment = sources["fragment.html"].replace(/data-group-start=["']([0-9.]+)["']/g, (_, value) => (
-      `data-group-start="${decimal(Number(value) - windowStart)}"`
-    ));
+    // Keep independent group lifetimes when a fragment has more than one
+    // group. Only replace missing or stale metadata with the current Beat Map
+    // window; transformTimedRootMotionGroups localizes each group later.
+    const fragment = sources["fragment.html"].replace(
+      /<[^>]*\bdata-motion-group(?:\s|=|>)[^>]*>/gi,
+      (tag) => {
+        const groupStart = Number(mediaAttribute(tag, "data-group-start"));
+        const groupDuration = Number(mediaAttribute(tag, "data-group-duration"));
+        const groupEnd = groupStart + groupDuration;
+        const tolerance = 1 / fps;
+        const isCurrent = Number.isFinite(groupStart)
+          && Number.isFinite(groupDuration)
+          && groupDuration > 0
+          && groupStart >= renderWindow.start - tolerance
+          && groupEnd <= renderWindow.end + tolerance;
+        if (isCurrent) return tag;
+        return replaceMediaAttribute(
+          replaceMediaAttribute(tag, "data-group-start", decimal(renderWindow.start)),
+          "data-group-duration",
+          decimal(renderWindow.end - renderWindow.start)
+        );
+      }
+    );
     const rootSelector = beatRootSelector(beatId);
-    const relative = (value) => decimal(Number(value) - windowStart);
     includedBeatIds.push(beatId);
     styles.push(`/* ${beatId} */\n@scope (#mg-${beatId}) {\n${sources["style.css"]}\n}`);
     fragments.push([
@@ -292,7 +398,7 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
     timelines.push([
       `// ${beatId}`,
       "{",
-      `  const beat = Object.freeze({ id: ${JSON.stringify(beatId)}, start: ${relative(beat.start)}, duration: ${decimal(beat.end - beat.start)}, entryAnchorTime: ${relative(renderWindow.entryAnchorTime)}, exitAnchorTime: ${relative(renderWindow.exitAnchorTime)}, exitStartTime: ${relative(renderWindow.exitStartTime)}, exitDuration: ${renderWindow.exitDuration} });`,
+      `  const beat = Object.freeze({ id: ${JSON.stringify(beatId)}, start: ${decimal(beat.start)}, duration: ${decimal(beat.end - beat.start)}, entryAnchorTime: ${decimal(renderWindow.entryAnchorTime)}, exitAnchorTime: ${decimal(renderWindow.exitAnchorTime)}, exitStartTime: ${decimal(renderWindow.exitStartTime)}, exitDuration: ${renderWindow.exitDuration} });`,
       `  const root = document.querySelector(${JSON.stringify(rootSelector)});`,
       `  if (!root) throw new Error(${JSON.stringify(`${beatId}: Beat root is missing`)});`,
       "  const select = (selector) => [...root.querySelectorAll(selector)].filter((node) => root.contains(node));",
@@ -305,12 +411,17 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
 
   const duration = seconds(endFrame - startFrame, fps);
   source = transformCaptionLayers(source, startFrame, endFrame, fps)
-    .replaceAll("__CUT_MOTION_DURATION__", String(duration))
-    .replaceAll("__CUT_MOTION_MEDIA_START__", String(windowStart))
     .replace(STYLE_MARKER, `${STYLE_MARKER}\n${styles.join("\n\n")}`)
     .replace(FRAGMENT_MARKER, `${FRAGMENT_MARKER}\n${fragments.join("\n")}`)
     .replace(COLLISION_MARKER, `const findContentCollision = ${findContentCollision.toString()};\nconst clippedContentRect = ${clippedContentRect.toString()};`)
     .replace(TIMELINE_MARKER, `${TIMELINE_MARKER}\n${timelines.join("\n\n")}`);
+  // Apply chunk-local transforms after MG fragments have been inserted so
+  // their motion-group bounds use the same local clock as root media groups.
+  source = transformTimedRootMedia(source, startFrame, endFrame, fps, frameGridDuration);
+  source = transformTimedRootMotionGroups(source, startFrame, endFrame, fps, frameGridDuration);
+  source = source
+    .replaceAll("__CUT_MOTION_DURATION__", String(duration))
+    .replaceAll("__CUT_MOTION_MEDIA_START__", String(windowStart));
   source = source.replaceAll("data-template-composition-id", "data-composition-id");
   if (options.videoOnly === true) {
     source = source.replace(/\s*<audio\b[^>]*><\/audio>\s*/gi, "\n");

@@ -8,6 +8,7 @@ import { deriveRenderManifest, resolveRenderMode, unsafeRenderIntervals } from "
 import {
   assertPinnedArtifacts,
   pinRenderedArtifacts,
+  prepareRender,
   probeVideoArtifact,
   promoteRenderedCandidate,
   renderOutput,
@@ -83,6 +84,23 @@ try {
   assert.ok(manifest.captions.every((cue) => cue.window && cue.fingerprint));
   assert.ok(manifest.chunks.every((chunk) => /^[a-f0-9]{64}$/.test(chunk.cacheKey)));
   assert.ok(manifest.chunks.every((chunk) => !("standardKey" in chunk) && !("highKey" in chunk)));
+  writeJson("state/render-manifest.json", {
+    ...manifest,
+    chunks: [
+      { startFrame: 0, endFrame: 450 },
+      { startFrame: 450, endFrame: manifest.totalFrames }
+    ]
+  });
+  const preparedWithBaseline = prepareRender(
+    jobRoot,
+    "standard",
+    path.join(jobRoot, "previews", "baseline.mp4"),
+    "chunked"
+  );
+  assert.ok(
+    preparedWithBaseline.manifest.chunks.some(({ endFrame }) => endFrame === 450),
+    "the render entrypoint should preserve compatible prior chunk boundaries"
+  );
   writeJson("captions/captions.json", {
     cues: [{ id: "cue-1", start: 2, end: 3, text: "测试", lines: ["测试"] }]
   });
@@ -225,7 +243,8 @@ try {
   const cacheDirectory = path.join(jobRoot, "hyperframes/cache/standard");
   fs.mkdirSync(cacheDirectory, { recursive: true });
   const cacheArtifact = write(`hyperframes/cache/standard/${chunk.cacheKey}.mp4`, "cache-artifact");
-  writeJson(`hyperframes/cache/standard/${chunk.cacheKey}.receipt.json`, {
+  const cacheReceiptPath = `hyperframes/cache/standard/${chunk.cacheKey}.receipt.json`;
+  writeJson(cacheReceiptPath, {
     schemaVersion: "2.0.0",
     cacheKey: chunk.cacheKey,
     quality: "standard",
@@ -237,6 +256,12 @@ try {
   const cachedChunk = validateCacheReceipt(jobRoot, "standard", chunk);
   assert.ok(cachedChunk);
   assert.equal(validateCacheReceipt(jobRoot, "high", chunk), null);
+  const invalidReceipt = readJson(path.join(jobRoot, cacheReceiptPath));
+  invalidReceipt.schemaVersion = "1.0.0";
+  writeJson(cacheReceiptPath, invalidReceipt);
+  assert.equal(validateCacheReceipt(jobRoot, "standard", chunk), null);
+  invalidReceipt.schemaVersion = "2.0.0";
+  writeJson(cacheReceiptPath, invalidReceipt);
   const pinnedDirectory = path.join(jobRoot, "hyperframes", "chunks", "pin-test");
   fs.mkdirSync(pinnedDirectory, { recursive: true });
   const pinned = pinRenderedArtifacts(pinnedDirectory, [cachedChunk]);

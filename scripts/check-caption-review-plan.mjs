@@ -53,8 +53,14 @@ try {
   errors.push(error.message);
 }
 const totalWordCount = (transcript.segments ?? []).reduce((sum, segment) => sum + (segment.words?.length ?? 0), 0);
-if (resolvedCues.length > 0 && resolvedCues.at(-1).endWordIndex !== totalWordCount - 1) {
-  errors.push("caption word ranges do not cover the complete transcript");
+if (resolvedCues.length > 0) {
+  const startsAtFirstWord = resolvedCues[0].startWordIndex === 0;
+  const endsAtLastWord = resolvedCues.at(-1).endWordIndex === totalWordCount - 1;
+  const contiguous = resolvedCues.every((cue, index) => index === 0
+    || cue.startWordIndex === resolvedCues[index - 1].endWordIndex + 1);
+  if (!startsAtFirstWord || !endsAtLastWord || !contiguous) {
+    errors.push("caption word ranges do not cover the complete transcript");
+  }
 }
 
 let previousEnd = -Infinity;

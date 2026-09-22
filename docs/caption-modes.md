@@ -6,7 +6,7 @@ This is the high-density style demonstrated by the legacy `examples/gold-standar
 
 ## Subtitles mode
 
-This is the default release path. Captions carry the complete reconciled spoken content. ChatCut viewer pages provide raw timing evidence; `captions/caption-review-plan.json` is the approved wording, grouping, and boundary authority.
+This is the default release path. Captions carry the complete reconciled spoken content. ChatCut viewer pages provide raw timing evidence; `captions/caption-review-plan.json` is the approved wording, grouping, and boundary authority, but it is a semantic draft rather than an installable caption file. Promote it to `captions/captions.json` before checking or installing released captions.
 
 Default 1080×1920 caption treatment:
 

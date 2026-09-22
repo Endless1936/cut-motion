@@ -52,7 +52,11 @@ npm run render:preview
 npm run render
 ```
 
-The preview uses HyperFrames `standard` quality. The final render uses `high` quality with the same composition, resolution, frame rate, timing, and audio.
+These scripts use the repository's stable delivery route. The normal commands use the existing automatic mode: short jobs stay monolithic and longer jobs use chunks with HyperFrames' platform-default browser resolution. Use `npm run render:chunked` for a known macOS multi-media job that needs isolated chunks; that explicit route selects the exact cached arm64 HeadlessChrome and hardware Metal. Chunk boundaries are normalized to the manifest frame grid, each rendered chunk is probed and cached with a receipt, and the final video is assembled with the authoritative audio. The preview uses HyperFrames `standard` quality; the final render uses `high` quality with the same composition, resolution, frame rate, timing, and audio.
+
+Do not replace these scripts with a bare `hyperframes render` for this job family. HyperFrames 0.7.60 can stall in macOS Apple Silicon media initialization before frame 0 when a composition contains several long videos, a duplicated PiP source, and dense captions. The browser choice alone does not remove that stall; the explicit chunked route isolates the media initialization to short compositions and fails fast when the cached browser is missing. A future CLI upgrade is a separate, explicitly verified change rather than an automatic render fallback.
+
+If the explicit macOS arm64 chunked route reports that no exact cached browser is available, install or restore the browser for the pinned version and rerun `npm run render:chunked`. Ordinary `auto` renders follow HyperFrames' platform-specific browser setup. Do not wait on a silent monolithic render or switch to Edge as a workaround.
 
 ## Repository verification
 

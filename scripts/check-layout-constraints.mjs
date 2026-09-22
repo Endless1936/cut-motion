@@ -31,9 +31,11 @@ if (!/data-layout-constraints\s*=\s*["']enforced["']/i.test(composition)) {
 if (!/data-motion-contract\s*=\s*["']enforced["']/i.test(composition)) errors.push("composition must declare the motion contract");
 if (!/data-runtime-layout\s*=\s*["']hyperframes["']/i.test(composition)) errors.push("composition must delegate peak-frame layout checks to HyperFrames");
 if (!composition.includes("window.__motionContract")) errors.push("composition must execute the browser motion contract");
+const hasDirectSeekMotionContract = composition.includes("window.__motionContract(Number(value))")
+  || composition.includes("window.__motionContract(toLocalTimelineTime(value))");
 if (!composition.includes('timeline.eventCallback("onUpdate", () => {')
   || !composition.includes("function checkedTotalTime(value, suppressEvents)")
-  || !composition.includes("if (motionContractUpdateSerial === serialBeforeSeek) window.__motionContract(Number(value))")) {
+  || !hasDirectSeekMotionContract) {
   errors.push("motion contract must cover GSAP updates and direct HyperFrames timeline seeks");
 }
 if (motionContract.outerFrameAllowed !== false || motionContract.containerBorderPolicy !== "none") errors.push("design system must forbid generic outer frames and container borders");
@@ -110,11 +112,16 @@ for (const declaration of ["overflow-wrap: normal", "word-break: normal", "text-
   if (!composition.includes(declaration)) errors.push(`composition is missing no-orphan declaration: ${declaration}`);
 }
 
-const explicitLines = composition.split(/<br\s*\/?\s*>/i).slice(1);
-for (const [index, line] of explicitLines.entries()) {
+const explicitLines = composition.split(/<br\s*\/?\s*>/i);
+const firstLineText = explicitLines[0].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+const firstLineRun = firstLineText.match(/(?:^|[\s\p{P}\p{S}])([\p{Script=Han}]+)(?:[\s\p{P}\p{S}\p{L}\p{N}]*)$/u)?.[1] ?? "";
+if (firstLineRun.length === 1) errors.push(`explicit line 1 ends with a one-character orphan: ${firstLineRun}`);
+for (const [index, line] of explicitLines.slice(1).entries()) {
   const text = line.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
   const firstRun = text.match(/^[\p{Script=Han}]+/u)?.[0] ?? "";
+  const lastRun = text.match(/([\p{Script=Han}]+)[\s\p{P}\p{S}\p{L}\p{N}]*$/u)?.[1] ?? "";
   if (firstRun.length === 1) errors.push(`explicit line ${index + 2} begins with a one-character orphan: ${firstRun}`);
+  if (lastRun.length === 1) errors.push(`explicit line ${index + 2} ends with a one-character orphan: ${lastRun}`);
 }
 
 const usesPip = /id\s*=\s*["']speaker-pip["']/i.test(composition);

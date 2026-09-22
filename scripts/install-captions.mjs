@@ -52,7 +52,8 @@ const customProperties = [
 
 const layers = captions.cues.map((cue, index) => {
   const { start, duration } = frameWindowTiming(cue, captions.source?.fps);
-  if (!Array.isArray(cue.lines) || cue.lines.length !== 1 || /[\r\n]/.test(cue.lines[0])) {
+  if (!Array.isArray(cue.lines) || cue.lines.length !== 1 || typeof cue.lines[0] !== "string"
+    || !cue.lines[0].trim() || /[\r\n]/.test(cue.lines[0])) {
     throw new Error(`${cue.id}: must contain exactly one rendered line`);
   }
   const cueProperties = Number.isFinite(cue.fitFontSizePx)
