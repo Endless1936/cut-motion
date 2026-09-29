@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "traework-reference",
+  "kind": "style-kit",
+  "sourceCase": "TraeWork",
+  "captionMode": "subtitles",
+  "axisModes": ["A", "B"],
+  "sourceOfTruth": "hyperframes/mg/",
+  "modules": [
+    "mg-cost-points",
+    "mg-domestic-integrations",
+    "mg-finance-usecase",
+    "mg-github-clone",
+    "mg-proof-23w",
+    "mg-search-cn-choice",
+    "mg-seedance-video",
+    "mg-traework-logo",
+    "mg-traework-position",
+    "mg-workflow-map"
+  ],
+  "localAssets": "hyperframes/assets/README.md"
+}

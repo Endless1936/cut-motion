@@ -1,0 +1,14 @@
+const markets=select(".market-shot");
+const marketStack=select(".market-stack");
+const flow=select(".finance-flow");
+const sources=select(".source-row .flow-node");
+const arrow=select(".flow-arrow");
+const outputs=select(".output-row .flow-node");
+timeline.set(root,{autoAlpha:1},beat.start);
+timeline.fromTo(markets,{xPercent:-50,x:48,autoAlpha:0},{xPercent:-50,x:0,autoAlpha:1,stagger:.42,duration:.3,ease:"power3.out"},165.433333);
+timeline.to(marketStack,{y:-24,autoAlpha:0,duration:.22,ease:"power2.in"},167.2);
+timeline.set(sources,{autoAlpha:1},168.333333);
+timeline.fromTo(flow,{x:48,autoAlpha:0},{x:0,autoAlpha:1,duration:.28,ease:"power3.out"},168.333333);
+timeline.fromTo(sources,{y:24},{y:0,stagger:.12,duration:.24,ease:"power2.out"},168.333333);
+timeline.to(arrow,{scaleY:1,duration:.28,ease:"power2.out"},168.68);
+timeline.fromTo(outputs,{y:24,autoAlpha:0},{y:0,autoAlpha:1,stagger:.12,duration:.26,ease:"power2.out"},169.666667);

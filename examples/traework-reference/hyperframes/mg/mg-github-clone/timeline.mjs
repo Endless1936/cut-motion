@@ -1,0 +1,15 @@
+const stage=select(".github-stage");
+const repo=select(".repo");
+const terminal=select(".terminal");
+const https=select(".https-focus");
+const zip=select(".zip-focus");
+timeline.set(root,{autoAlpha:1},beat.start);
+timeline.set(repo,{x:0,autoAlpha:1},beat.start);
+timeline.from(stage,{y:-24,autoAlpha:0,duration:.3,ease:"power2.out"},beat.start);
+timeline.fromTo(https,{autoAlpha:0},{autoAlpha:1,duration:.3,ease:"power2.out"},59.466667);
+timeline.to(https,{autoAlpha:0,duration:.16},60.433333);
+timeline.to(repo,{x:-70,autoAlpha:0,duration:.28,ease:"power2.in"},60.433333);
+timeline.fromTo(terminal,{x:70,autoAlpha:0},{x:0,autoAlpha:1,duration:.32,ease:"power3.out"},60.433333);
+timeline.to(terminal,{x:70,autoAlpha:0,duration:.28,ease:"power2.in"},64.2);
+timeline.fromTo(repo,{x:-70,autoAlpha:0},{x:0,autoAlpha:1,duration:.32,ease:"power3.out",immediateRender:false},64.2);
+timeline.fromTo(zip,{autoAlpha:0},{autoAlpha:1,duration:.3,ease:"power2.out"},65.433333);

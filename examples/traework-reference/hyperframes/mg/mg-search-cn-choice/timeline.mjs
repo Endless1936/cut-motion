@@ -1,0 +1,17 @@
+const stage=select(".search-stage");
+const topMask=select(".mask-top");
+const bottomMask=select(".mask-bottom");
+const emphasis=select(".cn-emphasis");
+const benefits=select(".benefit");
+timeline.set(root,{autoAlpha:1},beat.start);
+timeline.from(stage,{y:-24,autoAlpha:0,duration:.3,ease:"power2.out"},beat.start);
+timeline.to(topMask,{scaleY:.39,duration:.45,ease:"power2.inOut"},47.9);
+timeline.to(bottomMask,{scaleY:.85,duration:.45,ease:"power2.inOut"},47.9);
+timeline.to(topMask,{scaleY:1,duration:.45,ease:"power2.inOut"},49.766667);
+timeline.to(bottomMask,{scaleY:0,duration:.45,ease:"power2.inOut"},49.766667);
+timeline.to(topMask,{scaleY:.39,duration:.45,ease:"power2.inOut"},51.466667);
+timeline.to(bottomMask,{scaleY:.85,duration:.45,ease:"power2.inOut"},51.466667);
+timeline.fromTo(emphasis,{autoAlpha:0},{autoAlpha:1,duration:.22},51.466667);
+timeline.to(emphasis,{scale:1.015,duration:.32,yoyo:true,repeat:1,ease:"power2.inOut"},51.78);
+timeline.to(stage,{y:-24,autoAlpha:0,duration:.22,ease:"power2.in"},53.366667);
+[53.366667,54.233333,55.366667].forEach((t,i)=>timeline.fromTo(benefits[i],{x:48,autoAlpha:0},{x:0,autoAlpha:1,duration:.24,ease:"power3.out"},t));

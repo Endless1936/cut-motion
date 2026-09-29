@@ -1,0 +1,4 @@
+.mg-root{position:absolute;inset:0;opacity:0;visibility:hidden;pointer-events:none;color:#fff}
+.seedance-shot{position:absolute;left:60px;top:190px;display:block;width:960px;height:auto;border-radius:8px;box-shadow:0 24px 64px rgba(0,0,0,.36);opacity:0}
+.video-result{position:absolute;left:140px;top:610px;width:800px;height:280px;display:flex;align-items:center;justify-content:center;gap:42px;border-radius:8px;background:rgba(18,20,24,.82);box-shadow:0 24px 64px rgba(0,0,0,.36);backdrop-filter:blur(14px);font-size:132px;line-height:1;opacity:0}
+.play{width:132px;height:132px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:#7df2c4;color:#161719;font-size:58px;padding-left:8px;box-sizing:border-box}

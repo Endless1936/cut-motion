@@ -1,0 +1,9 @@
+.mg-root{position:absolute;inset:0;opacity:0;visibility:hidden;pointer-events:none;color:#fff}
+.market-stack{position:absolute;left:60px;top:190px;width:960px;height:900px}
+.market-shot{position:absolute;left:50%;top:0;display:block;width:820px;height:auto;border-radius:8px;box-shadow:0 24px 64px rgba(0,0,0,.42);transform:translateX(-50%);opacity:0}
+.market-one{z-index:1}.market-two{top:58px;z-index:2}.market-three{top:116px;z-index:3}
+.finance-flow{position:absolute;left:140px;top:270px;width:800px;height:650px;padding:52px;box-sizing:border-box;border-radius:8px;background:rgba(18,20,24,.8);box-shadow:0 24px 64px rgba(0,0,0,.36);backdrop-filter:blur(14px);opacity:0}
+.source-row,.output-row{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.flow-node{height:170px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:rgba(255,255,255,.1);font-size:78px;line-height:1;opacity:0}
+.flow-arrow{height:190px;display:flex;align-items:center;justify-content:center;color:var(--connector);font-size:110px;line-height:1;transform:scaleY(0)}
+.flow-node.output{background:#fff;color:#161719}

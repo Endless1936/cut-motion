@@ -1,0 +1,6 @@
+.mg-root{position:absolute;inset:0;opacity:0;visibility:hidden;pointer-events:none}
+.asset-stage{position:absolute;left:60px;top:180px;width:960px;height:1242px}
+.integration-asset{position:absolute;left:50%;top:0;display:block;max-width:960px;max-height:1242px;width:auto;height:auto;transform:translateX(-50%);border-radius:8px;box-shadow:0 24px 64px rgba(0,0,0,.36);opacity:0}
+.bind{width:960px;height:auto}
+.invoke{width:720px;height:auto}
+.plugin{width:960px;height:auto}

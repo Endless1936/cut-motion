@@ -1,0 +1,6 @@
+.mg-root{position:absolute;inset:0;opacity:0;visibility:hidden;pointer-events:none;color:#fff}
+.cost-assets{position:absolute;left:60px;top:180px;width:960px;height:850px}
+.cost-shot{position:absolute;left:50%;top:0;display:block;width:auto;height:auto;max-width:960px;max-height:850px;transform:translateX(-50%);border-radius:8px;box-shadow:0 24px 64px rgba(0,0,0,.36);opacity:0}
+.gain-shot{width:505px}
+.spend-shot{width:960px}
+.cost-result{position:absolute;left:140px;top:390px;width:800px;height:220px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#fff;color:#161719;box-shadow:0 24px 64px rgba(0,0,0,.36);font-size:120px;line-height:1;opacity:0}
