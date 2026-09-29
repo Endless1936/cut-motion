@@ -27,7 +27,7 @@ jobs/<job-id>/
 │   ├── transcript-reconciliation.json
 │   ├── reference-script-annotations.json
 │   ├── chatcut-roughcut.json
-│   ├── trim-plan.json
+│   ├── trim-plan.json              # explicit FFmpeg fallback audit input; not used for ChatCut rough cuts
 │   ├── design-system.json
 │   ├── creative-confirmation.json
 │   ├── workflow.json
@@ -48,6 +48,8 @@ jobs/<job-id>/
     └── final.mp4
 ```
 
+`source-audio-waveform-index.json` is a job-local working input for the rough-cut seam pass; build or reuse it once per source. `chatcut-seams.json` and `seam-waveform-lookup.json` may record the single batch lookup. These are evidence artifacts, not release outputs, workflow states, or approval gates.
+
 Never overwrite the original source video. Every destructive-looking operation must produce a new artifact and update `state/project.json`.
 
 Each job directory is an isolated working directory. Do not place job media, generated state, previews, or logs in the cut-motion repository root.
@@ -59,7 +61,7 @@ This is a local open-source workflow, not a production service. Keep jobs, priva
 Use the first available tool in each stage:
 
 1. **Rough cut:** ChatCut project and editable timeline.
-2. **Transcription:** recorded speech, supplied reference script, ChatCut transcription, then a local speech-to-text fallback.
+2. **Transcription:** ChatCut transcription, reconciled with the original recording and any supplied reference script. Local silence detection is a separate audio-only step, never a substitute for ASR.
 3. **Precision trim:** FFmpeg and FFprobe.
 4. **Motion design:** HyperFrames HTML/CSS with a single seek-safe GSAP timeline.
 5. **Validation and render:** HyperFrames build/render and FFprobe. Additional automatic validation is enabled only by the explicit `auto` mode.
@@ -70,8 +72,8 @@ Remotion and Vibe Motion are not part of the default stack. Use them only when t
 
 ## Operating modes
 
-- `review` is the default fast path. It pauses only at `rough-cut-review`, where the user inspects the ChatCut timeline before export. After approval it performs basic media checks, builds HyperFrames, and renders once; it does not run full automatic validation, a standard preview, or a short sample.
-- `auto` follows the same nine-state sequence. It explicitly enables automatic validation at the existing transitions, including the rough-cut audit when applicable, and must warn that the checks and repair may take a long time.
+- `review` is the default fast path. Before the existing `rough-cut-review`, follow [`docs/talking-head-trim-standard.md`](docs/talking-head-trim-standard.md) for the semantic edit, candidate pass, spoken-content coverage, and one original-source waveform batch lookup. Use targeted seam review only for specific concerns raised by candidate or waveform evidence; exhaustive per-seam playback is not required. After approval, export once, perform basic media checks, build HyperFrames, and render once. These are checks inside the existing path, not additional states or gates.
+- `auto` follows the same nine-state sequence and the same ChatCut editing standard, then enables existing validations. The legacy trim-plan audit runs only when `roughCutEngine` is explicitly set to `ffmpeg-fallback`; it never runs for a ChatCut rough cut.
 
 `rough-cut-review` is the only workflow gate. Inspecting the rendered file is a handoff for the user's editorial decision, not another state or approval gate.
 
@@ -90,7 +92,7 @@ node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json fallback-auto 
 node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json reopen <rough-cut|motion-plan|composition|delivery> --actor user --note <feedback>
 ```
 
-The only approval commands are for `rough-cut-review`: `approve` records the user's decision and `revise` returns to `rough-cut`. In `auto`, the same state is resolved by the explicit automatic fallback; no parallel state path is created. Record the result in `roughCutReviewDecision` as `pending`, `manual-approved`, or `automatic-fallback`. Never infer approval or an automatic decision from silence.
+The only approval commands are for `rough-cut-review`: `approve` records the user's decision and `revise` returns to `rough-cut`. In `auto`, the same state is resolved by recording `automatic-fallback`; no parallel state path is created. Record the result in `roughCutReviewDecision` as `pending`, `manual-approved`, or `automatic-fallback`. Never infer approval or an automatic decision from silence.
 
 Every creative round has a `revisionId`. Preserve prior decisions in `history`; revisions invalidate downstream hashes and return to the earliest affected state. `currentState` and `pendingGate` identify the active position.
 
@@ -168,11 +170,12 @@ ChatCut is used only to create the editable rough cut. If it is unavailable, rec
 2. Copy or link the source into `input/`; never modify it.
 3. Ask once for optional caption, reference-script, and visual-axis preferences. Record supplied choices; otherwise keep them deferred and continue.
 4. Probe duration, dimensions, frame rate, codecs, sample rate, and rotation with FFprobe.
-5. Normalize the project timeline to the source frame rate unless the user specifies another rate, then save the resolved inputs and defaults.
+5. For every ChatCut rough cut, start building or reusing the original-source waveform index as soon as the source is probed, following `docs/source-audio-silence-index.md`. Continue ChatCut import and semantic editing while a new index is being built; have it ready for one batch seam lookup before rough-cut review. Do not decode the MOV again per cut.
+6. Use 30 fps as the project timeline default, even if the source is 29.97 fps; use another rate only when the user requests it. Record source and timeline rates separately.
 
 ### 2. Transcript and alignment
 
-1. Transcribe the recording through ChatCut when available; use local ASR only as fallback for timing evidence.
+1. Use ChatCut for transcription and timing. Do not use local ASR; if ChatCut is unavailable, follow environment preflight and defer transcript-dependent edits. The original audio may still be indexed locally for a targeted seam audit.
 2. If a reference script is supplied, persist the immutable original under `input/reference-scripts/` and record its SHA-256 in `state/workflow.json` and `state/reference-script-annotations.json`. Reconcile its wording with the recording: remove unspoken text, restore spoken omissions, and use the confirmed script wording for release.
 3. When the reference contains `【】`, use only `speechText` from `state/reference-script-annotations.json` for released wording and retain every visual note separately.
 4. Store timestamps in `state/transcript.json` and evidence in `state/transcript-reconciliation.json`; run the reconciliation checker.
@@ -181,33 +184,26 @@ ChatCut is used only to create the editable rough cut. If it is unavailable, rec
 
 ### 3. Shared edit lock
 
-1. Create or target a ChatCut project and import the source.
+Use [`docs/talking-head-trim-standard.md`](docs/talking-head-trim-standard.md) as the sole detailed rough-cut policy. This section records only ChatCut operations and required evidence.
+
+1. Create or target a ChatCut project. Before importing, call `browse_assets` and reuse the exact source asset ID if it is already in the target project. Otherwise import the authoritative job copy through the ChatCut `asset-import` skill; do not substitute an unverified proxy or retry through multiple routes. If the local helper is blocked by sandbox `EPERM`, request one scoped escalation when authorized and stop if denied. Record the asset ID and separate setup, transfer, and transcription time.
 2. Use ChatCut only to build the editable talking-head rough-cut timeline; do not add released captions, MG, or B-axis composition there.
-3. Remove clear false starts, duplicated takes, and long empty sections. Use the non-blocking editorial heuristics in `docs/talking-head-trim-standard.md`; preserve complete meaning, intentional repetition or self-correction, natural breath, and comic or rhetorical timing.
-4. Record the ChatCut project and timeline IDs in `state/chatcut-roughcut.json`; this is the review artifact and is not a video export.
-5. In `review`, record deferred caption and axis recommendations with `set-caption-mode` and `set-axis-mode`, open the ChatCut project in the Codex in-app browser, and stop at the only workflow gate. Do not export or run automatic seam repair before the user decides.
-6. If the user requests a revision, revise the ChatCut timeline and reopen the same browser review. If the user approves, record the manual approval and export once to `roughcut/a-roll.mp4`; perform only the basic media probe and lock.
-7. In `auto`, warn that automatic export, three-threshold checking, and repair may take a long time, then resolve `rough-cut-review` with the automatic fallback on the same state path.
-8. Promote the approved export with `scripts/promote-job-media.mjs <job> roughcut <export> --consume-source` before advancing `rough-cut-export`. It atomically replaces `roughcut/a-roll.mp4` and refreshes the HyperFrames input through a hard link when possible.
-9. For `subtitles`, retain any ChatCut timing output only as raw alignment evidence; released captions are authored and installed in HyperFrames. Released wording comes from the persisted reference script when supplied, otherwise from the reconciled recording transcript.
+3. Complete the ChatCut semantic edit according to the Golden Standard; retain each valid recorded phrase or give it an explicit editorial disposition. Do not remove content based only on ASR omission or script mismatch.
+4. Immediately after the ChatCut semantic edit, apply the Golden Standard's terminal-tail trim, then run its remaining candidate and completeness checks using `state/source-transcript.json`, Script with `showSilence:true`, and `scripts/detect-silence.sh` for its candidate-only scan. Classify the remaining candidates before the existing review gate.
+5. Use the source-waveform procedure in the Golden Standard and `docs/source-audio-silence-index.md` for one schema-v2 batch lookup of the retained ChatCut seams. The map must come from a fresh ChatCut asset inspection and original-file probe; it checks map-field consistency, not remote bytes. The lookup is evidence only and does not require exhaustive per-seam playback or edits. Record source asset IDs/names, source and rough-cut durations, and measured `elapsedSecondsByStage` in `state/chatcut-roughcut.json`. Keep the cut closed before `rough-cut-review`.
+6. Follow the Golden Standard's local transition rule: use a 0–2 frame transition only after confirming a hard pop remains after the physical boundary is correct; default to 0 and never use smoothing to hide a gap.
+7. If the user requests a revision, revise the same ChatCut timeline and reopen the same browser review. If the user approves, record approval and export once to `roughcut/a-roll.mp4`; perform only the basic media probe and lock.
+8. In `auto`, resolve `rough-cut-review` by recording `automatic-fallback`. Apply the candidate-discovery and source-waveform seam policy only to ChatCut rough cuts. If ChatCut is unavailable, use the conservative FFmpeg fallback described below. The legacy trim-plan audit is restricted to output explicitly marked `roughCutEngine: "ffmpeg-fallback"`.
+9. Promote the approved export with `scripts/promote-job-media.mjs <job> roughcut <export> --consume-source` before advancing `rough-cut-export`. It atomically replaces `roughcut/a-roll.mp4` and refreshes the HyperFrames input through a hard link when possible.
+10. For `subtitles`, retain any ChatCut timing output only as raw alignment evidence; released captions are authored and installed in HyperFrames. Released wording comes from the persisted reference script when supplied, otherwise from the reconciled recording transcript.
 
 The shared baseline for both caption modes is: protected regions take precedence over decoration; protect the face, PiP, product evidence, UI, and any active caption; check text wrapping, entrance/peak/hold/exit bounds, and audio continuity before adding decorative motion. Caption mode changes only how speech is represented and how much motion is appropriate, not the rough-cut, source-lock, safe-area, or HyperFrames validation discipline.
 
 If ChatCut is unavailable, record `roughCutEngine: "ffmpeg-fallback"` and perform only conservative silence and false-start removal. Never pretend the ChatCut stage ran.
 
-### 4. Edit-lock precision procedure
+### 4. Rough-cut source-boundary procedure
 
-This procedure is the automatic rough-cut check. In `review`, the user's ChatCut decision supplies the seam decision and the export performs only basic media checks. In `auto`, the same `rough-cut-review` transition enables this procedure and its derived audit.
-
-1. Run `scripts/detect-silence.sh` at `-30`, `-35`, and `-40 dB`; use the median detected speech boundary instead of trusting one threshold or an ASR word endpoint.
-2. Convert candidates into `state/trim-plan.json` as editing decisions only: integer timeline `startFrame`/`endFrame`, explicit classification, reason, semantic evidence, confidence and actual audio-transition frames. Never author derived acoustic boundaries, audit booleans or media hashes.
-3. For the default `tight-talking-head` profile, trim asymmetrically: retain about 20 ms after outgoing speech and 50 ms before incoming speech, quantized to the normalized timeline frame grid. Tighten the outgoing decay independently; never move the incoming boundary later merely to make both sides equally tight. These are safety handles, not a target pause duration.
-4. Preserve a pause when meaning and visible delivery remain continuous. Remove it when the speaker looks at a script, stops articulating, resets posture or gaze, or prepares a restart. A topic boundary alone does not justify keeping extra dead air.
-5. After the physical cut is correct, inspect the first two to three incoming timeline frames and restore one or two frames when the onset sounds shaved; do not restore the whole discarded pause. Then apply zero to two frames of audio transition only when it neither attenuates the incoming onset nor restores discarded tail noise. Two frames is a ceiling, not a requirement.
-6. Run the structural trim-plan check and apply the plan only on the automatic fallback. Advancing `rough-cut-export` after `fallback-auto` runs the canonical trim finalizer against the immutable source-timeline transcript, derives both word and three-threshold acoustic handles, binds source and rough-cut hashes, then validates the result. A cut touching a transcript word—including English, numbers, or proper-name tokens—is invalid. Removable resets and false starts may retain at most 80ms, quantized down to timeline frames. Natural pauses are exempt from that ceiling, but a pause above 180ms requires an internal filmstrip-waveform diagnostic and concrete finding.
-7. Re-align every later transcript word and animation cue by the cumulative removed duration. Follow the late-cut procedure in `docs/revision-standard.md`; `scripts/shift-timestamps.sh` produces frame-aware caption/Beat Map candidates only, not a complete media or transcript revision.
-
-Natural pauses inside continuous delivery remain at their performed length; they are not normalized to an arbitrary 80 ms. A cut is invalid if it clips a phoneme, removes a breath needed for comprehension, retains a visible reading/reset action, or creates a mismatched jump. A low-confidence boundary falls back to 50–120 ms of conservative padding and must be marked for review.
+The ChatCut rough-cut rules are defined only in [`docs/talking-head-trim-standard.md`](docs/talking-head-trim-standard.md). Use [`docs/source-audio-silence-index.md`](docs/source-audio-silence-index.md) for index and batch-lookup mechanics. These checks finish inside the existing `rough-cut-review` path; they add no state or approval gate. The legacy trim-plan audit runs only when `roughCutEngine` is explicitly set to `ffmpeg-fallback`; it does not apply to ChatCut timelines.
 
 ### 5. Semantic beat map and motion plan
 
@@ -317,7 +313,7 @@ For `subtitles`, preserve ChatCut timing pages only as evidence, align the settl
 
 `auto` mode:
 
-1. Run the applicable automatic checks in `docs/quality-gates.md` at the existing state transitions. The state machine enforces the rough-cut audit, plan/reconciliation checks, and detailed render receipt; deeper HyperFrames/content diagnostics remain explicit commands when requested.
+1. Run the applicable automatic checks in `docs/quality-gates.md` at the existing state transitions. The state machine enforces Golden Standard rough-cut checks, plan/reconciliation checks, and the detailed render receipt; deeper HyperFrames/content diagnostics remain explicit commands when requested.
 2. Keep the same state sequence and render the delivery from `composition` to `render`; any diagnostic preview is evidence only and never becomes a state.
 3. Reuse unchanged evidence only when the existing contract accepts it; do not present an automated pass as editorial or aesthetic approval.
 

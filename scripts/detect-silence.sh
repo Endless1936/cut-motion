@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Reports dB-only candidate intervals. Review their content before editing; these times are not physical cut points.
 if [[ $# -lt 1 || $# -gt 3 ]]; then
   echo "Usage: $0 <media-file> [noise-db] [minimum-seconds=0.45]" >&2
   exit 64
@@ -14,7 +15,7 @@ run_detection() {
 
   printf 'threshold_db=%s\n' "$noise_db"
   ffmpeg -hide_banner -i "$media_file" -vn -af "silencedetect=noise=${noise_db}dB:d=${minimum_seconds}" -f null - 2>&1 \
-    | sed -n '/silence_start\|silence_end/p'
+    | sed -n '/silence_start/p; /silence_end/p'
 }
 
 if [[ $# -eq 1 ]]; then

@@ -8,9 +8,9 @@ Each job owns its source, state, previews, logs, and output under `jobs/<job-id>
 | --- | --- |
 | `intake` | Validate source media and record deferred preferences. |
 | `transcription` | Reconcile the recording with the optional reference script and lock source word timings. |
-| `rough-cut` | Record the editable ChatCut project/timeline. |
-| `rough-cut-review` | User approves, revises, or explicitly chooses `fallback-auto`. |
-| `rough-cut-export` | Export the approved rough cut and perform the basic media lock; `fallback-auto` also runs the trim audit. |
+| `rough-cut` | Build the editable ChatCut timeline and complete the Golden Standard pass before review. |
+| `rough-cut-review` | In `review`, the user approves, revises, or explicitly chooses `fallback-auto`; in `auto`, the workflow records `automatic-fallback`. |
+| `rough-cut-export` | Export the approved rough cut and perform the basic media lock; trim-plan exports from projects explicitly marked `roughCutEngine: "ffmpeg-fallback"` also run the legacy trim audit. |
 | `motion-plan` | Author wording, captions, beat map, MG, axis, and timing for HyperFrames. |
 | `composition` | Build deterministic HyperFrames HTML/CSS/GSAP composition. |
 | `render` | Produce the requested delivery and basic media verification. |
@@ -24,7 +24,7 @@ In `review` mode, the user is the quality gate: inspect the ChatCut timeline bef
 
 ## Automatic path
 
-`auto` follows the same state route. It selects the rough-cut fallback after recording the timeline, warns about the delay, and runs deterministic transcript, plan, render, and media checks. It does not create intermediate approval states. Optional reports or `previews/final-preview.mp4` may be generated when the user explicitly asks for an audit or preview.
+`auto` follows the same ChatCut Golden Standard through rough-cut. At the existing `rough-cut-review` state, it records `automatic-fallback` and runs the validations enabled for auto; it adds no intermediate approval state. The legacy trim-plan audit runs only when `roughCutEngine` is explicitly set to `ffmpeg-fallback`, never on ChatCut timelines. Optional reports or `previews/final-preview.mp4` may be generated when the user explicitly asks for an audit or preview.
 
 ## Wording and visual axis
 

@@ -12,6 +12,26 @@
       "minItems": 1,
       "items": { "type": "string", "minLength": 1 }
     },
+    "sourceAssetId": { "type": "string", "minLength": 1 },
+    "sourceAssetName": { "type": "string", "minLength": 1 },
+    "sourceDurationSeconds": { "type": "number", "exclusiveMinimum": 0 },
+    "roughCutDurationSeconds": { "type": "number", "exclusiveMinimum": 0 },
+    "referenceDurationSeconds": { "type": "number", "exclusiveMinimum": 0 },
+    "elapsedSecondsByStage": {
+      "type": "object",
+      "properties": {
+        "projectAndAssetLookup": { "type": "number", "minimum": 0 },
+        "assetTransfer": { "type": "number", "minimum": 0 },
+        "transcription": { "type": "number", "minimum": 0 },
+        "semanticCut": { "type": "number", "minimum": 0 },
+        "wholeTimelineSweep": { "type": "number", "minimum": 0 },
+        "sourceWaveformIndex": { "type": "number", "minimum": 0 },
+        "batchSeamLookup": { "type": "number", "minimum": 0 },
+        "seamAdjustment": { "type": "number", "minimum": 0 },
+        "total": { "type": "number", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
     "activeTimelineId": { "type": ["string", "null"] },
     "timelines": {
       "type": "array",

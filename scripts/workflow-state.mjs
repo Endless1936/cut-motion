@@ -91,7 +91,7 @@ const checkReconciliation = (allowPending, expectedMedia = null) => {
   );
 };
 
-const lockRoughCutMedia = (artifactPath, { audit = false, requirePromotion = false } = {}) => {
+const lockRoughCutMedia = (artifactPath, { audit = false, trimPlanAudit = false, requirePromotion = false } = {}) => {
   const mediaPath = path.relative(jobRoot, artifactPath);
   const trimPlanPath = path.join(jobRoot, "state", "trim-plan.json");
 
@@ -107,7 +107,11 @@ const lockRoughCutMedia = (artifactPath, { audit = false, requirePromotion = fal
   }
 
   if (audit) {
-    checkReconciliation(true, mediaPath);
+    const project = readJson(path.join(jobRoot, "state", "project.json"));
+    checkReconciliation(true, project.sourceVideo);
+  }
+
+  if (trimPlanAudit) {
     runCheck("finalize-trim-plan.mjs", [
       trimPlanPath,
       artifactPath,
@@ -262,7 +266,7 @@ const recordRoughCutDecision = (status, decision, entryActor, decisionNote) => {
 const selectAutomaticFallback = (entryActor, decisionNote) => {
   validateRoughCutReview();
   acceptDeferredPreferences("auto");
-  const warning = "Automatic export and three-threshold checking may take a long time";
+  const warning = "Automatic export and validation may take a long time";
   recordRoughCutDecision("automatic-fallback", "automatic-fallback", entryActor, `${decisionNote} ${warning}.`);
   move("rough-cut-export", "automatic-fallback", entryActor);
   console.warn(`${warning}.`);
@@ -563,9 +567,13 @@ if (command === "advance") {
       if (!["automatic-fallback", "manual-approved"].includes(workflow.roughCutReviewDecision)) {
         throw new Error("Rough-cut export requires manual approval or an explicit automatic fallback");
       }
+      const reviewArtifact = workflow.gates?.["rough-cut-review"]?.artifact;
+      const isChatCutRoughCut = chatcutRoughCutArtifact(reviewArtifact);
+      const project = readJson(path.join(jobRoot, "state", "project.json"));
       lockRoughCutMedia(artifactPath, {
         audit: workflow.roughCutReviewDecision === "automatic-fallback",
-        requirePromotion: chatcutRoughCutArtifact(workflow.gates?.["rough-cut-review"]?.artifact)
+        trimPlanAudit: workflow.roughCutReviewDecision === "automatic-fallback" && project.roughCutEngine === "ffmpeg-fallback" && !isChatCutRoughCut,
+        requirePromotion: isChatCutRoughCut
       });
     }
     if (workflow.currentState === "motion-plan") {
