@@ -55,6 +55,21 @@ const jobRoot = jobRootForWorkflow(workflowPath);
 recoverTranscriptTransaction(jobRoot);
 const workflow = ensureWorkflowDefaults(JSON.parse(fs.readFileSync(workflowPath, "utf8")));
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
+const workflowGuideSections = {
+  intake: "intake",
+  transcription: "transcript-and-alignment",
+  "rough-cut": "rough-cut",
+  "rough-cut-review": "rough-cut-review-and-export",
+  "rough-cut-export": "rough-cut-review-and-export",
+  "motion-plan": "motion-plan",
+  composition: "composition",
+  render: "delivery",
+  complete: "revisions"
+};
+const printStageGuideHint = (state) => {
+  const section = workflowGuideSections[state];
+  if (section) console.error(`Stage guidance: docs/workflow.md#${section}`);
+};
 const actor = String(options.actor ?? (command === "advance" ? "agent" : "user"));
 const artifact = options.artifact ? String(options.artifact) : null;
 const note = options.note ? String(options.note) : null;
@@ -272,7 +287,9 @@ const selectAutomaticFallback = (entryActor, decisionNote) => {
   console.warn(`${warning}.`);
 };
 const save = () => {
+  const previousState = workflow.currentState;
   saveWorkflow(workflowPath, workflow, now);
+  if (workflow.currentState !== previousState) printStageGuideHint(workflow.currentState);
 };
 
 const invalidateCreativeConfirmation = () => {
@@ -357,6 +374,7 @@ const approveCaptionReviewPlan = (approvalNote) => {
 
 if (command === "status") {
   console.log(JSON.stringify(workflow, null, 2));
+  printStageGuideHint(workflow.currentState);
   process.exit(0);
 }
 
@@ -683,3 +701,6 @@ if (command === "advance") {
 }
 save();
 console.log(`Workflow state: ${workflow.currentState}`);
+if (workflow.currentState === "rough-cut-review") {
+  console.log("Reminder (informational): Before presenting the rough cut, confirm semantic selection, timeline-wide candidate review, spoken-content coverage, and the single waveform seam lookup; briefly note any skipped or unavailable item. This reminder does not block the workflow.");
+}
