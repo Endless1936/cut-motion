@@ -9,6 +9,17 @@ intake → transcription → rough-cut → rough-cut-review → rough-cut-export
        → motion-plan → composition → render → complete
 ```
 
+Every state change prints the brief to load for the state it lands on:
+
+```text
+Workflow state: rough-cut
+Stage brief — read before working: docs/stages/rough-cut.md
+```
+
+Work from that file. It carries only what applies to the current stage — its entry conditions, required steps with their evidence, that stage's prohibitions, and its exit artifact — so the whole contract does not have to be held in context at once. Detailed policy stays in the documents each brief points to; the briefs index and constrain, they do not duplicate.
+
+A `revise` returns to `rough-cut` and prints that brief again. Work it from the top rather than resuming from memory: one revision shipped without re-running a mandatory step because the agent continued from recollection instead of reloading.
+
 `rough-cut` keeps the editable ChatCut timeline as its artifact and completes [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) before `rough-cut-review`. `chatcut-roughcut.json` records project and timeline evidence; captions, MG, and B-axis composition are authored in HyperFrames. After approval, export once to `roughcut/a-roll.mp4` and run the basic media lock.
 
 At `composition`, `workflow-state.mjs` rebuilds `hyperframes/index.html` from `index.template.html`, the Beat Map, transcript, and MG modules, then records that build's hash. Those authored files are the editing source; generated HTML is disposable and the render entrypoint rebuilds from the same source before rendering.

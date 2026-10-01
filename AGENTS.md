@@ -81,6 +81,8 @@ Remotion and Vibe Motion are not part of the default stack. Use them only when t
 
 `state/workflow.json` is the authoritative state. `currentState` may only be one of `intake`, `transcription`, `rough-cut`, `rough-cut-review`, `rough-cut-export`, `motion-plan`, `composition`, `render`, or `complete`. Never advance by assumption or by merely creating the next artifact.
 
+Each transition prints the brief for the state it lands on (`docs/stages/<state>.md`). Load that brief and work from it; it holds the steps, prohibitions, and exit evidence for that state only. See [`docs/state-machine.md`](docs/state-machine.md#stage-briefs). A `revise` back to `rough-cut` reprints that brief — work it from the top, do not resume from memory.
+
 Use `scripts/workflow-state.mjs` for every transition:
 
 ```bash

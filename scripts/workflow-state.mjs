@@ -39,6 +39,15 @@ const stages = {
   complete: { terminal: true }
 };
 
+// Every state change names the brief the agent should load for that state, so
+// the guidance is pulled at the moment it applies instead of all at once.
+function printStateBrief(state) {
+  console.log(`Workflow state: ${state}`);
+  if (!stages[state]?.terminal) {
+    console.log(`Stage brief — read before working: docs/stages/${state}.md`);
+  }
+}
+
 const options = {};
 const positionals = [];
 for (let index = 0; index < rawArguments.length; index += 1) {
@@ -357,6 +366,7 @@ const approveCaptionReviewPlan = (approvalNote) => {
 
 if (command === "status") {
   console.log(JSON.stringify(workflow, null, 2));
+  printStateBrief(workflow.currentState);
   process.exit(0);
 }
 
@@ -451,7 +461,7 @@ if (command === "replan") {
   workflow.pendingGate = null;
   appendHistory("replan", previousState, "motion-plan", actor);
   save();
-  console.log(`Workflow state: ${workflow.currentState}`);
+  printStateBrief(workflow.currentState);
   process.exit(0);
 }
 if (command === "fallback-auto") {
@@ -460,7 +470,7 @@ if (command === "fallback-auto") {
   if (!note) throw new Error("Automatic rough-cut fallback requires --note");
   selectAutomaticFallback(actor, note);
   save();
-  console.log(`Workflow state: ${workflow.currentState}`);
+  printStateBrief(workflow.currentState);
   process.exit(0);
 }
 if (command === "reopen") {
@@ -682,4 +692,4 @@ if (command === "advance") {
   throw new Error(`Unknown command: ${command}`);
 }
 save();
-console.log(`Workflow state: ${workflow.currentState}`);
+printStateBrief(workflow.currentState);
