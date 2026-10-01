@@ -60,7 +60,7 @@ This is a local open-source workflow, not a production service. Keep jobs, priva
 
 Use the first available tool in each stage:
 
-1. **Rough cut:** ChatCut project and editable timeline.
+1. **Rough cut:** ChatCut project and editable timeline. Frame-accurate tightening on that timeline goes through `edit_item` updates (`fromFrame`, `durationInFrames`, `sourceStartFromInSeconds`); Script's inline `~~…~~` strike deletes part of a transcript row. Read both tool contracts before editing, not after a rejected result.
 2. **Transcription:** ChatCut transcription, reconciled with the original recording and any supplied reference script. Local silence detection is a separate audio-only step, never a substitute for ASR.
 3. **Precision trim:** FFmpeg and FFprobe.
 4. **Motion design:** HyperFrames HTML/CSS with a single seek-safe GSAP timeline.
@@ -233,7 +233,7 @@ Use [`docs/visual-language.md`](docs/visual-language.md) for design grammar and 
 
 ## Failure policy
 
-Report missing inputs, failed checks, and fallbacks plainly. Preserve the last known-good rough cut and composition before major revisions; retry only safe transient failures.
+Report missing inputs, failed checks, and fallbacks plainly. Preserve the last known-good rough cut and composition before major revisions; retry only safe transient failures. Do not stall on an expired credential: refresh it through the service's documented token or OAuth path first (for ChatCut, exchange the stored refresh token) and only then report a blocker or ask the user to re-authorize.
 
 ## Completion definition
 

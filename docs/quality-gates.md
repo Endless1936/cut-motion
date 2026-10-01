@@ -6,6 +6,7 @@ The default path is human-reviewed and intentionally light. Machine checks estab
 
 - Keep the original source unchanged.
 - Complete [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) before the existing ChatCut review gate.
+- Before that gate, confirm every mandatory Golden Standard step actually ran and is recorded in `state/chatcut-roughcut.json` — the terminal-tail pass and the residual-take scan included. A rough cut whose own record says a mandatory step was skipped does not advance; fix it and re-record instead of reporting it as a known omission.
 - After approval, export once and run only the basic rough-cut/media lock.
 - Build the HyperFrames composition, render once, and verify that the delivery has readable video/audio, dimensions, frame rate, duration, and a non-empty file.
 - Let the user judge the final captions, MG, timing, semantics, and visual quality.
