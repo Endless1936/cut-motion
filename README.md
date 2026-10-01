@@ -6,7 +6,9 @@ cut-motion 是一套开源 Agent 视频制作工作流，可以把一段口播�
 
 ## 如何使用
 
-你不需要学习剪辑软件、代码或终端命令。用 Codex、Claude Code 或类似的编程 Agent 打开这个项目，然后直接告诉它要剪辑的视频路径。
+你不需要学习剪辑软件、代码或终端命令。用 ChatGPT 桌面端的 Work/Codex、Claude Code 或 WorkBuddy 打开这个项目，然后直接告诉它要剪辑的视频路径。剪辑工作流需要 ChatCut Agent 集成；首次使用时，按[环境指南](docs/agent-setup.md#environment-preflight)为当前客户端安装并连接。
+
+ChatCut 官方目前提供以上三种客户端的安装指南，其中 ChatGPT 指南覆盖桌面端的 Work 和 Codex 标签页；ChatGPT 网站和远程 workspace 不在该指南的支持范围内。
 
 例如：
 

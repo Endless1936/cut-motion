@@ -6,7 +6,9 @@ cut-motion is an open Agent workflow that turns a talking-head recording into a 
 
 ## How to use it
 
-You do not need to learn video-editing software, code, or terminal commands. Open this repository in Codex, Claude Code, or a similar coding Agent and describe what you want in natural language.
+You do not need to learn video-editing software, code, or terminal commands. Open this repository in the ChatGPT desktop app's Work or Codex tab, Claude Code, or WorkBuddy and describe what you want in natural language. The workflow requires the ChatCut Agent integration; on first use, follow the [environment guide](docs/agent-setup.md#environment-preflight) for your client.
+
+ChatCut currently publishes setup guides for these three clients. Its ChatGPT guide covers the desktop app's Work and Codex tabs; it does not cover ChatGPT website sessions or remote workspaces.
 
 For example:
 

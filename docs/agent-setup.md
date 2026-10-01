@@ -10,10 +10,21 @@ Inspect the active Agent session for ChatCut, then run:
 ./scripts/check-environment.sh check
 ```
 
-If ChatCut is required but unavailable, explain the reason and wait for approval. After approval:
+ChatCut is an Agent integration; its setup depends on the client. The official guides currently cover:
 
-- Codex: `Read https://chatcut.io/chatgpt to install and use the ChatCut plugin`
+| Client | Setup guide |
+| --- | --- |
+| ChatGPT desktop app (Work or Codex tab) | [chatcut.io/chatgpt](https://chatcut.io/chatgpt) |
+| Claude Code | [chatcut.io/claude](https://chatcut.io/claude) |
+| WorkBuddy | [chatcut.io/workbuddy](https://chatcut.io/workbuddy) |
+
+If ChatCut is required but unavailable, explain the reason and wait for approval before installing a plugin, changing Agent-wide configuration, or starting authentication. Then ask the active Agent to follow the matching guide:
+
+- ChatGPT desktop Work/Codex: `Read https://chatcut.io/chatgpt to install and use the ChatCut plugin`
 - Claude Code: `Read https://chatcut.io/claude to install and use the ChatCut plugin`
+- WorkBuddy: `Read https://chatcut.io/workbuddy and follow its setup to connect ChatCut`
+
+Start a new Agent session after setup because integrations may load only when a session starts, then confirm ChatCut tools are available before continuing. The ChatGPT guide covers the desktop app's Work and Codex tabs; do not assume it also covers the ChatGPT website or remote workspaces.
 
 ## Local requirements
 
