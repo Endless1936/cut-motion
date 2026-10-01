@@ -60,7 +60,7 @@ This is a local open-source workflow, not a production service. Keep jobs, priva
 
 Use the first available tool in each stage:
 
-1. **Rough cut:** ChatCut project and editable timeline. Frame-accurate tightening on that timeline goes through `edit_item` updates (`fromFrame`, `durationInFrames`, `sourceStartFromInSeconds`); Script's inline `~~…~~` strike deletes part of a transcript row. Read both tool contracts before editing, not after a rejected result. `scripts/chatcut-mcp.mjs` is the prebuilt ChatCut client and `scripts/apply-seam-tightening.mjs` applies a tightening plan — use them instead of hand-rolling HTTP calls or recomputing cuts by hand.
+1. **Rough cut:** ChatCut project and editable timeline. Frame-accurate tightening on that timeline goes through `edit_item` updates (`fromFrame`, `durationInFrames`, `sourceStartFromInSeconds`); Script's inline `~~…~~` strike deletes part of a transcript row. Read both tool contracts before editing, not after a rejected result. If the ChatCut tools are missing from the tool list or calls fail on authentication, follow [`docs/troubleshooting.md`](docs/troubleshooting.md) before substituting a hand-rolled client for them.
 2. **Transcription:** ChatCut transcription, reconciled with the original recording and any supplied reference script. Local silence detection is a separate audio-only step, never a substitute for ASR.
 3. **Precision trim:** FFmpeg and FFprobe.
 4. **Motion design:** HyperFrames HTML/CSS with a single seek-safe GSAP timeline.
