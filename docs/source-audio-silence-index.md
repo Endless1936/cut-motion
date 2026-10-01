@@ -20,6 +20,30 @@ Reuse a prior schema-v3 or schema-v4 index when its source SHA-256 matches the u
 
 Do not pass a `--summary` output to `--lookup`; summaries intentionally omit the waveform windows.
 
+## Clip source windows
+
+The tightening computation needs to know, for each retained clip in timeline order, which span of the **original source** it plays. Export that as `state/timeline-source-windows.json` before computing:
+
+```json
+[
+  { "srcStartUs": 0, "srcEndUs": 3566667 },
+  { "srcStartUs": 9363000, "srcEndUs": 11130000 }
+]
+```
+
+One entry per clip, in timeline order, source time — not timeline time. Both ends inclusive of any tail that is still awaiting the tightening pass; do not pre-trim. The head of the first entry and the tail of the last entry are the timeline ends, and the tightening pass treats them as candidates like any other seam.
+
+## Computing the tightening plan
+
+```bash
+node scripts/compute-seam-tightening.mjs \
+  --index state/source-audio-waveform-index.json \
+  --windows state/timeline-source-windows.json \
+  --out state/seam-tightening-plan.json
+```
+
+It reads the waveform index rather than a dB threshold, leaves one frame past the last speech window, falls back to a lower content threshold when content would otherwise be cut, and writes a dry-run summary when `--out` is omitted. It never reads ASR timings: ASR locates candidates, the waveform sets the frame.
+
 ## Batch lookup
 
 After ChatCut has completed semantic and candidate cleanup, put every retained cut in/out edge in one manifest: each seam records the outgoing clip's source end and the incoming clip's source start. This checks waveform padding inside both clips, even when timeline items touch with no timeline gap. Candidate discovery stays in the preceding step; do not use this seam lookup to enumerate unrelated pauses. Add a same-item candidate span only for a specific unresolved blank or transient; set `leftAssetEndUs` to the candidate start and `rightAssetStartUs` to its end, and set `lookupPaddingMs` to at least half that candidate's source-time span. The lookup rejects a same-item span when the padding would leave its middle uninspected. The manifest must carry the source SHA-256, timeline frame rate, both item IDs, asset-clock edge times, and an operator-attested asset-to-source map based on a fresh ChatCut asset inspection and the original-file probe. The script checks that the attested ID, hash, duration, offset, and scale agree with the map; this consistency check does not independently prove the remote asset's identity. Schema v2 is the only accepted lookup format. Do not downgrade to legacy schema v1. dB intervals may be used to find regions for inspection, never to choose the physical edge returned by this lookup.

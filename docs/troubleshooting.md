@@ -33,7 +33,7 @@ node scripts/chatcut-token.mjs   # exchanges the stored refresh token and writes
 
 Then restart or reload MCP connections and re-check the tool list.
 
-**Do not** hand-roll HTTP calls as a substitute. That was done once: it cost a tedious round of hand-written requests per operation and produced a 105-line client that only exists because nobody checked *why* the tools were missing. If you genuinely cannot get the server mounted and must drive the endpoint directly, `scripts/chatcut-mcp.mjs` exists as a fallback — but reaching for it without doing the two steps above is treating the symptom.
+**Do not** hand-roll HTTP calls as a substitute. That was done once: it cost a tedious round of hand-written requests per operation and produced a 105-line client that only existed because nobody checked *why* the tools were missing. That client was deleted rather than kept as a fallback — a workaround in the repo invites the next run to take the same path. If the two steps above do not mount the server, say so plainly; the answer is a working credential, not a second way to reach the endpoint.
 
 ---
 
@@ -111,6 +111,37 @@ git -C <repo> config user.name               # commit identity; may be unset if 
 A repo-level `core.sshCommand` is the cleanest way to pin an account and needs no global `~/.ssh/config` edit. Check it before changing anything global.
 
 ---
+
+## A produced artifact does not have the fields my code assumes
+
+**Symptom.** A script reads an index or lookup and every value comes back empty, zero, or obviously wrong — but it does not throw. The result looks like "no speech anywhere" rather than a crash.
+
+**Diagnose first.** Print one record before writing the loop that consumes thousands of them:
+
+```bash
+python3 -c "import json;d=json.load(open('state/source-audio-waveform-index.json'));print(d['waveform']['featureOrderPerChannel']);print(d['waveform']['windows'][0])"
+```
+
+Two failures of exactly this shape cost real time on one job:
+
+- The RMS feature was renamed. Code matching `rmsSample` got `-1` from `indexOf` and silently read the wrong column out of every window. The index has shipped `rmsSample` and `linearRms16`. **Match on `/rms/i`, never on an exact name.**
+- A window array carried no `timeUs`. Time has to be derived as `index * windowMs`, not read from the record.
+
+Related: silence durations came back in **seconds** while the consuming code treated them as milliseconds, so every gap looked 1000× too small. Confirm the unit on the first value, not after the numbers look odd.
+
+The pattern to watch for is a lookup that returns `null`/`-1` and is then used as if it were valid. Fail loudly on a missing field instead.
+
+## A step ran, and its output was never used
+
+**Symptom.** Time went into a pass whose results did not end up deciding anything — a sweep over three thresholds, a package install, a rendered preview that was superseded.
+
+This is not a tooling failure, but it has cost more time than most tooling failures. Before starting a pass, be able to say which decision will consume its output:
+
+- The dB candidate sweep is for **finding regions to inspect**. It does not choose a physical edge, and it is not the terminal-tail pass. Running it early, before there is a candidate to resolve, produces numbers nobody reads.
+- Installing dependencies for a later stage (motion, render) before the current stage is accepted means installing twice if the cut changes.
+- Rendering a preview before the cut points are settled means rendering again.
+
+If a pass cannot name its consumer, defer it.
 
 ## Adding to this document
 
