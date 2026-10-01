@@ -28,7 +28,7 @@ Each stage reads and writes versionable JSON under the job's `state/` directory.
 
 ## Quality strategy
 
-The system uses a gold-standard reference plus semantic motion recipes. Recipes define intent, timing behavior, and failure modes—not coordinates or a single look. Automated checks catch timing and layout defects; the visual-language document prevents regressions toward dirty overlays, tiny typography, repetitive PPT transitions, and empty components.
+The initial design paired a reference composition with semantic motion recipes. Recipes define intent, timing behavior, and failure modes—not coordinates or a single look. That proposal included automated timing and layout checks; current checks are listed in `docs/quality-gates.md`. The visual-language guide records composition rules and common failure patterns.
 
 ## Extensibility
 

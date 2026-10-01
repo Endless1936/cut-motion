@@ -9,7 +9,9 @@ intake → transcription → rough-cut → rough-cut-review → rough-cut-export
        → motion-plan → composition → render → complete
 ```
 
-`rough-cut` keeps the editable ChatCut timeline as its artifact. Complete semantic selection, the terminal-tail trim, remaining candidate classification, spoken-content coverage, and one original-source waveform batch lookup according to the sole [`talking-head-trim-standard.md`](talking-head-trim-standard.md) before `rough-cut-review`. Use targeted seam review only when candidate or waveform evidence raises a specific concern; exhaustive per-seam playback is not required. This work stays inside the existing state and adds no gate. `chatcut-roughcut.json` records the project and timeline; it is not a second seam gate. ChatCut does not author released captions, MG, or B-axis scenes. After the user approves the closed timeline, export once to `roughcut/a-roll.mp4` and run the basic media lock.
+`rough-cut` keeps the editable ChatCut timeline as its artifact and completes [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) before `rough-cut-review`. `chatcut-roughcut.json` records project and timeline evidence; captions, MG, and B-axis composition are authored in HyperFrames. After approval, export once to `roughcut/a-roll.mp4` and run the basic media lock.
+
+At `composition`, `workflow-state.mjs` rebuilds `hyperframes/index.html` from `index.template.html`, the Beat Map, transcript, and MG modules, then records that build's hash. Those authored files are the editing source; generated HTML is disposable and the render entrypoint rebuilds from the same source before rendering.
 
 To abandon the manual review explicitly:
 
@@ -27,17 +29,17 @@ Use `set-caption-mode` and `set-axis-mode` so changes are recorded. A caption or
 
 ## Modes
 
-`review` is the default: wait at `rough-cut-review`, export once after approval, build HyperFrames, render once, and let the user judge the result.
+`review` is the default: wait at `rough-cut-review`, then follow [Quality Checks](quality-gates.md) for the delivery path.
 
-In `auto`, the existing `rough-cut-review` state is resolved with the `automatic-fallback` decision; no parallel state or approval gate is added. The same ChatCut Golden Standard applies before that resolution, and selected structural/technical checks run during planning and delivery. The legacy trim-plan audit runs only when `roughCutEngine` is explicitly set to `ffmpeg-fallback`; it never runs on ChatCut timelines. Passing checks is not an aesthetic approval.
+`auto` resolves the existing `rough-cut-review` state with `automatic-fallback` and runs the checks listed in [Quality Checks](quality-gates.md). Passing checks do not replace the user's aesthetic decision.
 
 ## Revisions
 
-Use `reopen` for completed jobs:
+Use `reopen` from the earliest affected state for completed jobs. During an active job, localized `composition`/`render` revisions are supported only in `review` mode before an automatic-fallback decision. Revision routing for completed jobs, including Auto authority changes, follows [`revision-standard.md`](revision-standard.md):
 
 - `rough-cut`: editorial cuts and transcript timing;
-- `motion-plan`: caption segmentation, MG structure/copy, style, or axis;
-- `composition`: parameter-only visual changes;
+- `motion-plan`: broad or ambiguous changes to caption segmentation, MG structure, style, story, or axis;
+- `composition`: explicit localized MG/caption implementation changes and parameter adjustments;
 - `delivery`: encoding-only changes.
 
 Use a short affected-window preview for parameter changes when useful. Preserve the source and use `output/final.candidate.mp4` for a delivery revision so the last delivery remains available until promotion.

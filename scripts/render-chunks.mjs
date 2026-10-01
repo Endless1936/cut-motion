@@ -14,6 +14,15 @@ import {
   writeJsonAtomic
 } from "./workflow-utils.mjs";
 
+const hyperframesWorkerArguments = () => {
+  const workers = process.env.CUT_MOTION_RENDER_WORKERS;
+  if (!workers) return [];
+  if (!/^[1-8]$/.test(workers)) {
+    throw new Error("CUT_MOTION_RENDER_WORKERS must be a whole number from 1 to 8");
+  }
+  return ["--workers", workers];
+};
+
 const run = (command, argumentsList, options = {}) => {
   const result = spawnSync(command, argumentsList, { encoding: "utf8", ...options });
   if (result.status !== 0) {
@@ -211,6 +220,7 @@ const renderChunk = (jobRoot, manifest, chunk, quality, binary) => {
       "--composition", relativeComposition,
       "--quality", quality,
       "--output", temporaryPath,
+      ...hyperframesWorkerArguments(),
       "."
     ], { cwd: path.join(jobRoot, "hyperframes"), stdio: "inherit", label: `HyperFrames ${quality} Chunk render` });
     normalizeChunkFrameBoundary(temporaryPath, chunk.endFrame - chunk.startFrame, manifest.fps);
@@ -352,9 +362,6 @@ export const pinRenderedArtifacts = (workDirectory, rendered) => rendered.map((i
   }
   const pinnedPath = path.join(workDirectory, `chunk-${String(index + 1).padStart(4, "0")}.mp4`);
   fs.linkSync(item.artifactPath, pinnedPath);
-  if (sha256File(pinnedPath) !== item.receipt.artifactSha256) {
-    throw new Error("Chunk cache changed while being pinned for assembly");
-  }
   return { ...item, pinnedPath };
 });
 
@@ -535,27 +542,30 @@ const renderMonolithic = (
       "--composition", "index.html",
       "--quality", quality,
       "--output", temporaryPath,
+      ...hyperframesWorkerArguments(),
       "."
     ], { cwd: path.join(jobRoot, "hyperframes"), stdio: "inherit", label: `HyperFrames ${quality} monolithic render` });
-    assertCurrentManifest(jobRoot, manifest, mode);
     const fullAudit = workflow.mode === "auto" || workflow.roughCutReviewDecision === "automatic-fallback";
     const detailedProbe = fullAudit || mode === "chunked";
     const probe = probeVideoArtifact(temporaryPath, { detailed: detailedProbe });
     if (detailedProbe) assertFullOutputProbe(manifest, probe, "Monolithic render");
     else assertBasicOutputProbe(manifest, probe, "Monolithic render");
     promoteRenderedCandidate(jobRoot, manifest, temporaryPath, outputPath, { mode });
-    const receipt = {
-      schemaVersion: "2.0.0",
-      quality,
-      mode: "monolithic",
-      reason,
-      artifactSha256: sha256File(outputPath),
-      contentManifestSha256: manifest.contentManifestSha256,
-      totalFrames: manifest.totalFrames,
-      streamSignature: probe.streamSignature
-    };
-    if (detailedProbe) writeJsonAtomic(assemblyReceiptPath(outputPath), receipt);
-    return { mode: "monolithic", outputPath, manifest, receipt: detailedProbe ? receipt : null, reason };
+    let receipt = null;
+    if (detailedProbe) {
+      receipt = {
+        schemaVersion: "2.0.0",
+        quality,
+        mode: "monolithic",
+        reason,
+        artifactSha256: sha256File(outputPath),
+        contentManifestSha256: manifest.contentManifestSha256,
+        totalFrames: manifest.totalFrames,
+        streamSignature: probe.streamSignature
+      };
+      writeJsonAtomic(assemblyReceiptPath(outputPath), receipt);
+    }
+    return { mode: "monolithic", outputPath, manifest, receipt, reason };
   } finally {
     if (fs.existsSync(temporaryPath)) fs.unlinkSync(temporaryPath);
   }

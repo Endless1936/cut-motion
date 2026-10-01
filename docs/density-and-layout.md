@@ -1,6 +1,6 @@
 # Density and Layout Specification
 
-This document converts the mode-appropriate reference into measurable planning constraints. Use `examples/traework-reference` for subtitle-led work and `examples/gold-standard` for motion-copy work. It does not replace visual judgment.
+This document gives measurable layout guidance for the available references and each job's creative plan. Use `examples/traework-reference/` for subtitle-led structure and `examples/book-video-reference/` for its grid, annotation, and A/B transition modules. Motion-copy is planned per job; the repository does not maintain a complete motion-copy reference composition.
 
 ## Three rhythm layers
 
@@ -28,10 +28,20 @@ These are planning zones, not rigid rows. Primary text should not default to the
 
 Record bounds for entrance, maximum overshoot, hold, and exit. Rotation, outline, shadow, blur, and scale all count toward occupied space. A scene fails when transformed glyphs clip even if the resting frame is clean.
 
-Runtime layout checks must use the rendered DOM, not only planned dimensions. They also enforce the caption safe-zone ratio, forbid generic outlined containers and decorative labels, and keep synchronized connector/container reveals within the design-system frame tolerance.
+## Timing and typography bounds
 
-## Review matrix
+- Begin phrase motion within three frames of its acoustic onset; anchor the first meaningful event to a spoken word within 400ms. Connected elements in one reveal group start within two frames.
+- In subtitle mode, use 0.8–1.8 seconds as a spacing guide for meaningful micro-events inside approved local MG; trigger each event from speech or meaning, not a fixed timer. Caption-only passages need no animation.
+- Vary transition families across phrases; when reusing a complete visual signature, record one `reuseGroup` and a concrete `reuseReason`.
+- For 1080×1920 vertical video, primary Chinese copy is normally 84–156 px and secondary copy at least 42 px. Use 0.92–1.12 display line height and 1.15–1.35 body-copy line height.
+- Keep 54 px horizontal and 88 px vertical canvas clearance, with 18 px around outlined or transformed glyphs. Panel padding is normally 48–72 px.
+- Set Chinese line breaks around complete phrases; keep at least two visible characters on each line when a semantic break is needed.
+- Give every panel meaningful copy, an icon, status, diagram, or animated state. Check the entrance, peak, hold, and exit at the rendered size.
 
-For every visual scene, inspect the states required by `docs/quality-gates.md`. Do not expand pure-caption beats into per-beat snapshot sets.
+The on-demand `scripts/check-layout-constraints.mjs` is a static source diagnostic. It checks declared layout settings, motion-group and role metadata, connector/container markers, and caption placement/style declarations; it does not measure rendered DOM or judge visual quality.
 
-Compare the grid with the mode-appropriate reference. For subtitle-led work use `examples/traework-reference`; for motion-copy work use `examples/gold-standard`. Reject scenes that are materially smaller, emptier, dirtier, or more crowded without a semantic reason.
+## Visual review guidance
+
+Use the code-backed examples for the components they demonstrate. The rendered MP4 is the review handoff; capture a still or window only for a specific visual question. `auto` runs only the checks listed in `docs/quality-gates.md`.
+
+Keep meaningful content at the intended scale and remove excess decoration before reducing its clarity.

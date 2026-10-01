@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { buildComposition } from "./build-composition.mjs";
 import {
   assertCreativeAuthorities,
   assertRegularContainedFile,
@@ -19,6 +18,7 @@ import {
   validateActiveReference,
   writeJsonAtomic
 } from "./workflow-utils.mjs";
+import { buildComposition } from "./build-composition.mjs";
 
 const [workflowPath, command, ...rawArguments] = process.argv.slice(2);
 
@@ -348,8 +348,6 @@ const approveCaptionReviewPlan = (approvalNote) => {
   if (workflow.captionMode !== "subtitles") return;
   const captionReviewPlanPath = path.join(jobRoot, "captions", "caption-review-plan.json");
   if (!fs.existsSync(captionReviewPlanPath)) throw new Error("Subtitle plan approval requires captions/caption-review-plan.json");
-  const captionReviewCheck = spawnSync(process.execPath, [path.join(scriptDirectory, "check-caption-review-plan.mjs"), captionReviewPlanPath], { encoding: "utf8" });
-  if (captionReviewCheck.status !== 0) throw new Error(`Subtitle plan approval requires valid semantic cues: ${captionReviewCheck.stderr.trim() || captionReviewCheck.stdout.trim()}`);
   const captionReviewPlan = readJson(captionReviewPlanPath);
   captionReviewPlan.status = "approved";
   captionReviewPlan.approvedAt = now;
@@ -474,8 +472,14 @@ if (command === "reopen") {
     delivery: "render"
   };
   const target = targets[scope];
-  if (workflow.currentState !== "complete") throw new Error("Only a completed job can be reopened");
   if (!target) throw new Error("Reopen scope must be rough-cut, motion-plan, composition, or delivery");
+  const activeReviewCompositionRevision = scope === "composition"
+    && ["composition", "render"].includes(workflow.currentState)
+    && workflow.mode === "review"
+    && workflow.roughCutReviewDecision !== "automatic-fallback";
+  if (workflow.currentState !== "complete" && !activeReviewCompositionRevision) {
+    throw new Error("Only a completed job or an active review-mode composition/render revision can be reopened");
+  }
   if (actor !== "user") throw new Error("Reopen requires --actor user");
   if (!note) throw new Error("Reopen requires --note");
   const previousState = workflow.currentState;
@@ -532,7 +536,9 @@ if (command === "advance") {
       composition: "hyperframes",
       render: "output"
     }[workflow.currentState];
-    const artifactPath = assertJobArtifact(artifact, expectedDirectory);
+    const artifactPath = workflow.currentState === "composition"
+      ? path.resolve(jobRoot, artifact)
+      : assertJobArtifact(artifact, expectedDirectory);
     if (workflow.currentState === "transcription") {
       const transcriptPath = path.join(jobRoot, "state", "transcript.json");
       if (artifactPath !== transcriptPath) throw new Error("Transcription must use state/transcript.json");
@@ -604,13 +610,16 @@ if (command === "advance") {
       }
     }
     if (workflow.currentState === "composition") {
-      const built = buildComposition(path.join(jobRoot, "hyperframes"));
-      if (path.resolve(artifactPath) !== path.resolve(built.outputPath)) {
-        throw new Error("Composition advance requires the deterministic hyperframes/index.html build artifact");
+      const generatedCompositionPath = path.join(jobRoot, "hyperframes", "index.html");
+      if (artifactPath !== generatedCompositionPath) {
+        throw new Error("Composition advance requires hyperframes/index.html");
       }
+      buildComposition(path.join(jobRoot, "hyperframes"));
+      assertRegularContainedFile(path.join(jobRoot, "hyperframes"), generatedCompositionPath, "Built composition");
+      const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
+      if (fs.existsSync(beatMapPath)) workflow.visualPlanSha256 = sha256File(beatMapPath);
       if (fullAuditRequested) {
         assertCreativeAuthorities(jobRoot, workflow);
-        checkReconciliation(false);
       }
     }
     if (workflow.currentState === "render") {

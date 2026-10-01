@@ -38,7 +38,7 @@ intake → transcription → rough-cut → rough-cut-review → rough-cut-export
 - **带字幕模式**：完整口播内容以清晰字幕呈现，只在有助于理解的位置加入少量动画；字幕和 MG 都在 HyperFrames 中完成。
 - **无字幕模式**：没有单独的字幕层，口播文案直接成为 HyperFrames 中的动态图形。
 
-带字幕模式默认参考 `examples/traework-reference/`；无字幕模式继续参考 `examples/gold-standard/` 的全屏动效样例。
+带字幕模式可参考 `examples/traework-reference/` 的字幕与局部 MG 结构；`examples/book-video-reference/` 提供网格背景、批注字幕和双向 A/B 轴切换。无字幕模式按当前 job 的创意方案设计，不依赖通用成片模板。
 
 如果没有偏好，Agent 会在粗剪审核前给出字幕模式和视觉轴建议，并把选择记录到 job 状态中。
 

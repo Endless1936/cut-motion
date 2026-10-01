@@ -2,7 +2,7 @@
 
 ## Motion-copy mode
 
-This is the high-density style demonstrated by the legacy `examples/gold-standard` video. Every spoken phrase appears as motion typography. There is no additional caption layer. The beat map must cover every transcript segment exactly.
+Every spoken phrase appears as motion typography. There is no separate caption layer, and the beat map must cover every transcript segment exactly. Plan the visual treatment for the current job; the repository has no complete motion-copy reference composition.
 
 ## Subtitles mode
 
@@ -10,7 +10,7 @@ This is the default release path. Captions carry the complete reconciled spoken 
 
 Default 1080×1920 caption treatment:
 
-- 得意黑, locally embedded;
+- 得意黑, embedded when available, with the sans-serif fallback used otherwise;
 - white `#FFFFFF`;
 - 96 px;
 - line height 1.15;
@@ -25,11 +25,11 @@ Default 1080×1920 caption treatment:
 Use this sequence:
 
 ```bash
-node scripts/check-caption-review-plan.mjs jobs/<job-id>/captions/caption-review-plan.json
 node scripts/promote-caption-review-plan.mjs jobs/<job-id>
-node scripts/check-captions.mjs jobs/<job-id>/captions/captions.json jobs/<job-id>/captions/chatcut-pages.json jobs/<job-id>/state/design-system.json
 node scripts/install-captions.mjs jobs/<job-id>/captions/captions.json jobs/<job-id>/hyperframes/index.html jobs/<job-id>/state/design-system.json
 ```
+
+Promotion checks the approved semantic plan and the exact generated caption file before replacing `captions/captions.json`. Run the standalone checkers only for early feedback, after changing a promoted file, or during an explicit audit.
 
 Before promotion, lock the ChatCut rough cut, reconcile wording against the recording, and mark the settled semantic cue plan `status: approved`. This records the Agent's completed preparation, not a new user gate. Promotion validates transcript freshness, complete semantic coverage, timing, and clean-export evidence before replacing captions; `auto` and `fallback-auto` additionally retain the full creative-package authority check. Disable ChatCut caption rendering before exporting clean A-roll. The installer uses only the approved promoted cues and replaces prior generated clips idempotently.
 

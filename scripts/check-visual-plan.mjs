@@ -159,7 +159,15 @@ for (let index = 0; index < beats.length; index += 1) {
   const bounds = beat.layout.primaryBoundsNormalized;
   if (bounds.x + bounds.width > 1 || bounds.y + bounds.height > 1) errors.push(`${beat.id}: primary bounds leave the canvas`);
   const primaryCenterY = bounds.y + bounds.height / 2;
-  if (primaryCenterY < designSystem.canvas.primaryStageYRatio[0] || primaryCenterY > designSystem.canvas.primaryStageYRatio[1]) errors.push(`${beat.id}: primary content is placed in an edge strip`);
+  const captionCompanionLabel = ["A", "B"].includes(beat.axis)
+    && beat.mgScope === "local"
+    && ["evidence", "organization"].includes(beat.supportRole)
+    && beat.captionCueIds?.length === 1
+    && beat.components?.includes("caption-companion-label")
+    && bounds.y >= 0.8
+    && bounds.height <= 0.04;
+  const maximumPrimaryY = captionCompanionLabel ? 0.84 : designSystem.canvas.primaryStageYRatio[1];
+  if (primaryCenterY < designSystem.canvas.primaryStageYRatio[0] || primaryCenterY > maximumPrimaryY) errors.push(`${beat.id}: primary content is placed in an edge strip`);
   if (beat.axis === "B" && pipExclusionZone) {
     const pipBounds = {
       x: 1 - (pipExclusionZone.rightPx + pipExclusionZone.widthPx) / designSystem.canvas.width,

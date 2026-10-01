@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "book-video-reference",
+  "kind": "style-kit",
+  "sourceCase": "Book Video",
+  "captionMode": "subtitles",
+  "axisModes": ["A", "B"],
+  "sourceOfTruth": "hyperframes/",
+  "modules": [
+    "b-axis-horizon-grid",
+    "mg-annotation-caption",
+    "axis-stage-transitions"
+  ],
+  "localAssets": "none"
+}

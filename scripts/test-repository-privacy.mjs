@@ -22,10 +22,15 @@ try {
     write(file, "private fixture");
     git("check-ignore", "--quiet", file);
   }
-  const example = "examples/gold-standard/reference-frames/01-incremental-stack.jpg";
-  write(example, "approved reference fixture");
-  git("add", example);
+  const example = "examples/gold-standard/hyperframes/assets/example.jpg";
+  write(example, "example media fixture");
+  git("check-ignore", "--quiet", example);
   assert.deepEqual(checkRepositoryPrivacy(root), []);
+  git("add", "-f", example);
+  fs.rmSync(path.join(root, example));
+  assert.deepEqual(checkRepositoryPrivacy(root), [], "working-tree privacy ignores paths deleted from the working tree");
+  assert(checkRepositoryPrivacy(root, { stagedOnly: true }).some((issue) => issue.file === example));
+  git("rm", "--cached", example);
   write("Jobs/B/input.MOV", "sk-" + "pQ7rS8".repeat(8));
   git("add", "-f", "Jobs/B/input.MOV");
   fs.chmodSync(path.join(root, "Jobs/B/input.MOV"), 0o000);
@@ -56,7 +61,7 @@ try {
   assert.equal(failed.status, 1);
   assert.match(failed.stderr, /could not complete/);
   assert(!(failed.stdout + failed.stderr).includes(token), "subprocess failures must not print captured contents");
-  console.log("Repository privacy tests passed: ignores, approved example, forced tracking, staged secrets, redacted diagnostics.");
+  console.log("Repository privacy tests passed: ignored media, forced tracking, staged secrets, redacted diagnostics.");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
 }

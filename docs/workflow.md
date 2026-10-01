@@ -1,6 +1,5 @@
 # Workflow Architecture
 
-Each job owns its source, state, previews, logs, and output under `jobs/<job-id>/`. Never overwrite the source or place generated media in the repository root.
 
 ## Stage contracts
 
@@ -18,22 +17,22 @@ Each job owns its source, state, previews, logs, and output under `jobs/<job-id>
 
 ## Human-first path
 
-ChatCut is only the rough-cut editor. Do not add released subtitles or motion graphics there. HyperFrames owns captions, B-axis treatment, MG, composition timing, and final rendering so caption timing and MG remain bound to one timeline.
+HyperFrames owns released captions, B-axis treatment, MG, composition timing, and final rendering so caption timing and MG remain bound to one timeline.
 
-In `review` mode, the user is the quality gate: inspect the ChatCut timeline before export, then inspect the rendered file. The default path does not render a standard preview, run a full visual QA pass, or compare two encodes.
+In `review` mode, the user reviews the ChatCut timeline before export and the rendered file at delivery. See [Quality Checks](quality-gates.md) for the default checks.
 
 ## Automatic path
 
-`auto` follows the same ChatCut Golden Standard through rough-cut. At the existing `rough-cut-review` state, it records `automatic-fallback` and runs the validations enabled for auto; it adds no intermediate approval state. The legacy trim-plan audit runs only when `roughCutEngine` is explicitly set to `ffmpeg-fallback`, never on ChatCut timelines. Optional reports or `previews/final-preview.mp4` may be generated when the user explicitly asks for an audit or preview.
+`auto` follows the same rough-cut standard and state sequence, records `automatic-fallback` at the existing review state, and runs the checks in [Quality Checks](quality-gates.md).
 
 ## Wording and visual axis
 
 The recording remains authoritative for spoken content. A supplied reference script is preserved and reconciled; it can provide release wording only where the recording supports it. ASR and ChatCut are timing evidence.
 
-`subtitles` uses HyperFrames subtitle layers for the settled wording and reserves MG for supplemental meaning. `motion-copy` puts spoken wording inside designed motion. A-axis keeps the talking head full-frame with localized overlays; B-axis makes motion design the stage with a protected live PiP. B-axis and hybrid require explicit user choice.
+`subtitles` uses HyperFrames subtitle layers for settled wording and reserves MG for supplemental meaning. `motion-copy` puts spoken wording inside designed motion. A-axis keeps the talking head full-frame with localized overlays; B-axis makes motion design the stage with a protected live PiP. Record B-axis or hybrid selection in the rough-cut decision; `review` requires the user's explicit choice, while `auto` may use an authorized automatic axis decision.
 
 ## Revisions
 
-Use `reopen rough-cut|motion-plan|composition|delivery` for completed jobs. Parameter-only changes should use an affected-window preview before a full delivery render. Delivery revisions render to `output/final.candidate.mp4` and are promoted by the workflow after media verification.
+Use `reopen rough-cut|motion-plan|composition|delivery` at the earliest affected state for completed jobs. During an active job, localized `composition`/`render` revisions are supported only in `review` mode before an automatic-fallback decision. Keep the motion plan and creative-confirmation package as the baseline for local edits; use `replan` for global creative changes.
 
 See [Editorial revisions](revision-standard.md) for preserving user decisions, repairing a whole feedback family, sizing evidence, and applying a shared frame edit after a late cut. A timing candidate or a flattened-master edit is not a rebuilt editable composition; keep the current delivery and its reproducible source explicit.

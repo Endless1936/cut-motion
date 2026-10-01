@@ -43,7 +43,7 @@ For user-edited segmentation, rebind word anchors to the new text before filling
 1. Use `state/transcript.json` as authority; `captions/reference-transcript.txt` may exist only as a derived human-readable snapshot.
 2. Record names, product configurations, number-unit pairs, and fixed phrases in `captions/caption-lexicon.json`.
 3. The Agent authors each semantic cue directly in `captions/caption-review-plan.json` with `text`, `startWordId`, and `endWordId`. Code must not choose or optimize cue boundaries.
-4. Validate `captions/caption-review-plan.json` with `scripts/check-caption-review-plan.mjs`.
+4. Use `scripts/check-caption-review-plan.mjs` for early feedback when useful; the caption promotion step performs the release check itself.
 5. Present every cue in `docs/caption-plan.md` when creative review is triggered.
-6. After required user approval or recorded conditional internal approval, the state machine marks the plan approved.
-7. Promote that exact plan with `scripts/promote-caption-review-plan.mjs`, validate it, and install it. Do not repaginate during composition.
+6. Once the cue plan is settled, set `status: approved`; this readiness marker is consumed by promotion, not a separate user gate. The automatic full-audit path records it after package validation.
+7. Promote that exact plan with `scripts/promote-caption-review-plan.mjs` and install it. Promotion checks the semantic plan and generated cues. Do not repaginate during composition.

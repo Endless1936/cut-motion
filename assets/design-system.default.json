@@ -10,7 +10,6 @@
     "displayFamily": "Smiley Sans",
     "displayNameZh": "得意黑",
     "fontAsset": "assets/fonts/smiley-sans-oblique.woff2",
-    "required": true,
     "fontWeight": 400,
     "primarySizePx": [84, 156],
     "secondarySizePx": [42, 72],

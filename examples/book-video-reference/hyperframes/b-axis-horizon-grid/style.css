@@ -1,0 +1,73 @@
+.book-video-grid-module {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  overflow: hidden;
+  background: #050505;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.book-video-grid-mask {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0.9) 12%,
+    rgba(255, 255, 255, 0.72) 16%,
+    rgba(255, 255, 255, 0.4) 19%,
+    transparent 21%,
+    transparent 79%,
+    rgba(255, 255, 255, 0.4) 81%,
+    rgba(255, 255, 255, 0.72) 84%,
+    rgba(255, 255, 255, 0.9) 88%,
+    rgba(255, 255, 255, 0.9) 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0.9) 12%,
+    rgba(255, 255, 255, 0.72) 16%,
+    rgba(255, 255, 255, 0.4) 19%,
+    transparent 21%,
+    transparent 79%,
+    rgba(255, 255, 255, 0.4) 81%,
+    rgba(255, 255, 255, 0.72) 84%,
+    rgba(255, 255, 255, 0.9) 88%,
+    rgba(255, 255, 255, 0.9) 100%
+  );
+}
+
+.book-video-grid-plane {
+  --grid-scroll-offset: 0px;
+  position: absolute;
+  left: -36%;
+  width: 172%;
+  background-repeat: repeat;
+  background-image:
+    linear-gradient(to right, rgba(150, 150, 150, 0.78) 4px, transparent 4px),
+    linear-gradient(to bottom, rgba(150, 150, 150, 0.78) 4px, transparent 4px);
+  background-position:
+    calc(50% + 50px) var(--grid-scroll-offset),
+    calc(50% + 50px) var(--grid-scroll-offset);
+}
+
+.book-video-grid-top {
+  top: -92%;
+  height: 140%;
+  background-size: 100px 42px;
+  transform-origin: 50% 100%;
+  transform: perspective(1500px) rotateX(-64deg);
+}
+
+.book-video-grid-bottom {
+  top: 52%;
+  height: 140%;
+  background-size: 100px 42px;
+  transform-origin: 50% 0%;
+  transform: perspective(1500px) rotateX(64deg);
+}

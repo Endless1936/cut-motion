@@ -8,7 +8,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const renderChunksPath = path.join(repoRoot, "scripts", "render-chunks.mjs");
 
 const usage = () => {
-  console.error("Usage: node render-delivery.mjs <job-directory> <standard|high> <output.mp4> [--mode auto|chunked]");
+  console.error("Usage: node render-delivery.mjs <job-directory> <standard|high> <output.mp4> [--mode auto|chunked] [--workers 1-8]");
 };
 
 const isExecutableFile = (candidate) => {
@@ -79,11 +79,24 @@ const resolveBrowserPath = (mode) => {
 };
 
 const [jobRootInput, quality, outputInput, ...options] = process.argv.slice(2);
-const mode = options.length === 0 ? "auto" : options[1];
-const validOptions = options.length === 0
-  || (options.length === 2 && options[0] === "--mode" && ["auto", "chunked"].includes(options[1]));
+let mode = "auto";
+let workerCount = null;
+let validOptions = true;
+for (let index = 0; index < options.length; index += 1) {
+  const option = options[index];
+  const value = options[index + 1];
+  if (option === "--mode" && ["auto", "chunked"].includes(value)) {
+    mode = value;
+    index += 1;
+  } else if (option === "--workers" && /^[1-8]$/.test(value ?? "")) {
+    workerCount = Number(value);
+    index += 1;
+  } else {
+    validOptions = false;
+    break;
+  }
+}
 if (!jobRootInput || !["standard", "high"].includes(quality) || !outputInput
-  || !["auto", "chunked"].includes(mode)
   || !validOptions) {
   usage();
   process.exit(64);
@@ -94,13 +107,13 @@ const outputPath = path.resolve(process.cwd(), outputInput);
 const browserPath = resolveBrowserPath(mode);
 const environment = {
   ...process.env,
+  ...(workerCount == null ? {} : { CUT_MOTION_RENDER_WORKERS: String(workerCount) }),
   ...(browserPath
     ? {
         HYPERFRAMES_BROWSER_PATH: browserPath,
         PRODUCER_HEADLESS_SHELL_PATH: browserPath,
         PRODUCER_BROWSER_GPU_MODE: process.env.PRODUCER_BROWSER_GPU_MODE ?? "hardware",
         PRODUCER_EXPERIMENTAL_FAST_CAPTURE: process.env.PRODUCER_EXPERIMENTAL_FAST_CAPTURE ?? "false",
-        PRODUCER_MAX_WORKERS: process.env.PRODUCER_MAX_WORKERS ?? "1",
         PRODUCER_ENABLE_BROWSER_POOL: process.env.PRODUCER_ENABLE_BROWSER_POOL ?? "false"
       }
     : {})

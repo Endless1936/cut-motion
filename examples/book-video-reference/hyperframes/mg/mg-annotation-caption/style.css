@@ -1,0 +1,26 @@
+.annotation-caption-root {
+  position: absolute;
+  inset: 0;
+  z-index: 48;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.annotation-caption-copy {
+  position: absolute;
+  top: 80.625%;
+  left: 0;
+  right: 0;
+  width: auto;
+  margin: 0;
+  color: rgba(244, 241, 232, 0.94);
+  font-family: "Smiley Sans", sans-serif;
+  font-size: 80px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.015em;
+  text-align: center;
+  white-space: nowrap;
+  text-shadow: 0 3px 9px rgba(0, 0, 0, 0.7);
+}

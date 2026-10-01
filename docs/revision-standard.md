@@ -6,9 +6,13 @@ Use this standard for revisions to an existing job. It adds no approval gate or 
 
 Read `state/project.json`, `state/workflow.json`, the latest delivery receipt, and the affected authored sources. Identify the actual file the user reviewed. A new asset with the same filename is a new input: inspect its current pixels, dimensions, and crop, then rebuild affected output. Do not reuse a cached result based on its path alone.
 
-Resolve frame rate once from the user's delivery choice, otherwise the source default. Keep that rate in the project, frame calculations, composition, and render flags. A 29.97 fps source does not override a requested 30 fps delivery; do not add conversion stages merely to preserve the source's fraction.
+Resolve frame rate once from the user's delivery choice, otherwise use the 30 fps default in the Rough-Cut Golden Standard. Keep that rate in the project, frame calculations, composition, and render flags. A 29.97 fps source does not override the 30 fps default; do not add conversion stages merely to preserve the source's fraction.
 
 Use `workflow-state.mjs reopen` at the earliest affected stage. If workflow state and delivered evidence disagree, report and reconcile that discrepancy; do not fabricate state completion or silently run a second workflow in an ad hoc script.
+
+## Scoped visual revisions
+
+After the initial motion plan is established, use `docs/motion-plan.md` and the creative-confirmation package as the approved baseline. In `review`, apply a clearly scoped change to the affected Beat Map entry and HyperFrames module, then rebuild the composition; use `reopen composition` for a named MG's copy, cue, timing, placement, or addition/removal. Record state changes in workflow history and reserve `replan` for ambiguous requests or changes to the overall story, axis, or visual system. For completed jobs in `auto` or with `automatic-fallback`, route changes to Beat Map or caption authority through `motion-plan` and regenerate the package; use `composition` only for implementation changes that preserve those authorities.
 
 ## Diagnose a feedback family
 

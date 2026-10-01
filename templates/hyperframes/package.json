@@ -8,6 +8,7 @@
     "check": "npm run build:composition && hyperframes check",
     "preview": "npm run build:composition && hyperframes preview",
     "render:preview": "node ../../../scripts/render-delivery.mjs .. standard ../previews/final-preview.mp4 --mode auto",
+    "render:preview:chunked": "node ../../../scripts/render-delivery.mjs .. standard ../previews/final-preview.mp4 --mode chunked --workers 4",
     "render": "node ../../../scripts/render-delivery.mjs .. high ../output/final.mp4 --mode auto",
     "render:revision": "node ../../../scripts/render-delivery.mjs .. high ../output/final.candidate.mp4 --mode auto",
     "render:chunked": "node ../../../scripts/render-delivery.mjs .. high ../output/final.mp4 --mode chunked"

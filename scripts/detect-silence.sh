@@ -19,9 +19,7 @@ run_detection() {
 }
 
 if [[ $# -eq 1 ]]; then
-  for noise_db in -30 -35 -40; do
-    run_detection "$noise_db"
-  done
+  ffmpeg -hide_banner -i "$media_file" -vn -af "silencedetect@db30=noise=-30dB:d=${minimum_seconds},silencedetect@db35=noise=-35dB:d=${minimum_seconds},silencedetect@db40=noise=-40dB:d=${minimum_seconds}" -f null - 2>&1 | sed -n '/\[silencedetect@db/p'
 else
   run_detection "$2"
 fi

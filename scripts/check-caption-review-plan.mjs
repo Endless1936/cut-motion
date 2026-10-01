@@ -93,7 +93,10 @@ for (const [index, cue] of resolvedCues.entries()) {
   const endsWithQuestion = /[?？]$/u.test(cue.text);
   const punctuationBody = (endsWithQuestion ? cue.text.slice(0, -1) : cue.text)
     .replace(/(?<=[A-Za-z0-9])\.(?=[A-Za-z0-9])/g, "");
-  if (/[，。；：！!、,.!?;:'"“”‘’（）()《》〈〉—–\-]/u.test(punctuationBody)) {
+  const punctuationCheckedText = (plan.rules?.protectedTerms ?? [])
+    .filter((term) => term.includes("-"))
+    .reduce((text, term) => text.replaceAll(term, term.replaceAll("-", "")), punctuationBody);
+  if (/[，。；：！!、,.!?;:'"“”‘’（）()《》〈〉—–\-]/u.test(punctuationCheckedText)) {
     errors.push(`${cue.id}: punctuation is only allowed as a final question mark`);
   }
   if (!endsWithQuestion && /[?？]/u.test(cue.text)) {

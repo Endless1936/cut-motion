@@ -244,7 +244,7 @@ if (!reviewPlanPath || path.isAbsolute(reviewPlanRelativePath) || !isPathInside(
     assertRegularContainedFile(jobRoot, reviewPlanPath, "Caption review plan");
     const reviewPlan = readJson(reviewPlanPath);
     const transcriptPath = path.join(jobRoot, "state", "transcript.json");
-    if (reviewPlan.status !== "approved") errors.push("semantic caption plan must be user-approved before promotion");
+    if (reviewPlan.status !== "approved") errors.push("semantic caption plan must be marked approved before promotion");
     if (!Array.isArray(reviewPlan.cues) || reviewPlan.cues.length !== captions.cues.length) errors.push("promoted cue count differs from the approved plan");
     let transcript = null;
     if (!fs.existsSync(transcriptPath)) {

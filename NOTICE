@@ -1,10 +1,6 @@
 cut-motion
 Copyright 2026 prototech
 
-Reference frames under examples/gold-standard contain a creator likeness and are
-included as project documentation with permission. The Apache License does not
-grant trademark, privacy, publicity, or personality rights.
-
 ChatCut, HyperFrames, GSAP, fonts, source videos, and generated media remain
 subject to their respective licenses and terms and are not bundled unless a file
 is explicitly present in this repository.

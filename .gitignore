@@ -30,10 +30,6 @@ secrets.json
 *.webp
 *.gif
 *.heic
-!examples/gold-standard/reference-frames/01-incremental-stack.jpg
-!examples/gold-standard/reference-frames/02-b-axis-showcase.jpg
-!examples/gold-standard/reference-frames/03-tool-strikeout.jpg
-!examples/gold-standard/reference-frames/04-celebration-loop.jpg
 **/renders/
 **/.hyperframes/
 **/snapshots/

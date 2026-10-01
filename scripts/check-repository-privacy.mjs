@@ -25,7 +25,8 @@ export function checkRepositoryPrivacy(root, { stagedOnly = false } = {}) {
   let ignored = [];
   if (tracked.length) {
     try {
-      ignored = split(git(["check-ignore", "--no-index", "-z", "--stdin"], { input: `${tracked.join("\0")}\0` }));
+      ignored = split(git(["check-ignore", "--no-index", "-z", "--stdin"], { input: `${tracked.join("\0")}\0` }))
+        .filter((file) => stagedOnly || fs.existsSync(path.join(root, file)));
     } catch (error) {
       if (error.status !== 1) throw error;
     }
@@ -33,6 +34,7 @@ export function checkRepositoryPrivacy(root, { stagedOnly = false } = {}) {
   for (const file of ignored) report(file, "tracked file matches .gitignore");
   const privatePaths = new Set(ignored);
   for (const file of tracked) {
+    if (!stagedOnly && !fs.existsSync(path.join(root, file))) continue;
     if (/(^|\/)jobs\//i.test(file)) {
       report(file, "private job is tracked");
       privatePaths.add(file);

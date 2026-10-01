@@ -1,6 +1,6 @@
 # Source-Audio Candidate and Waveform Seam Checks
 
-Use this file for waveform-index format and batch-lookup mechanics. The sole rough-cut and seam policy is [`talking-head-trim-standard.md`](talking-head-trim-standard.md). Start building or reusing the index as soon as the source is probed; continue ChatCut import and semantic editing while it builds, then batch-lookup the edited seams after cleanup. The index must be ready before that lookup. This procedure adds no workflow state or approval gate.
+Use this file for waveform-index format and batch-lookup mechanics. The sole rough-cut and seam policy is [`talking-head-trim-standard.md`](talking-head-trim-standard.md). Start building or reusing the index as soon as the source is probed; continue ChatCut import and semantic editing while it builds, then batch-lookup the edited seams after cleanup. The index must be ready before that lookup.
 
 ## Candidate-scan invocation
 

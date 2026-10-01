@@ -71,14 +71,14 @@ check_environment() {
   fi
 
   printf '%s\n' 'manual  ChatCut plugin — confirm it is enabled and authenticated when the selected workflow requires it'
-  printf '%s\n' 'manual  Licensed WOFF2 font — add it to each job before composition rendering'
+  printf '%s\n' 'optional Licensed WOFF2 font — add it to a job when available; otherwise composition uses sans-serif'
 
   if (( missing_count > 0 )); then
     printf '\nLocal preflight failed: %d required item(s) missing. Ask for user approval before installing anything.\n' "$missing_count" >&2
     return 1
   fi
 
-  printf '\nLocal preflight passed. Verify ChatCut when required and add the font before rendering.\n'
+  printf '\nLocal preflight passed. Verify ChatCut when required; a local display font is optional.\n'
 }
 
 install_job() {
