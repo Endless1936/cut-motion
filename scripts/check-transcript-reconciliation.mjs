@@ -127,7 +127,17 @@ if (workflow.referenceScriptStatus === "provided") {
       errors.push("reference-script visual annotations are stale or do not match the immutable source");
     }
   }
-  const classifiedReference = (reconciliation.items ?? []).map((item) => item.referenceText ?? "").join("");
+  const referenceItems = (reconciliation.items ?? []).filter((item) => item.referenceText);
+  const referenceOrder = reconciliation.referenceScript.itemOrder;
+  let orderedReferenceItems = referenceItems;
+  if (referenceOrder !== undefined) {
+    const byId = new Map(referenceItems.map((item) => [item.id, item]));
+    if (!Array.isArray(referenceOrder) || referenceOrder.length !== referenceItems.length
+      || new Set(referenceOrder).size !== referenceItems.length || referenceOrder.some((id) => !byId.has(id))) {
+      errors.push("reference itemOrder must name every reference-bearing item exactly once");
+    } else orderedReferenceItems = referenceOrder.map((id) => byId.get(id));
+  }
+  const classifiedReference = orderedReferenceItems.map((item) => item.referenceText).join("");
   if (normalize(classifiedReference) !== normalize(expectedAnnotations.speechText)) {
     errors.push("reference-script spoken text is not exhaustively classified");
   }

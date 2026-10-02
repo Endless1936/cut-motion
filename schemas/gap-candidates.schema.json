@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cut-motion Gap Candidates",
+  "type": "object",
+  "required": ["schemaVersion", "mediaFingerprint", "timeline", "scan", "candidates", "removedCandidates", "coverage"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": "1.0.0" },
+    "note": { "type": "string" },
+    "mediaFingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "timeline": {
+      "type": "object",
+      "required": ["path", "sha256", "itemCount", "fps", "durationSeconds"],
+      "properties": {
+        "path": { "const": "state/timeline-source-windows.json" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "itemCount": { "type": "integer", "minimum": 1 },
+        "fps": { "type": "number", "exclusiveMinimum": 0 },
+        "durationSeconds": { "type": "number", "exclusiveMinimum": 0 },
+        "baselineKind": { "enum": ["provided", "current-timeline"] },
+        "preCleanupPath": { "type": ["string", "null"] },
+        "preCleanupSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+        "preCleanupItemCount": { "type": ["integer", "null"], "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "scan": {
+      "type": "object",
+      "required": ["asrNoWordSeconds", "emphasisSeconds", "decibelSweep"],
+      "properties": {
+        "asrNoWordSeconds": { "const": 0.3 },
+        "emphasisSeconds": { "const": 0.8 },
+        "decibelSweep": {
+          "type": "object",
+          "required": ["thresholdsDb", "minimumDetectedSeconds", "source", "applied"],
+          "properties": {
+            "thresholdsDb": {
+              "type": "array",
+              "prefixItems": [{ "const": -30 }, { "const": -35 }, { "const": -40 }],
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "minimumDetectedSeconds": { "const": 0.45 },
+            "source": { "const": "state/source-silence-db-scan.txt" },
+            "applied": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "itemId", "boundary", "sourceStart", "sourceEnd", "durationSeconds", "timelineStart", "timelineEnd", "asrGap", "decibelHits", "classification"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "itemId": { "type": "string", "minLength": 1 },
+          "boundary": { "enum": ["internal", "head", "tail"] },
+          "sourceStart": { "type": "number", "minimum": 0 },
+          "sourceEnd": { "type": "number", "minimum": 0 },
+          "durationSeconds": { "type": "number", "minimum": 0.3 },
+          "timelineStart": { "type": "number", "minimum": 0 },
+          "timelineEnd": { "type": "number", "minimum": 0 },
+          "asrGap": { "type": "boolean" },
+          "decibelHits": { "type": "array", "items": { "type": "number" } },
+          "classification": { "enum": ["unclassified", "remove", "preserve"] },
+          "reasonCode": { "type": ["string", "null"] },
+          "reason": { "type": ["string", "null"] },
+          "precedingWord": {
+            "type": ["object", "null"],
+            "required": ["id", "text", "end"],
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" },
+              "end": { "type": "number" }
+            },
+            "additionalProperties": false
+          },
+          "followingWord": {
+            "type": ["object", "null"],
+            "required": ["id", "text", "start"],
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" },
+              "start": { "type": "number" }
+            },
+            "additionalProperties": false
+          },
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "audioChecked": { "type": "boolean" },
+              "note": { "type": ["string", "null"] }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "removedCandidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "sourceStart", "sourceEnd", "durationSeconds", "originalPauseSeconds", "retainedSeconds", "classification"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "itemId": { "type": ["string", "null"] },
+          "sourceStart": { "type": "number", "minimum": 0 },
+          "sourceEnd": { "type": "number", "minimum": 0 },
+          "durationSeconds": { "type": "number", "minimum": 0.3 },
+          "originalPauseSeconds": { "type": "number", "minimum": 0.3 },
+          "retainedSeconds": { "type": "number", "minimum": 0 },
+          "classification": { "const": "remove" },
+          "reasonCode": { "type": ["string", "null"] },
+          "reason": { "type": "string" },
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "audioChecked": { "type": "boolean" },
+              "note": { "type": ["string", "null"] }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["itemsExamined", "candidateCount", "classifiedCount", "preservedCount", "removedCount", "unexplainedCount", "removedSeconds"],
+      "properties": {
+        "itemsExamined": { "type": "integer", "minimum": 1 },
+        "candidateCount": { "type": "integer", "minimum": 0 },
+        "classifiedCount": { "type": "integer", "minimum": 0 },
+        "preservedCount": { "type": "integer", "minimum": 0 },
+        "removedCount": { "type": "integer", "minimum": 0 },
+        "removedSeconds": { "type": "number", "minimum": 0 },
+        "unexplainedCount": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

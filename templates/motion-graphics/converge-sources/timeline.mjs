@@ -1,0 +1,10 @@
+timeline.set(root, {autoAlpha:1}, beat.start);
+const inputs = select('.converge-inputs h3');
+inputs.forEach((node) => timeline.fromTo(node,{autoAlpha:0,y:-16},{autoAlpha:1,y:0,duration:.3,ease:'power3.out'},beat.start+Number(node.dataset.at)));
+const result = select('.converge-result')[0];
+const resultAt = beat.start + Number(result.dataset.at);
+const wiringAt = Math.max(beat.start, resultAt - .45);
+timeline.fromTo(select('.converge-wiring i'),{scaleY:0,transformOrigin:'top'},{scaleY:1,duration:.2,ease:'power2.out'},wiringAt);
+timeline.fromTo(select('.converge-wiring b'),{scaleX:0,transformOrigin:'center'},{scaleX:1,duration:.2,ease:'power2.out'},wiringAt+.1);
+timeline.fromTo(select('.converge-wiring span'),{scaleY:0,transformOrigin:'top'},{scaleY:1,duration:.2,ease:'power2.out'},wiringAt+.25);
+timeline.fromTo(result,{autoAlpha:0,y:10},{autoAlpha:1,y:0,duration:.32,ease:'power3.out'},resultAt);

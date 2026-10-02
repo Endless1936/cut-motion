@@ -239,7 +239,9 @@ export const computeDesignLanguageFingerprint = (jobRoot, captionMode) => {
 export const beginWorkflowRevision = (workflow, { invalidateVisualPlan = true } = {}) => {
   ensureWorkflowDefaults(workflow);
   workflow.revisionId += 1;
-  if (invalidateVisualPlan) workflow.visualPlanSha256 = null;
+  if (invalidateVisualPlan) {
+    workflow.visualPlanSha256 = null;
+  }
 };
 export const saveWorkflow = (workflowPath, workflow, now = new Date().toISOString()) => {
   workflow.completed = workflow.currentState === "complete";
@@ -296,7 +298,7 @@ export const computeCreativeDocumentFingerprints = (jobRoot, captionMode) => {
   ]));
 };
 
-export const assertCreativeAuthorities = (jobRoot, workflow, { requireApproved = true } = {}) => {
+export const assertCreativeAuthorities = (jobRoot, workflow, { requireApproved = true, ignore = [], allowMissing = false } = {}) => {
   const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
   if (!fs.existsSync(confirmationPath)) throw new Error("Creative confirmation is missing");
   const confirmation = readJson(confirmationPath);
@@ -318,12 +320,115 @@ export const assertCreativeAuthorities = (jobRoot, workflow, { requireApproved =
   }
   const expected = computeCreativeAuthorities(jobRoot, workflow.captionMode);
   for (const [name, authority] of Object.entries(expected)) {
+    if (ignore.includes(name)) continue;
     const recorded = confirmation.authorities?.[name];
+    if (allowMissing && !recorded?.sha256) continue;
     if (recorded?.path !== authority.path || recorded?.sha256 !== authority.sha256) {
       throw new Error(`Creative authority drift: ${name}`);
     }
   }
   return confirmation;
+};
+
+// Legacy field name retained for compatibility; these are descriptive categories.
+export const REAPPROVAL_FIELD_NAMES = [
+  "caption-segmentation",
+  "mg-node-set",
+  "mg-count",
+  "on-screen-copy",
+  "support-role",
+  "visual-style",
+  "primary-flow-axis",
+  "visual-reference",
+  "axis-mode"
+];
+
+// Transitions check consumed inputs; explicit verify also audits settled outputs.
+const workflowDriftTargets = (jobRoot, workflow, { scope = "full" } = {}) => {
+  const full = scope === "full";
+  const state = workflow.currentState;
+  const automatic = workflow.mode === "auto" || workflow.roughCutReviewDecision === "automatic-fallback";
+  const targets = [];
+  const record = (label, relativePath, sha256) => {
+    if (typeof relativePath === "string" && relativePath && typeof sha256 === "string" && sha256) {
+      targets.push({ label, relativePath, sha256 });
+    }
+  };
+  if ((full || state === "render" || (state === "composition" && automatic))
+    && !(state === "composition" && !automatic)) {
+    record("visual plan", "state/beat-map.json", workflow.visualPlanSha256);
+  }
+  // The composition fingerprint describes whatever file the last transition
+  // produced. While the job sits inside the composition stage, rebuilding
+  // index.html *is* the work: the advance that leaves the stage rewrites the
+  // fingerprint. Comparing it here would make every rebuild look like drift.
+  if (state !== "composition" && (full || state === "render")) {
+    record("composition", workflow.compositionArtifactPath, workflow.compositionArtifactSha256);
+  }
+  // Large media is checked at delivery; explicit verify also audits older files.
+  if (full || state === "render") record("authoritative media", workflow.authoritativeMediaPath, workflow.authoritativeMediaSha256);
+  if (full) record("trim plan", "state/trim-plan.json", workflow.trimPlanSha256);
+  if (full || (automatic && ["composition", "render"].includes(state))) {
+    record("creative confirmation", "state/creative-confirmation.json", workflow.creativeConfirmationSha256);
+    for (const [name, fingerprint] of Object.entries(workflow.creativeDocumentFingerprints ?? {})) {
+      record(`creative document ${name}`, fingerprint?.path, fingerprint?.sha256);
+    }
+  }
+  if (full && workflow.lastKnownGoodDelivery) {
+    record("last known-good delivery", workflow.lastKnownGoodDelivery.path, workflow.lastKnownGoodDelivery.sha256);
+  }
+  return targets.map((target) => ({ ...target, absolutePath: path.resolve(jobRoot, target.relativePath) }));
+};
+
+/**
+ * The creative package declares which artifact fingerprints the approval
+ * covers. Checking them is deliberately separate from the generic drift scan:
+ * a scaffolded job legitimately has an empty declaration until its plan is
+ * generated, so only the composition transition (where the package must be
+ * settled) and an explicit `verify` treat a mismatch as a failure.
+ */
+export const collectCreativeAuthorityDrift = (jobRoot, workflow) => {
+  if (!fs.existsSync(path.join(jobRoot, "state", "creative-confirmation.json"))) return [];
+  try {
+    const scopedReview = workflow.currentState === "composition" && workflow.mode === "review"
+      && workflow.roughCutReviewDecision !== "automatic-fallback";
+    const requestedRevision = scopedReview && workflow.history?.some((entry) =>
+      entry.action === "reopen" && entry.actor === "user" && entry.scope === "composition"
+      && entry.revisionId === workflow.revisionId);
+    assertCreativeAuthorities(jobRoot, workflow, {
+      requireApproved: false,
+      ignore: scopedReview ? ["beatMap", ...(requestedRevision ? ["captionPlan"] : [])] : [],
+      allowMissing: scopedReview
+    });
+    return [];
+  } catch (error) {
+    return [`creative authorities: ${error.message}`];
+  }
+};
+
+export const collectWorkflowDrift = (jobRoot, workflow, options = {}) => {
+  const drift = [];
+  for (const target of workflowDriftTargets(jobRoot, workflow, options)) {
+    if (!fs.existsSync(target.absolutePath)) {
+      drift.push(`${target.label}: ${target.relativePath} is gone but ${target.sha256.slice(0, 12)}… is still recorded`);
+      continue;
+    }
+    const actual = sha256File(target.absolutePath);
+    if (actual !== target.sha256) {
+      drift.push(`${target.label}: ${target.relativePath} is ${actual.slice(0, 12)}… but the workflow records ${target.sha256.slice(0, 12)}…`);
+    }
+  }
+  return drift;
+};
+
+export const assertNoWorkflowDrift = (jobRoot, workflow, options = {}) => {
+  const drift = collectWorkflowDrift(jobRoot, workflow, options);
+  if (drift.length === 0) return;
+  throw new Error([
+    "Recorded fingerprints no longer match the job artifacts:",
+    ...drift.map((line) => `  - ${line}`),
+    "Inspect with `workflow-state.mjs <workflow.json> verify`. For a scoped visual edit use `reopen composition --actor user --note ...`; for a changed plan use `replan --note ...` in an active job or `reopen motion-plan --actor user --note ...` after completion."
+  ].join("\n"));
 };
 
 export const invalidateCreativeArtifacts = (jobRoot, note = "Dependent creative inputs changed") => {

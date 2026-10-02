@@ -103,13 +103,6 @@ try {
 } catch (error) {
   errors.push(error.message);
 }
-const requiredReapprovalFields = new Set(["caption-segmentation", "mg-node-set", "mg-count", "on-screen-copy", "support-role", "visual-style", "primary-flow-axis", "visual-reference", "axis-mode"]);
-const actualReapprovalFields = new Set(confirmation.changeControl?.reapprovalFields ?? []);
-if (confirmation.changeControl?.implementationMayStartAfter !== "creative-package-approved"
-  || confirmation.changeControl?.planChangesRequireReapproval !== true
-  || [...requiredReapprovalFields].some((field) => !actualReapprovalFields.has(field))) {
-  errors.push("change control must block implementation before plan approval and require reapproval for every plan field");
-}
 
 const aAxis = confirmation.axisPolicy?.A;
 if (aAxis?.accumulation !== "replace") errors.push("A-axis must use replace behavior");

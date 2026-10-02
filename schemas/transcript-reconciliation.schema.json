@@ -14,7 +14,8 @@
       "properties": {
         "status": { "enum": ["none", "provided"] },
         "path": { "type": ["string", "null"] },
-        "sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" }
+        "sha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+        "itemOrder": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 }, "description": "Reference-bearing item IDs in original script order; independent of released timeline order." }
       },
       "additionalProperties": false
     },

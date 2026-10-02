@@ -4,8 +4,11 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   assertCreativeAuthorities,
+  assertNoWorkflowDrift,
   assertRegularContainedFile,
   beginWorkflowRevision,
+  collectCreativeAuthorityDrift,
+  collectWorkflowDrift,
   computeCreativeAuthorities,
   computeCreativeDocumentFingerprints,
   ensureWorkflowDefaults,
@@ -23,7 +26,7 @@ import { buildComposition } from "./build-composition.mjs";
 const [workflowPath, command, ...rawArguments] = process.argv.slice(2);
 
 if (!workflowPath || !command) {
-  console.error("Usage: node workflow-state.mjs <workflow.json> <status|advance|approve|revise|fallback-auto|replan|reopen|set-mode|set-caption-mode|set-axis-mode> [value] [--actor name] [--artifact path] [--note text]");
+  console.error("Usage: node workflow-state.mjs <workflow.json> <status|verify|advance|approve|revise|fallback-auto|replan|reopen|set-mode|set-caption-mode|set-axis-mode> [value] [--actor name] [--artifact path] [--note text]");
   process.exit(64);
 }
 
@@ -105,6 +108,22 @@ const checkReconciliation = (allowPending, expectedMedia = null) => {
     [reconciliationPath, ...(allowPending ? ["--allow-review-pending"] : []), ...(expectedMedia ? ["--expected-media", expectedMedia] : [])],
     "Transcript reconciliation failed"
   );
+};
+
+// Steps 3-5 of docs/talking-head-trim-standard.md order gap-candidate cleanup
+// before edge tightening, but nothing used to record that it happened. The
+// pre-cleanup snapshot plus the classified candidate list make a skipped cleanup
+// fail the rough-cut transition instead of silently reaching review.
+const preCleanupWindowsPath = path.join(jobRoot, "state", "timeline-source-windows.pre-cleanup.json");
+const gapCandidatesPath = path.join(jobRoot, "state", "gap-candidates.json");
+const checkGapCandidates = () => {
+  if (!fs.existsSync(preCleanupWindowsPath)) {
+    throw new Error("ChatCut rough cut requires state/timeline-source-windows.pre-cleanup.json: snapshot the retained source structure before gap cleanup");
+  }
+  if (!fs.existsSync(gapCandidatesPath)) {
+    throw new Error("ChatCut rough cut requires state/gap-candidates.json: run scripts/classify-gaps.mjs --write and classify every candidate");
+  }
+  runCheck("check-gap-candidates.mjs", [gapCandidatesPath], "Gap candidate review failed");
 };
 
 const lockRoughCutMedia = (artifactPath, { audit = false, trimPlanAudit = false, requirePromotion = false } = {}) => {
@@ -378,6 +397,21 @@ if (command === "status") {
   process.exit(0);
 }
 
+if (command === "verify") {
+  const findings = collectWorkflowDrift(jobRoot, workflow);
+  const settled = ["composition", "render", "complete"].includes(workflow.currentState);
+  if (settled || workflow.currentState === "motion-plan") {
+    findings.push(...collectCreativeAuthorityDrift(jobRoot, workflow));
+  }
+  if (findings.length === 0) {
+    console.log(`Workflow fingerprints verified: ${workflow.currentState} (revision ${workflow.revisionId})`);
+    process.exit(0);
+  }
+  for (const finding of findings) console.error(`Error: ${finding}`);
+  console.error(`Workflow fingerprints no longer describe the job: ${findings.length} finding(s).`);
+  process.exit(1);
+}
+
 if (command === "set-mode") {
   const mode = positionals[0];
   if (!["review", "auto"].includes(mode)) throw new Error(`Invalid mode: ${mode}`);
@@ -535,6 +569,7 @@ if (!currentStage) throw new Error(`Unknown current state: ${workflow.currentSta
 if (command === "advance") {
   if (currentStage.terminal) throw new Error("Workflow is already complete");
   if (currentStage.gate) throw new Error(`Gate ${workflow.currentState} requires approve or revise`);
+  assertNoWorkflowDrift(jobRoot, workflow, { scope: "stage" });
   if (workflow.currentState === "intake") {
     const projectPath = path.join(jobRoot, "state", "project.json");
     if (!fs.existsSync(projectPath)) throw new Error("Project state is missing");
@@ -571,6 +606,7 @@ if (command === "advance") {
         if (project.roughCutEngine !== "chatcut") throw new Error("ChatCut rough-cut review requires project.roughCutEngine=chatcut");
         if (record.timelineIds.length === 0) throw new Error("ChatCut rough-cut review requires at least one timeline");
         assertSourceTranscriptLock();
+        checkGapCandidates();
         if (project.mediaArtifacts?.roughcut) {
           delete project.mediaArtifacts.roughcut;
           writeJsonAtomic(projectPath, project);
@@ -621,24 +657,45 @@ if (command === "advance") {
         workflow.visualAxisModeSource = "default";
       }
       if (!fs.existsSync(beatMapPath)) throw new Error("Motion plan requires state/beat-map.json");
-      workflow.visualPlanSha256 = sha256File(beatMapPath);
       if (fullAuditRequested) {
         runCheck("check-visual-plan.mjs", [beatMapPath, path.join(jobRoot, "state", "transcript.json"), path.join(jobRoot, "state", "design-system.json")], "Motion plan requires a valid beat map");
         validateCreativePackage("Automatic full-audit validation", "agent");
       }
+      // The beat-map fingerprint is what a later composition or render advance
+      // compares against. Write it last, so the caption-plan approval that
+      // validateCreativePackage performs is already on disk when it is digested.
+      workflow.visualPlanSha256 = sha256File(beatMapPath);
     }
     if (workflow.currentState === "composition") {
       const generatedCompositionPath = path.join(jobRoot, "hyperframes", "index.html");
       if (artifactPath !== generatedCompositionPath) {
         throw new Error("Composition advance requires hyperframes/index.html");
       }
+      const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
+      if (!fs.existsSync(beatMapPath)) throw new Error("Composition requires state/beat-map.json");
+      const beatMapSha256 = sha256File(beatMapPath);
+      if (fullAuditRequested && !workflow.visualPlanSha256) {
+        throw new Error("Automatic composition requires the recorded beat map; run replan --note ... then advance motion-plan");
+      }
+      if (fullAuditRequested && workflow.visualPlanSha256 !== beatMapSha256) {
+        throw new Error("The automatic beat map changed; run replan --note ... and regenerate the plan");
+      }
+      const authorityDrift = collectCreativeAuthorityDrift(jobRoot, workflow);
+      if (authorityDrift.length > 0) {
+        throw new Error(`Composition requires a creative package whose authorities match the job artifacts (run scripts/generate-plan.mjs <job> --write): ${authorityDrift.join("; ")}`);
+      }
       buildComposition(path.join(jobRoot, "hyperframes"));
       assertRegularContainedFile(path.join(jobRoot, "hyperframes"), generatedCompositionPath, "Built composition");
-      const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
-      if (fs.existsSync(beatMapPath)) workflow.visualPlanSha256 = sha256File(beatMapPath);
       if (fullAuditRequested) {
         assertCreativeAuthorities(jobRoot, workflow);
+      } else {
+        const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
+        const confirmation = readJson(confirmationPath);
+        confirmation.authorities = computeCreativeAuthorities(jobRoot, workflow.captionMode);
+        writeJsonAtomic(confirmationPath, confirmation);
+        if (workflow.creativeConfirmationSha256) workflow.creativeConfirmationSha256 = sha256File(confirmationPath);
       }
+      workflow.visualPlanSha256 = beatMapSha256;
     }
     if (workflow.currentState === "render") {
       const canonicalDeliveryPath = path.join(jobRoot, "output", "final.mp4");

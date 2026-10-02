@@ -324,7 +324,8 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
   }
   const moduleIds = moduleDirectories(directory);
   for (const beat of beats.values()) {
-    const requiresModule = beatMap.captionMode === "motion-copy" || beat.mgScope === "local";
+    const sharedStage = ["stage/axis-stage-transition", "axis-stage-transition"].includes(beat.templateId ?? beat.mgComponent ?? beat.recipe);
+    const requiresModule = !sharedStage && (beatMap.captionMode === "motion-copy" || beat.mgScope === "local");
     if (requiresModule && !moduleIds.includes(beat.id)) {
       throw new Error(`${beat.id}: approved motion Beat is missing its MG module`);
     }

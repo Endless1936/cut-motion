@@ -6,6 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   beginWorkflowRevision,
+  collectWorkflowDrift,
+  computeCreativeAuthorities,
   ensureWorkflowDefaults,
   readJson,
   sha256File,
@@ -64,6 +66,10 @@ const prepareCaptionPlan = (job, axisMode = "a-axis-overlay") => {
   confirmation.visualAxisModeDecision = { status: "acknowledged", source: workflow.visualAxisModeSource };
   confirmation.storyboard.beatCount = beats.length;
   confirmation.review.status = "ready";
+  // A real job gets these from `generate-plan.mjs --write`. The composition
+  // transition refuses to build from a package whose authorities are absent or
+  // stale, so the fixture has to declare them like any other job.
+  confirmation.authorities = computeCreativeAuthorities(job, workflow.captionMode);
   writeJsonAtomic(confirmationPath, confirmation);
   const reconciliation = readJson(path.join(job, "state", "transcript-reconciliation.json"));
   reconciliation.mediaFingerprint = sha256File(path.join(job, "input", "source.mov"));
@@ -132,7 +138,52 @@ try {
     const workflowPath = path.join(job, "state", "workflow.json");
     const workflow = readJson(workflowPath);
     const sourceTranscriptPath = path.join(job, "state", "source-transcript.json");
-    writeJsonAtomic(sourceTranscriptPath, { schemaVersion: "1.0.0", revision: 1, segments: [] });
+    writeJsonAtomic(sourceTranscriptPath, {
+      schemaVersion: "1.0.0",
+      revision: 1,
+      language: "zh-CN",
+      duration: 2,
+      source: "chatcut",
+      segments: [
+        {
+          id: "s1",
+          text: "甲。",
+          start: 1,
+          end: 2,
+          confidence: null,
+          words: [{ id: "s1.w0", text: "甲。", start: 1, end: 2, confidence: null }]
+        }
+      ]
+    });
+    // A retained item that starts and ends exactly on the spoken words leaves no
+    // gap candidate, so this fixture exercises the gate rather than the cleanup.
+    const windows = {
+      schemaVersion: 1,
+      sourceSha256: "c".repeat(64),
+      sourceDurationUs: 2_000_000,
+      sourceAssetId: "asset-test",
+      timelineFps: { numerator: 30, denominator: 1 },
+      clips: [{
+        itemId: "item-test",
+        assetId: "asset-test",
+        timelineStartFrame: 0,
+        durationFrames: 30,
+        srcStartUs: 1_000_000,
+        srcEndUs: 2_000_000,
+        playbackRateNumerator: 1,
+        playbackRateDenominator: 1
+      }]
+    };
+    writeJsonAtomic(path.join(job, "state", "timeline-source-windows.json"), windows);
+    writeJsonAtomic(path.join(job, "state", "timeline-source-windows.pre-cleanup.json"), windows);
+    fs.writeFileSync(path.join(job, "state", "source-silence-db-scan.txt"), [
+      "[silencedetect@db30 @ 0x0] silence_start: 0.1",
+      "[silencedetect@db30 @ 0x0] silence_end: 0.4 | silence_duration: 0.3",
+      "[silencedetect@db35 @ 0x0] silence_start: 0.1",
+      "[silencedetect@db35 @ 0x0] silence_end: 0.4 | silence_duration: 0.3",
+      "[silencedetect@db40 @ 0x0] silence_start: 0.1",
+      "[silencedetect@db40 @ 0x0] silence_end: 0.4 | silence_duration: 0.3"
+    ].join("\n"));
     workflow.currentState = "rough-cut";
     workflow.pendingGate = null;
     workflow.sourceTranscriptSha256 = sha256File(sourceTranscriptPath);
@@ -148,8 +199,37 @@ try {
       activeTimelineId: "timeline-back",
       recordedAt: "2026-08-06T00:00:00.000Z"
     });
+    script("classify-gaps.mjs", [job, "--write"]);
     return { job, workflowPath };
   };
+
+  // The rough-cut transition refuses a ChatCut review with no gap-candidate record.
+  const missingGapReview = prepareChatcutReviewJob("chatcut-missing-gap-review");
+  const missingGapArtifact = path.join(missingGapReview.job, "state", "gap-candidates.json");
+  fs.rmSync(missingGapArtifact);
+  script("workflow-state.mjs", [
+    missingGapReview.workflowPath,
+    "advance",
+    "--artifact",
+    "state/chatcut-roughcut.json"
+  ], false, /gap-candidates\.json/);
+  script("classify-gaps.mjs", [missingGapReview.job, "--write"]);
+  const missingPreCleanup = readJson(missingGapArtifact);
+  missingPreCleanup.scan.decibelSweep.applied = false;
+  writeJsonAtomic(missingGapArtifact, missingPreCleanup);
+  script("workflow-state.mjs", [
+    missingGapReview.workflowPath,
+    "advance",
+    "--artifact",
+    "state/chatcut-roughcut.json"
+  ], false, /decibelSweep\.applied must be true/);
+  fs.rmSync(path.join(missingGapReview.job, "state", "timeline-source-windows.pre-cleanup.json"));
+  script("workflow-state.mjs", [
+    missingGapReview.workflowPath,
+    "advance",
+    "--artifact",
+    "state/chatcut-roughcut.json"
+  ], false, /pre-cleanup\.json/);
 
   const manualReview = prepareChatcutReviewJob("chatcut-manual-review");
   const manualProjectPath = path.join(manualReview.job, "state", "project.json");
@@ -421,6 +501,101 @@ try {
       scope === "rough-cut" ? "pending" : "manual-approved"
     );
   }
+
+  // ------------------------------------------------------- recorded bindings
+  // Every fingerprint the workflow records is written at a transition and was
+  // never re-checked, so a rebuild or a hand edit performed outside the state
+  // machine silently described a job that no longer existed.
+  const bindingJob = scaffold("bindings", "review", "subtitles");
+  const bindingWorkflowPath = path.join(bindingJob, "state", "workflow.json");
+  const bindingState = readJson(bindingWorkflowPath);
+  bindingState.currentState = "motion-plan";
+  bindingState.captionModeAcknowledged = true;
+  bindingState.visualAxisModeAcknowledged = true;
+  bindingState.referenceScriptAcknowledged = true;
+  writeJsonAtomic(bindingWorkflowPath, bindingState);
+  prepareCaptionPlan(bindingJob);
+  script("workflow-state.mjs", [bindingWorkflowPath, "verify"]);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "docs/motion-plan.md"]);
+  const boundState = readJson(bindingWorkflowPath);
+  assert.equal(boundState.currentState, "composition");
+  assert.equal(typeof boundState.visualPlanSha256, "string", "motion-plan must record the beat-map fingerprint");
+  script("workflow-state.mjs", [bindingWorkflowPath, "verify"]);
+
+  const bindingTranscriptPath = path.join(bindingJob, "state", "transcript.json");
+  const settledTranscript = fs.readFileSync(bindingTranscriptPath, "utf8");
+  const driftedTranscript = readJson(bindingTranscriptPath);
+  driftedTranscript.segments[0].text += "改";
+  writeJsonAtomic(bindingTranscriptPath, driftedTranscript);
+  script("workflow-state.mjs", [bindingWorkflowPath, "verify"], false, /creative authorities/);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /creative authorities/);
+  fs.writeFileSync(bindingTranscriptPath, settledTranscript);
+
+  // Automatic mode still detects edits to the settled plan.
+  const bindingBeatMapPath = path.join(bindingJob, "state", "beat-map.json");
+  const settledBeatMap = fs.readFileSync(bindingBeatMapPath, "utf8");
+  const editedBeatMap = readJson(bindingBeatMapPath);
+  editedBeatMap.beats[0].supportRole = "silent-edit";
+  writeJsonAtomic(bindingBeatMapPath, editedBeatMap);
+  writeJsonAtomic(bindingWorkflowPath, { ...boundState, mode: "auto" });
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /Recorded fingerprints no longer match/);
+  fs.writeFileSync(bindingBeatMapPath, settledBeatMap);
+  writeJsonAtomic(bindingWorkflowPath, { ...readJson(bindingWorkflowPath), visualPlanSha256: null });
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /Automatic composition requires the recorded beat map/);
+  writeJsonAtomic(bindingWorkflowPath, boundState);
+
+  // Caption segmentation is change-controlled. It is not a beat-map field, but
+  // the caption plan is a creative authority, so the whole-file authority
+  // fingerprint catches this edit without a per-field digest.
+  const bindingReviewPlanPath = path.join(bindingJob, "captions", "caption-review-plan.json");
+  const settledReviewPlan = fs.readFileSync(bindingReviewPlanPath, "utf8");
+  const editedReviewPlan = readJson(bindingReviewPlanPath);
+  editedReviewPlan.cues[0].text += "改";
+  writeJsonAtomic(bindingReviewPlanPath, editedReviewPlan);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /creative authorities/);
+  fs.writeFileSync(bindingReviewPlanPath, settledReviewPlan);
+
+  // Inside the composition stage, rebuilding index.html is the work itself. The
+  // fingerprint describes the last transition's output and is rewritten by the
+  // advance that leaves the stage, so a rebuild here must not read as drift.
+  const bindingCompositionPath = path.join(bindingJob, "hyperframes", "index.html");
+  fs.appendFileSync(bindingCompositionPath, "\n<!-- rebuild -->\n");
+  script("workflow-state.mjs", [bindingWorkflowPath, "verify"]);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
+  assert.equal(readJson(bindingWorkflowPath).currentState, "render");
+
+  // Once the stage is behind us the fingerprint is settled again, so the same
+  // edit is drift now.
+  fs.appendFileSync(bindingCompositionPath, "\n<!-- hand edit -->\n");
+  script("workflow-state.mjs", [bindingWorkflowPath, "verify"], false, /composition: hyperframes\/index\.html is/);
+
+  const baselineDocument = fs.readFileSync(path.join(bindingJob, "docs", "motion-plan.md"), "utf8");
+  script("workflow-state.mjs", [bindingWorkflowPath, "reopen", "composition", "--actor", "user", "--note", "Change one MG and caption timing"]);
+  const localBeatMap = readJson(bindingBeatMapPath);
+  localBeatMap.beats[0].onScreenCopy = ["局部修订"];
+  writeJsonAtomic(bindingBeatMapPath, localBeatMap);
+  const localCaptionPlan = readJson(bindingReviewPlanPath);
+  localCaptionPlan.note = "User requested caption timing adjustment";
+  writeJsonAtomic(bindingReviewPlanPath, localCaptionPlan);
+  const scopedState = readJson(bindingWorkflowPath);
+  assert.deepEqual(collectWorkflowDrift(bindingJob, {
+    ...scopedState, authoritativeMediaPath: "roughcut/missing-old-media.mp4", authoritativeMediaSha256: "0".repeat(64),
+    lastKnownGoodDelivery: { path: "output/missing-old-final.mp4", sha256: "0".repeat(64) }
+  }, { scope: "stage" }), [], "composition must not reread prior media on every transition");
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
+  assert.equal(readJson(bindingWorkflowPath).visualPlanSha256, sha256File(bindingBeatMapPath));
+  assert.equal(fs.readFileSync(path.join(bindingJob, "docs", "motion-plan.md"), "utf8"), baselineDocument);
+  script("workflow-state.mjs", [bindingWorkflowPath, "verify"]);
+
+  // Legacy review jobs with no authority bindings migrate on a successful build.
+  script("workflow-state.mjs", [bindingWorkflowPath, "reopen", "composition", "--actor", "user", "--note", "Rebuild legacy module"]);
+  const legacyConfirmationPath = path.join(bindingJob, "state", "creative-confirmation.json");
+  const legacyConfirmation = readJson(legacyConfirmationPath);
+  legacyConfirmation.authorities = {};
+  writeJsonAtomic(legacyConfirmationPath, legacyConfirmation);
+  writeJsonAtomic(bindingWorkflowPath, { ...readJson(bindingWorkflowPath), visualPlanSha256: null });
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
+  script("workflow-state.mjs", [bindingWorkflowPath, "verify"]);
 
   const transactionJob = scaffold("transaction", "review", "subtitles");
   const prepared = path.join(transactionJob, "state", "workflow.json.bad.prepared");

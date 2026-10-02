@@ -24,13 +24,25 @@
           "audioAnchorTime": { "type": "number", "minimum": 0 },
           "axis": { "enum": ["A", "B"] },
           "recipe": { "type": "string" },
+          "templateId": { "type": "string", "minLength": 1 },
+          "templateData": {
+            "type": "object",
+            "properties": {
+              "copy": { "type": "array", "items": { "type": "string" } },
+              "revealTimes": { "type": "array", "items": { "type": "number", "minimum": 0 } },
+              "topPx": { "type": "number" },
+              "image": { "type": "string" },
+              "alt": { "type": "string" },
+              "focus": { "type": "array", "items": { "type": "object" } },
+              "duration": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          },
           "mgScope": { "enum": ["none", "local"] },
           "captionSafeZonePass": { "type": "boolean" },
           "intent": { "type": "string" },
           "onScreenCopy": {
             "type": "array",
-            "minItems": 1,
-            "maxItems": 6,
+            "minItems": 0,
             "items": { "type": "string", "minLength": 1 }
           },
           "captionCueIds": {
@@ -42,7 +54,7 @@
           "visualStyle": { "type": "string", "minLength": 1 },
           "primaryFlowAxis": { "enum": ["horizontal", "vertical"] },
           "visualReference": { "type": "string", "minLength": 1 },
-          "semanticTopology": { "enum": ["sequence", "comparison", "convergence", "branch", "mapping", "emphasis", "evidence"] },
+          "semanticTopology": { "enum": ["sequence", "comparison", "convergence", "branch", "mapping", "emphasis", "evidence", "parallel", "linear", "one-to-many", "demonstration"] },
           "entryAnchorWordId": { "type": "string", "pattern": "^.+:word-[0-9]{3}$" },
           "exitAnchorWordId": { "type": "string", "pattern": "^.+:word-[0-9]{3}$" },
           "exitAnchorOffsetFrames": { "type": "integer", "minimum": 0, "maximum": 12 },

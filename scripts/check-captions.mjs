@@ -101,9 +101,8 @@ if (isSourceWordEvidence) {
   const rows = Array.isArray(pagesDocument.rows) ? pagesDocument.rows : [];
   const validRows = rows.filter((row) => Number.isFinite(row?.startMs) && Number.isFinite(row?.endMs) && row.endMs > row.startMs);
   if (!rows.length || validRows.length !== rows.length) errors.push("source word evidence requires valid source timestamps");
-  if (validRows.length > 1 && validRows.some((row, index) => index > 0 && row.startMs < validRows[index - 1].endMs)) {
-    errors.push("source word evidence rows must be ordered and non-overlapping");
-  }
+  // Rows follow released timeline order. Source positions may rewind when a
+  // shot is reordered or intentionally reused; the mapping below checks order.
 
   const mappingReference = pagesDocument.timelineMapping;
   let mapping = null;

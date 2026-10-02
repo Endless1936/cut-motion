@@ -34,6 +34,9 @@ secrets.json
 **/.hyperframes/
 **/snapshots/
 **/assets/fonts/*.woff2
+# Display fonts stay local in every format; only the accompanying LICENSE is committed.
+**/assets/fonts/*.ttf
+**/assets/fonts/*.otf
 **/assets/gsap.min.js
 *.log
 docs/superpowers/

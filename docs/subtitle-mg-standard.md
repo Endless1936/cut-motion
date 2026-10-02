@@ -106,6 +106,12 @@ Do not introduce a technical term, formula, or benchmark that creates more unans
 - Do not add a simultaneous reading task during the densest caption phrase.
 - Use motion to expose change, dependency, comparison, or hierarchy. If a static state communicates equally well, keep the motion restrained.
 
+## Component library
+
+Use the approved [motion template catalog](../templates/motion-graphics/README.md) and `scripts/assemble-mg.mjs`. The adapter in `scripts/motion-template-library.mjs` fills copy, assets, IDs and reveal times while preserving template structure. A/B transitions use the shared composition helper. Use `custom` with a short reason when the content requires a different structure.
+
+`generate-plan.mjs` derives shared template metadata (`semanticTopology`, flow axis, motion/transition families and style); the input supplies only deliberate overrides. Review the entrance, readable hold and exit when changing a template. A container opening before its label should retain meaningful content or a dim label preview, rather than settle blank.
+
 ## Evidence and claims
 
 - A factual addition needs a traceable source in the project research record.
@@ -135,5 +141,6 @@ Every proposed MG must pass:
 - a fixed-cadence pattern interrupt with no semantic purpose;
 - A-axis information groups accumulated into a page instead of being replaced;
 - a transient graphic whose resolved meaning never remains visible;
+- a container that settles visibly empty while its label waits on the audio;
 - any overlap with captions, PiP, evidence, or protected UI, or prolonged face coverage without a recorded user instruction, or accumulated face coverage;
 - an MG that cannot state a concrete `removalLoss`.

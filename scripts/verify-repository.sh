@@ -38,11 +38,21 @@ required_files=(
   assets/design-system.default.json
   config/validation-evidence-contracts.json
   schemas/chatcut-roughcut.schema.json
+  schemas/gap-candidates.schema.json
   schemas/workflow.schema.json
   schemas/render-manifest.schema.json
   schemas/chatcut-source-word-mapping.schema.json
   schemas/validation-receipt.schema.json
   scripts/build-composition.mjs
+  scripts/align-export.sh
+  scripts/check-chatcut.mjs
+  scripts/check-composition.sh
+  scripts/check-gap-candidates.mjs
+  scripts/classify-gaps.mjs
+  scripts/gap-detection.mjs
+  scripts/install-font.sh
+  scripts/assemble-mg.mjs
+  scripts/motion-template-library.mjs
   scripts/render-delivery.mjs
   scripts/render-manifest.mjs
   scripts/render-chunks.mjs
@@ -69,6 +79,8 @@ node "$repository_root/scripts/test-revision-contracts.mjs"
 node "$repository_root/scripts/test-render-core.mjs"
 node "$repository_root/scripts/test-validation-receipts.mjs"
 node "$repository_root/scripts/test-planning-contracts.mjs"
+node "$repository_root/scripts/test-gap-candidates.mjs"
+node "$repository_root/scripts/test-mg-components.mjs"
 node "$repository_root/scripts/test-workflow-contracts.mjs"
 bash "$repository_root/scripts/test-media-pipeline.sh" --static
 

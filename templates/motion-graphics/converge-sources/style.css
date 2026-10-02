@@ -1,0 +1,14 @@
+.converge-sources { position:absolute;top:var(--mg-top,28%);left:6%;width:88%;color:#F4F1E8;font-family:"Smiley Sans",sans-serif;pointer-events:none;opacity:0;visibility:hidden; }
+.converge-panel { position:relative;height:364px;width:100%; }
+.converge-inputs { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px; }
+.converge-inputs h3 { display:grid;place-items:center;margin:0;height:108px;border-radius:18px;background:rgba(244,241,232,.085);font-size:72px;font-weight:400;white-space:nowrap; }
+.converge-wiring { position:absolute;top:108px;left:0;right:0;height:118px; }
+.converge-wiring i,.converge-wiring b,.converge-wiring span { position:absolute;display:block;background:#7DF2C4;border-radius:2px; }
+.converge-wiring i { width:3px;height:50px;top:0; }
+.converge-wiring i:nth-child(1) { left:calc(12.5% - 7.5px); }
+.converge-wiring i:nth-child(2) { left:calc(37.5% - 3.5px); }
+.converge-wiring i:nth-child(3) { left:calc(62.5% + .5px); }
+.converge-wiring i:nth-child(4) { left:calc(87.5% + 4.5px); }
+.converge-wiring b { top:48px;left:calc(12.5% - 7.5px);right:calc(12.5% - 7.5px);height:3px; }
+.converge-wiring span { top:48px;left:calc(50% - 1.5px);height:68px;width:3px; }
+.converge-result { position:absolute;top:224px;left:16%;width:68%;height:116px;display:grid;place-items:center;margin:0;border-radius:22px;background:rgba(255,209,92,.13);color:#FFD15C;font-size:92px;font-weight:400;white-space:nowrap; }

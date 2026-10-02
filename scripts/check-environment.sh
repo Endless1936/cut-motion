@@ -8,10 +8,11 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/check-environment.sh check
+  scripts/check-environment.sh chatcut [probe arguments]
   scripts/check-environment.sh install-job <job-directory> --yes
 
-check verifies local cut-motion runtime dependencies. ChatCut is checked by the
-active Agent session because it cannot be reliably discovered from a shell.
+check verifies local cut-motion runtime dependencies. Inspect the active Agent's
+loaded ChatCut tools first; use `chatcut` only for endpoint diagnosis when needed.
 
 install-job first reuses exact-version modules already available to the local
 machine through job-local links or copies. It downloads only dependencies that
@@ -70,15 +71,16 @@ check_environment() {
     missing_count=$((missing_count + 1))
   fi
 
-  printf '%s\n' 'manual  ChatCut plugin — confirm it is enabled and authenticated when the selected workflow requires it'
   printf '%s\n' 'optional Licensed WOFF2 font — add it to a job when available; otherwise composition uses sans-serif'
+
+  printf '%s\n' 'manual  ChatCut — inspect the active Agent tools; use check-environment.sh chatcut only to diagnose an unavailable connection'
 
   if (( missing_count > 0 )); then
     printf '\nLocal preflight failed: %d required item(s) missing. Ask for user approval before installing anything.\n' "$missing_count" >&2
     return 1
   fi
 
-  printf '\nLocal preflight passed. Verify ChatCut when required; a local display font is optional.\n'
+  printf '\nLocal preflight passed. Confirm ChatCut is trusted when the job uses it; a local display font is optional.\n'
 }
 
 install_job() {
@@ -288,6 +290,10 @@ case "$command_name" in
   check)
     [[ $# -eq 1 ]] || { usage >&2; exit 64; }
     check_environment
+    ;;
+  chatcut)
+    shift
+    node "$script_directory/check-chatcut.mjs" "$@"
     ;;
   install-job)
     shift

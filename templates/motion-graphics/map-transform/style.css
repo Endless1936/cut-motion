@@ -1,0 +1,8 @@
+.map-transform { position:absolute;top:var(--mg-top,28%);left:6%;width:88%;color:#F4F1E8;font-family:"Smiley Sans",sans-serif;pointer-events:none;opacity:0;visibility:hidden; }
+.transform-panel { position:relative;height:352px;width:100%; }
+.transform-source,.transform-result { position:absolute;display:grid;place-items:center;margin:0;font-weight:400;line-height:1.1;white-space:nowrap; }
+.transform-source { top:0;left:16%;width:68%;height:112px;background:rgba(244,241,232,.085);border-radius:20px;font-size:80px; }
+.transform-result { top:220px;left:6%;width:88%;height:128px;border-radius:22px;background:rgba(255,209,92,.13);color:#FFD15C;font-size:96px; }
+.transform-link { position:absolute;top:112px;left:calc(50% - 1.5px);width:3px;height:108px; }
+.transform-link i { position:absolute;inset:0;background:#7DF2C4;border-radius:2px; }
+.transform-link span { position:absolute;bottom:7px;left:-6.5px;width:16px;height:16px;border-right:3px solid #7DF2C4;border-bottom:3px solid #7DF2C4;transform:rotate(45deg); }

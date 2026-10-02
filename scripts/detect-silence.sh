@@ -19,7 +19,10 @@ run_detection() {
 }
 
 if [[ $# -eq 1 ]]; then
+  printf 'scan_thresholds_db=-30,-35,-40\n'
   ffmpeg -hide_banner -i "$media_file" -vn -af "silencedetect@db30=noise=-30dB:d=${minimum_seconds},silencedetect@db35=noise=-35dB:d=${minimum_seconds},silencedetect@db40=noise=-40dB:d=${minimum_seconds}" -f null - 2>&1 | sed -n '/\[silencedetect@db/p'
 else
+  printf 'scan_thresholds_db=%s\n' "$2"
   run_detection "$2"
 fi
+printf 'scan_completed=true\n'

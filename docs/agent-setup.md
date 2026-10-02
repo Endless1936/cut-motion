@@ -50,13 +50,22 @@ After dependency-install approval:
 
 ```bash
 ./scripts/check-environment.sh install-job jobs/<job-id> --yes
-mkdir -p jobs/<job-id>/hyperframes/assets/fonts
-cp /path/to/smiley-sans-oblique.woff2 jobs/<job-id>/hyperframes/assets/fonts/smiley-sans-oblique.woff2
+./scripts/install-font.sh jobs/<job-id>
 ```
 
-The font copy is optional; skip it when the file is unavailable.
+`install-font.sh` resolves the display font in this order: `--from <file>`, the shared cache under `assets/fonts/` (git-ignored, populated by the first job that has the font), fonts already installed in another job, and finally an explicit `--download` from the upstream release. It copies the font and its license into `hyperframes/<fontAsset>`, repoints `state/design-system.json` at the installed file, and rewrites the `@font-face` in the HyperFrames template so the format match is real rather than assumed. Skip it when no font is available; the composition falls back to sans-serif and the font check is optional.
 
 `install-job` first reuses exact-version dependencies already in the current job, then checks valid dependency trees in other jobs under the same repository, then npm's `_npx` cache. A dependency tree copied from another job includes its hoisted dependencies, so the new job does not depend on the old job remaining in place. Invalid links and version mismatches are skipped. GSAP is resolved independently and its browser runtime is regenerated from the verified package. Only when no exact local source exists does it install the pinned dependencies; it never requires a global HyperFrames installation or a user-configured cache path.
+
+## ChatCut preflight
+
+Inspect the active Agent's loaded tools first. If ChatCut tools are callable, continue. `check-environment.sh check` checks local dependencies; the following optional diagnostic probes a configured HTTP MCP endpoint when tools are unavailable:
+
+```bash
+./scripts/check-environment.sh chatcut
+```
+
+It distinguishes endpoint/network/authentication failures from a responding server. Its JSON config discovery covers WorkBuddy/CodeBuddy/Cursor-style configs; native desktop integrations may not use those files. Missing config is not proof of a missing plugin. A healthy endpoint does not prove that the active client mounted its tools; check that client's enabled/trusted state.
 
 ## Render commands
 

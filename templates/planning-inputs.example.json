@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "1.0.0",
+  "captionMode": "subtitles",
+  "timelineId": "replace-with-locked-timeline-id",
+  "cleanExport": { "captionRenderDisabled": false },
+  "lexicon": { "protectedTerms": ["新工具"], "forbiddenStandaloneCues": [] },
+  "cueLines": [
+    { "segmentId": "s1", "fromWord": 1, "toWord": 3 },
+    { "segmentId": "s2", "fromWord": 1, "toWord": 3 }
+  ],
+  "beats": [
+    {
+      "id": "b01-claim", "sceneId": "hook", "sourceSegmentIds": ["s1"],
+      "text": "今天我要演示", "start": 0.5, "end": 2.4, "intent": "引出工具演示"
+    },
+    {
+      "id": "b02-tool", "sceneId": "proof", "sourceSegmentIds": ["s2"],
+      "text": "这个新工具很好用", "start": 3, "end": 5.4,
+      "templateId": "annotation", "intent": "补充演示位置",
+      "onScreenCopy": ["演示见片尾"],
+      "templateData": { "copy": ["演示见片尾"] },
+      "entryAnchorWordId": "s2:word-001", "exitAnchorWordId": "s2:word-003",
+      "exitAnchorOffsetFrames": 0, "exitFrames": 6, "entranceFrames": 6,
+      "viewerQuestion": "哪里看演示", "supportRole": "consequence",
+      "removalLoss": "观众不知道演示位置", "visualEncoding": "批注给出位置",
+      "stillFrameValue": "批注文案可读", "attentionCost": "low",
+      "components": ["批注"],
+      "typography": { "fontSizePx": 80 },
+      "captionSafeZonePass": true,
+      "factualClaims": [], "terms": [],
+      "majorSceneException": "短演示从引子进入工具说明",
+      "layout": {
+        "primaryOccupancyRatio": 0.041667,
+        "primaryBoundsNormalized": { "x": 0.25, "y": 0.80625, "width": 0.5, "height": 0.041667 },
+        "panelPaddingPx": 0, "safeAreaPass": true, "faceCover": "none",
+        "faceSafetyNote": "示例批注位于字幕下方；实际 job 重新判断人物位置"
+      }
+    }
+  ],
+  "annotationDecisions": []
+}

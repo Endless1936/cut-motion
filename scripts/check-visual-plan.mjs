@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { resolveBeatRenderWindow, transcriptWordsById } from "./motion-window-utils.mjs";
+import { resolveComponent } from "./motion-template-library.mjs";
 
 const [beatMapPath, transcriptPath, designSystemPath] = process.argv.slice(2);
 
@@ -30,6 +31,9 @@ const subtitleSupportRoles = new Set(["evidence", "explanation", "calibration", 
 
 for (let index = 0; index < beats.length; index += 1) {
   const beat = beats[index];
+  const component = resolveComponent(beat.templateId ?? beat.mgComponent ?? beat.recipe);
+  const stageTemplate = component?.meta.name.startsWith("stage/");
+  const annotationTemplate = component?.meta.name === "annotation";
   const duration = beat.end - beat.start;
 
   if (!(duration > 0)) errors.push(`${beat.id}: end must be greater than start`);
@@ -50,7 +54,8 @@ for (let index = 0; index < beats.length; index += 1) {
 
   if (captionMode === "subtitles" && beat.mgScope === "local" && sourceSegments.every(Boolean) && !beat.copyException) {
     const sourceText = sourceSegments.map((segment) => segment.text).join("");
-    if (normalize(sourceText) === normalize(beat.text)) errors.push(`${beat.id}: subtitles mode motion must add information instead of duplicating caption copy`);
+    const visibleCopy = component ? (beat.templateData?.copy ?? beat.onScreenCopy ?? []).join("") : beat.text;
+    if (!stageTemplate && normalize(sourceText) === normalize(visibleCopy)) errors.push(`${beat.id}: subtitles mode motion must add information instead of duplicating caption copy`);
   }
 
   if (sourceSegments.every(Boolean) && !beat.syncException) {
@@ -70,13 +75,13 @@ for (let index = 0; index < beats.length; index += 1) {
     continue;
   }
 
-  if (!beat.layout || !beat.typography || !beat.components || !beat.microEvents) {
+  if (!beat.layout || !beat.typography || !beat.components || (!component && !beat.microEvents)) {
     errors.push(`${beat.id}: motion beat is missing layout, typography, components, or micro-events`);
     continue;
   }
   if (!["horizontal", "vertical"].includes(beat.primaryFlowAxis)) errors.push(`${beat.id}: motion beat must declare a horizontal or vertical primaryFlowAxis`);
   if (typeof beat.visualReference !== "string" || beat.visualReference.trim().length === 0) errors.push(`${beat.id}: motion beat must declare its approved or proposed visualReference`);
-  if (!["sequence", "comparison", "convergence", "branch", "mapping", "emphasis", "evidence"].includes(beat.semanticTopology)) errors.push(`${beat.id}: motion beat must declare semanticTopology`);
+  if (component ? beat.semanticTopology !== component.meta.semanticTopology : !["sequence", "comparison", "convergence", "branch", "mapping", "emphasis", "evidence"].includes(beat.semanticTopology)) errors.push(`${beat.id}: motion beat must declare its template semanticTopology`);
   const entryWord = wordsById.get(beat.entryAnchorWordId);
   const exitWord = wordsById.get(beat.exitAnchorWordId);
   if (!entryWord) errors.push(`${beat.id}: entryAnchorWordId does not resolve to a transcript word`);
@@ -98,11 +103,20 @@ for (let index = 0; index < beats.length; index += 1) {
     }
   }
   if (captionMode === "subtitles" && beat.mgScope !== "local") errors.push(`${beat.id}: subtitles mode only permits local MG`);
+  if (component) {
+    if (beat.templateData?.copy && JSON.stringify(beat.onScreenCopy) !== JSON.stringify(beat.templateData.copy)) errors.push(`${beat.id}: onScreenCopy must match templateData.copy`);
+    try {
+      if (!stageTemplate) component.render({ beat });
+    } catch (error) { errors.push(error.message); }
+  }
+  // Shared stage animation is background/speaker geometry, not a foreground
+  // information panel. Its interval is validated by the assembler.
+  if (stageTemplate) continue;
   if (captionMode === "subtitles" && beat.captionSafeZonePass !== true) errors.push(`${beat.id}: local MG must pass caption safe-zone review`);
   if (captionMode === "subtitles") {
     if (!Array.isArray(beat.captionCueIds) || beat.captionCueIds.length === 0) errors.push(`${beat.id}: subtitle MG must map to captionCueIds`);
     if (typeof beat.visualStyle !== "string" || beat.visualStyle.trim().length === 0) errors.push(`${beat.id}: subtitle MG must declare visualStyle`);
-    if (!Array.isArray(beat.onScreenCopy) || beat.onScreenCopy.length === 0 || beat.onScreenCopy.length > 6) {
+    if (!Array.isArray(beat.onScreenCopy) || (component ? beat.onScreenCopy.length !== component.meta.copySlots : beat.onScreenCopy.length === 0 || beat.onScreenCopy.length > 6)) {
       errors.push(`${beat.id}: subtitle MG must declare 1–6 exact onScreenCopy strings`);
     } else {
       for (const [copyIndex, copy] of beat.onScreenCopy.entries()) {
@@ -111,7 +125,7 @@ for (let index = 0; index < beats.length; index += 1) {
           continue;
         }
         const visibleCharacters = [...copy.replace(/[\s·/｜|→↔+\-]/g, "")].length;
-        if (visibleCharacters > 12) errors.push(`${beat.id}: onScreenCopy[${copyIndex}] exceeds 12 visible characters`);
+        if (!component && visibleCharacters > 12) errors.push(`${beat.id}: onScreenCopy[${copyIndex}] exceeds 12 visible characters`);
       }
     }
     for (const field of ["viewerQuestion", "removalLoss", "visualEncoding", "stillFrameValue", "attentionCost"]) {
@@ -145,16 +159,16 @@ for (let index = 0; index < beats.length; index += 1) {
 
   if (beat.typography.fontFamily !== typography.displayFamily) errors.push(`${beat.id}: must use ${typography.displayFamily}`);
   const sizeRange = beat.typography.role === "primary" ? typography.primarySizePx : typography.secondarySizePx;
-  if (beat.typography.fontSizePx < sizeRange[0] || beat.typography.fontSizePx > sizeRange[1]) errors.push(`${beat.id}: font size is outside ${sizeRange[0]}–${sizeRange[1]} px`);
+  if (!(annotationTemplate && beat.typography.fontSizePx === 80) && (beat.typography.fontSizePx < sizeRange[0] || beat.typography.fontSizePx > sizeRange[1])) errors.push(`${beat.id}: font size is outside ${sizeRange[0]}–${sizeRange[1]} px`);
   if (beat.typography.lineHeight < typography.displayLineHeight[0] || beat.typography.lineHeight > typography.displayLineHeight[1]) errors.push(`${beat.id}: display line height is outside the approved range`);
   if (beat.typography.outlineReservePx < typography.outlineReservePx) errors.push(`${beat.id}: insufficient outline and transform reserve`);
 
-  if (beat.layout.primaryOccupancyRatio < density.primaryOccupancyRatio[0] || beat.layout.primaryOccupancyRatio > density.primaryOccupancyRatio[1]) errors.push(`${beat.id}: primary occupancy is too empty or too crowded`);
+  if (!annotationTemplate && (beat.layout.primaryOccupancyRatio < density.primaryOccupancyRatio[0] || beat.layout.primaryOccupancyRatio > density.primaryOccupancyRatio[1])) errors.push(`${beat.id}: primary occupancy is too empty or too crowded`);
   if (beat.layout.supportingElementCount < density.supportingElementCount[0] || beat.layout.supportingElementCount > density.supportingElementCount[1]) errors.push(`${beat.id}: supporting element count is outside the approved range`);
   if (beat.layout.supportingElementCount !== beat.components.length) errors.push(`${beat.id}: component list does not match supporting element count`);
   if (beat.layout.emptyComponentCount !== density.emptyComponentCount) errors.push(`${beat.id}: empty components are forbidden`);
   if (!beat.layout.safeAreaPass) errors.push(`${beat.id}: declared layout does not pass the safe area`);
-  if (beat.layout.panelPaddingPx < spacing.panelPaddingPx[0] || beat.layout.panelPaddingPx > spacing.panelPaddingPx[1]) errors.push(`${beat.id}: panel padding is outside the approved range`);
+  if (!annotationTemplate && (beat.layout.panelPaddingPx < spacing.panelPaddingPx[0] || beat.layout.panelPaddingPx > spacing.panelPaddingPx[1])) errors.push(`${beat.id}: panel padding is outside the approved range`);
 
   const bounds = beat.layout.primaryBoundsNormalized;
   if (bounds.x + bounds.width > 1 || bounds.y + bounds.height > 1) errors.push(`${beat.id}: primary bounds leave the canvas`);
@@ -166,7 +180,7 @@ for (let index = 0; index < beats.length; index += 1) {
     && beat.components?.includes("caption-companion-label")
     && bounds.y >= 0.8
     && bounds.height <= 0.04;
-  const maximumPrimaryY = captionCompanionLabel ? 0.84 : designSystem.canvas.primaryStageYRatio[1];
+  const maximumPrimaryY = annotationTemplate ? 0.86 : captionCompanionLabel ? 0.84 : designSystem.canvas.primaryStageYRatio[1];
   if (primaryCenterY < designSystem.canvas.primaryStageYRatio[0] || primaryCenterY > maximumPrimaryY) errors.push(`${beat.id}: primary content is placed in an edge strip`);
   if (beat.axis === "B" && pipExclusionZone) {
     const pipBounds = {
@@ -197,30 +211,33 @@ for (let index = 0; index < beats.length; index += 1) {
     if (overlapsCaption) errors.push(`${beat.id}: local MG overlaps the protected caption zone`);
   }
 
-  const microTimes = beat.microEvents.map((event) => event.time).sort((left, right) => left - right);
+  const microEvents = beat.microEvents ?? [];
+  const microTimes = microEvents.map((event) => event.time).sort((left, right) => left - right);
   if (microTimes.some((time) => time < beat.start || time > beat.end)) errors.push(`${beat.id}: micro-event falls outside its phrase`);
   const rhythmPoints = [beat.start, ...microTimes, beat.end];
   const largestGap = Math.max(...rhythmPoints.slice(1).map((time, pointIndex) => time - rhythmPoints[pointIndex]));
-  if (largestGap > rhythm.microEventGapSeconds[1] && !beat.staticHoldReason) errors.push(`${beat.id}: visual dead zone is ${largestGap.toFixed(2)}s`);
+  if (!component && largestGap > rhythm.microEventGapSeconds[1] && !beat.staticHoldReason) errors.push(`${beat.id}: visual dead zone is ${largestGap.toFixed(2)}s`);
   if (entryWord && microTimes.length > 0) {
     const firstMeaningfulDelayMs = (microTimes[0] - entryWord.start) * 1000;
     if (firstMeaningfulDelayMs < -rhythm.syncToleranceFrames / beatMap.fps * 1000) errors.push(`${beat.id}: first meaningful event starts before its anchor word`);
     if (firstMeaningfulDelayMs > (rhythm.firstMeaningfulEventMaxMs ?? 400)) errors.push(`${beat.id}: first meaningful event is delayed ${firstMeaningfulDelayMs.toFixed(1)}ms`);
   }
 
-  const topologyRoles = beat.microEvents.map((event) => event.topologyRole).filter(Boolean);
+  const topologyRoles = microEvents.map((event) => event.topologyRole).filter(Boolean);
+  if (!component) {
   if (beat.semanticTopology === "sequence" && topologyRoles.filter((role) => role === "node").length < 2) errors.push(`${beat.id}: sequence topology requires at least two nodes`);
   if (beat.semanticTopology === "comparison" && (!topologyRoles.includes("comparison-a") || !topologyRoles.includes("comparison-b"))) errors.push(`${beat.id}: comparison topology requires both sides`);
   if (beat.semanticTopology === "convergence" && (topologyRoles.filter((role) => role === "input").length < 2 || !topologyRoles.includes("result"))) errors.push(`${beat.id}: convergence topology requires two inputs and a result`);
   if (beat.semanticTopology === "branch" && (!topologyRoles.includes("source") || topologyRoles.filter((role) => role === "branch").length < 2)) errors.push(`${beat.id}: branch topology requires one source and two branches`);
   if (beat.semanticTopology === "mapping" && (!topologyRoles.includes("source") || !topologyRoles.includes("result"))) errors.push(`${beat.id}: mapping topology requires source and result roles`);
   if (["convergence", "branch", "mapping"].includes(beat.semanticTopology)
-    && !beat.microEvents.some((event) => event.visualRole === "connector")) {
+    && !microEvents.some((event) => event.visualRole === "connector")) {
     errors.push(`${beat.id}: ${beat.semanticTopology} topology requires a connector`);
+  }
   }
 
   const revealGroups = new Map();
-  for (const event of beat.microEvents.filter((candidate) => candidate.revealGroup)) {
+  for (const event of microEvents.filter((candidate) => candidate.revealGroup)) {
     const events = revealGroups.get(event.revealGroup) ?? [];
     events.push(event);
     revealGroups.set(event.revealGroup, events);
@@ -231,7 +248,7 @@ for (let index = 0; index < beats.length; index += 1) {
     const times = events.map((event) => event.time);
     if ((Math.max(...times) - Math.min(...times)) * beatMap.fps > (rhythm.revealGroupMaxSkewFrames ?? 2)) errors.push(`${beat.id}: reveal group ${group} exceeds two-frame coordination`);
   }
-  if (beat.microEvents.some((event) => event.visualRole === "connector" && !event.revealGroup)) errors.push(`${beat.id}: connector events must declare revealGroup`);
+  if (microEvents.some((event) => event.visualRole === "connector" && !event.revealGroup)) errors.push(`${beat.id}: connector events must declare revealGroup`);
 
   const visualSignature = JSON.stringify({
     axis: beat.axis,
@@ -251,7 +268,7 @@ for (let index = 0; index < beats.length; index += 1) {
   }
 }
 
-const aAxisMotionBeats = beats.filter((beat) => beat.axis === "A" && !(captionMode === "subtitles" && beat.mgScope === "none"));
+const aAxisMotionBeats = beats.filter((beat) => beat.axis === "A" && !(captionMode === "subtitles" && beat.mgScope === "none") && !resolveComponent(beat.templateId ?? beat.recipe)?.meta.name.startsWith("stage/"));
 for (const [index, beat] of aAxisMotionBeats.entries()) {
   const renderWindow = renderWindows.get(beat.id) ?? { start: beat.start, end: beat.end };
   const userFaceCoverage = beat.layout?.faceCoverApproval === "user" && typeof beat.layout?.faceSafetyNote === "string" && beat.layout.faceSafetyNote.trim();

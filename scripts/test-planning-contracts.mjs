@@ -4,7 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseReferenceScript } from "./reference-script-annotations.mjs";
+import { parseReferenceScript, buildReferenceScriptAnnotations } from "./reference-script-annotations.mjs";
+import { buildBeatMap, buildReleasedTranscript, buildCaptionPlan, buildReconciliationItems, buildSourceWordEvidence } from "./plan-artifacts.mjs";
+import { resolveComponent } from "./motion-template-library.mjs";
 import { sha256File } from "./workflow-utils.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -23,6 +25,38 @@ const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const writeJson = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 
 try {
+  const source = { segments: [{ id: "split", words: [{ text: "你好", start: 0, end: 1 }] }, { id: "later", words: [{ text: "再见", start: 2, end: 3 }] }] };
+  const clip = (start, end, at) => ({ srcStartUs: start * 1e6, srcEndUs: end * 1e6, timelineStartFrame: at * 30, durationFrames: (end - start) * 30 });
+  const splitWindows = { clips: [clip(0, 0.4, 0), clip(0.6, 1, 0.4)] };
+  const split = buildReleasedTranscript({ sourceTranscript: source, timelineWindows: splitWindows, fps: 30 });
+  assert.equal(split.segments.map((segment) => segment.text).join(""), "你好");
+  const reorderedWindows = { clips: [clip(2, 3, 0), clip(0, 1, 1), clip(0, 1, 2)] };
+  const reordered = buildReleasedTranscript({ sourceTranscript: source, timelineWindows: reorderedWindows, fps: 30 });
+  assert.deepEqual(reordered.segments.map((segment) => segment.text), ["再见", "你好", "你好"]);
+  assert.equal(new Set(reordered.segments.map((segment) => segment.id)).size, 3);
+  assert.equal(buildSourceWordEvidence({ sourceTranscript: source, timelineWindows: reorderedWindows, releasedTranscript: reordered, fps: 30 }).rows.length, 3);
+  const subframeSource = { segments: [{ id: "fast", words: [{ text: "一", start: 0, end: 0.01 }, { text: "二", start: 0.01, end: 0.1 }] }] };
+  const subframeWindows = { clips: [clip(0, 0.1, 0)] };
+  const subframeTranscript = buildReleasedTranscript({ sourceTranscript: subframeSource, timelineWindows: subframeWindows, fps: 30 });
+  assert.throws(() => buildSourceWordEvidence({ sourceTranscript: subframeSource, timelineWindows: subframeWindows, releasedTranscript: subframeTranscript, fps: 30 }), /shares its frame/);
+  const lines = reordered.segments.map((segment) => ({ segmentId: segment.id, fromWord: 1, toWord: 1, fitFontSizePx: 92 }));
+  assert.equal(buildCaptionPlan({ transcript: reordered, cueLines: lines, lexicon: {} }).cues[0].fitFontSizePx, 92);
+  assert.throws(() => buildCaptionPlan({ transcript: reordered, cueLines: [lines[0], lines[0], lines[2]], lexicon: {} }), /exactly once/);
+  const priorConflict = { id: "existing-conflict", segmentId: "split", type: "ambiguous", resolution: "unresolved", releaseImpact: true, heardText: "你好", evidence: { audioChecked: false, note: "ASR only" }, decision: { actor: "agent", at: "fixture", note: "unresolved" } };
+  const preserved = buildReconciliationItems({ transcript: split, existingItems: [priorConflict] })[0];
+  assert.equal(preserved.id, priorConflict.id);
+  assert.equal(preserved.resolution, "unresolved");
+  assert.equal(preserved.evidence.audioChecked, false);
+  assert.equal(buildReconciliationItems({ transcript: split })[0].evidence.audioChecked, false);
+  const removed = { ...priorConflict, id: "removed", segmentId: "discarded", type: "speech-only", resolution: "accepted-speech", releaseImpact: false, start: 2, end: 3 };
+  assert.equal(buildReconciliationItems({ transcript: split, existingItems: [removed] }).length, 1, "removed accepted source speech is not released evidence");
+  const trimmed = buildReconciliationItems({ transcript: split, existingItems: [{ ...removed, id: "r-split", segmentId: "split", heardText: "你好重录" }] });
+  assert.equal(trimmed[0].heardText, "你好", "ordinary accepted speech follows retained words");
+  const omittedReference = buildReconciliationItems({ transcript: split, existingItems: [{ ...removed, referenceText: "旧台词" }] }).find((item) => item.id === "removed");
+  assert.equal(omittedReference.type, "script-only");
+  assert.equal(omittedReference.resolution, "omitted-unspoken");
+  assert.equal(omittedReference.heardText, null);
+  assert.equal(buildReconciliationItems({ transcript: split, existingItems: [{ ...priorConflict, id: "removed-conflict", segmentId: "discarded" }] }).some((item) => item.id === "removed-conflict" && item.resolution === "unresolved"), true);
   const parsed = parseReferenceScript("第一句[保留]【MG：关键词】；第二句【从前面的分号到此使用B轴】");
   assert.equal(parsed.speechText, "第一句[保留]；第二句");
   assert.equal(parsed.annotations[0].scopeMode, "preceding-clause");
@@ -226,6 +260,246 @@ try {
   const legacyPath = path.join(job, "captions", "legacy.json");
   writeJson(legacyPath, legacyCaptions);
   script("check-captions.mjs", [legacyPath, pages, design], false, /approved semantic plan/);
+
+  const planJob = path.join(temporaryRoot, "generate-plan-job");
+  fs.mkdirSync(path.join(planJob, "state"), { recursive: true });
+  fs.mkdirSync(path.join(planJob, "roughcut"), { recursive: true });
+  fs.copyFileSync(design, path.join(planJob, "state", "design-system.json"));
+  fs.writeFileSync(path.join(planJob, "roughcut", "a-roll.mp4"), "not-a-real-file");
+  writeJson(path.join(planJob, "state", "source-transcript.json"), {
+    revision: 1,
+    language: "zh-CN",
+    duration: 6,
+    source: "chatcut",
+    segments: [
+      { id: "s1", text: "今天我要演示", start: 0.5, end: 2.4, confidence: null, words: [
+        { text: "今天", start: 0.5, end: 1.1, confidence: null },
+        { text: "我要", start: 1.1, end: 1.7, confidence: null },
+        { text: "演示", start: 1.7, end: 2.4, confidence: null }
+      ] },
+      { id: "s2", text: "这个新工具很好用", start: 3.0, end: 5.4, confidence: null, words: [
+        { text: "这个", start: 3.0, end: 3.6, confidence: null },
+        { text: "新工具", start: 3.6, end: 4.4, confidence: null },
+        { text: "很好用", start: 4.4, end: 5.4, confidence: null }
+      ] }
+    ]
+  });
+  writeJson(path.join(planJob, "state", "timeline-source-windows.json"), {
+    schemaVersion: 1,
+    sourceDurationUs: 6000000,
+    timelineFps: { numerator: 30, denominator: 1 },
+    clips: [{ itemId: "item-1", assetId: "asset-1", timelineStartFrame: 0, durationFrames: 180, srcStartUs: 0, srcEndUs: 6000000, playbackRateNumerator: 1, playbackRateDenominator: 1 }]
+  });
+  writeJson(path.join(planJob, "state", "project.json"), {
+    schemaVersion: "1.0.0",
+    id: "generate-plan-fixture",
+    language: "zh-CN",
+    fps: 30,
+    designSystem: "state/design-system.json",
+    mediaArtifacts: { roughcut: { path: "roughcut/a-roll.mp4" } }
+  });
+  writeJson(path.join(planJob, "state", "workflow.json"), {
+    schemaVersion: "1.0.0",
+    currentState: "transcription",
+    captionMode: "subtitles",
+    captionModeSource: "user",
+    captionModeAcknowledged: true,
+    visualAxisMode: "a-axis-overlay",
+    visualAxisModeSource: "user",
+    visualAxisModeAcknowledged: true,
+    referenceScriptStatus: "none",
+    referenceScriptPath: null,
+    referenceScriptSha256: null
+  });
+  writeJson(path.join(planJob, "state", "reference-script-annotations.json"), {
+    schemaVersion: "1.0.0",
+    source: { status: "none", path: null, sha256: null },
+    speechText: "",
+    annotations: [],
+    verification: { parsed: true, annotationCount: 0 }
+  });
+  const planInputs = {
+    schemaVersion: "1.0.0",
+    fps: 30,
+    captionMode: "subtitles",
+    timelineId: "fixture-timeline",
+    corrections: {},
+    lexicon: { protectedTerms: ["新工具"], forbiddenStandaloneCues: [] },
+    cueLines: [
+      { segmentId: "s1", fromWord: 1, toWord: 3 },
+      { segmentId: "s2", fromWord: 1, toWord: 3 }
+    ],
+    beats: [
+      { id: "b01-claim", sceneId: "hook", sourceSegmentIds: ["s1"], text: "今天我要演示", start: 0.5, end: 2.4, intent: "给出主张" },
+      {
+        id: "b02-tool", sceneId: "proof", sourceSegmentIds: ["s2"], text: "这个新工具很好用", start: 3.0, end: 5.4,
+        recipe: "tool-strikeout", intent: "点名工具", onScreenCopy: ["新工具"],
+        visualStyle: "标签入场后被划掉", primaryFlowAxis: "horizontal", visualReference: "recipes/tool-strikeout.json",
+        semanticTopology: "emphasis", entryAnchorWordId: "s2:word-001", exitAnchorWordId: "s2:word-003",
+        exitAnchorOffsetFrames: 0, exitFrames: 6, viewerQuestion: "这个工具还需要吗", supportRole: "consequence",
+        removalLoss: "看不出被取消的是哪一个依赖", visualEncoding: "划痕编码已取消", stillFrameValue: "暂停仍可读",
+        attentionCost: "low", motionFamily: "editorial", transitionFamily: "strike-reveal",
+        components: ["工具标签", "划除线"], entranceFrames: 6,
+        layout: { faceSafetyNote: "面板压在下唇与下巴上，不遮眼睛" }
+      }
+    ],
+    reconciliation: { defaultEvidenceNote: "Fixture evidence at {start}-{end}s." },
+    documents: { globalDirection: ["Fixture only"], rhythmNotes: [], openQuestions: [] }
+  };
+  writeJson(path.join(planJob, "state", "planning-inputs.json"), planInputs);
+
+  // An unchanged scaffold and the locked source-time transcript are inputs,
+  // not hand-authored output conflicts on the normal first generation.
+  fs.mkdirSync(path.join(planJob, "docs"), { recursive: true });
+  fs.mkdirSync(path.join(planJob, "captions"), { recursive: true });
+  for (const [target, template] of [["docs/motion-plan.md", "motion-plan.md"], ["docs/caption-plan.md", "caption-plan.md"], ["docs/creative-confirmation.md", "creative-confirmation.md"], ["captions/caption-lexicon.json", "caption-lexicon.json"]]) fs.copyFileSync(path.join(repositoryRoot, "templates/job", template), path.join(planJob, target));
+  const scaffoldConfirmation = readJson(path.join(repositoryRoot, "templates/job/creative-confirmation.json"));
+  scaffoldConfirmation.captionModeDecision = { status: "acknowledged", source: "user" };
+  writeJson(path.join(planJob, "state/creative-confirmation.json"), scaffoldConfirmation);
+  fs.copyFileSync(path.join(planJob, "state/source-transcript.json"), path.join(planJob, "state/transcript.json"));
+  const planningWorkflow = readJson(path.join(planJob, "state/workflow.json"));
+  planningWorkflow.currentState = "motion-plan";
+  planningWorkflow.sourceTranscriptSha256 = sha256File(path.join(planJob, "state/source-transcript.json"));
+  writeJson(path.join(planJob, "state/workflow.json"), planningWorkflow);
+
+  const dryRun = script("generate-plan.mjs", [planJob]);
+  assert.match(dryRun.stdout, /\(dry run/);
+  assert.equal(fs.existsSync(path.join(planJob, "state", "beat-map.json")), false, "dry run must not write artifacts");
+
+  script("generate-plan.mjs", [planJob, "--write"]);
+  const initialPages = readJson(path.join(planJob, "captions/chatcut-pages.json"));
+  assert.equal(initialPages.roughCutLocked, false, "a media file alone does not prove approval or a workflow lock");
+  assert.equal(initialPages.captionRenderDisabled, false, "the generator must not invent clean-export evidence");
+  const lockedWorkflow = readJson(path.join(planJob, "state/workflow.json"));
+  Object.assign(lockedWorkflow, { roughCutReviewDecision: "manual-approved", authoritativeMediaPath: "roughcut/a-roll.mp4", authoritativeMediaSha256: sha256File(path.join(planJob, "roughcut/a-roll.mp4")) });
+  writeJson(path.join(planJob, "state/workflow.json"), lockedWorkflow);
+  const cleanInputs = readJson(path.join(planJob, "state/planning-inputs.json"));
+  cleanInputs.cleanExport = { captionRenderDisabled: true };
+  writeJson(path.join(planJob, "state/planning-inputs.json"), cleanInputs);
+  script("generate-plan.mjs", [planJob, "--write"]);
+  assert.equal(readJson(path.join(planJob, "captions/chatcut-pages.json")).roughCutLocked, true);
+  assert.equal(readJson(path.join(planJob, "captions/chatcut-pages.json")).captionRenderDisabled, true);
+  fs.appendFileSync(path.join(planJob, "roughcut/a-roll.mp4"), "changed");
+  script("generate-plan.mjs", [planJob, "--write"], false, /media disagrees with the workflow lock/);
+  fs.writeFileSync(path.join(planJob, "roughcut/a-roll.mp4"), "not-a-real-file");
+  fs.appendFileSync(path.join(planJob, "state/source-transcript.json"), " ");
+  script("generate-plan.mjs", [planJob, "--write"], false, /Source transcript changed/);
+  fs.writeFileSync(path.join(planJob, "state/source-transcript.json"), fs.readFileSync(path.join(planJob, "state/source-transcript.json"), "utf8").slice(0, -1));
+  const derived = readJson(path.join(planJob, "state", "transcript.json"));
+  assert.equal(derived.revision, 2);
+  assert.equal(derived.duration, 6);
+  assert.deepEqual(derived.segments.map((segment) => segment.text), ["今天我要演示", "这个新工具很好用"]);
+  const derivedPlan = readJson(path.join(planJob, "captions", "caption-review-plan.json"));
+  assert.deepEqual(derivedPlan.cues.map((cue) => cue.text), ["今天我要演示", "这个新工具很好用"]);
+  assert.equal(derivedPlan.transcriptSha256, sha256File(path.join(planJob, "state", "transcript.json")));
+  const derivedBeats = readJson(path.join(planJob, "state", "beat-map.json"));
+  assert.deepEqual(derivedBeats.beats.map((beat) => beat.mgScope), ["none", "local"]);
+  assert.equal(derivedBeats.beats[0].recipe, "caption-only");
+  assert.equal(derivedBeats.beats[0].audioAnchorTime, 0.5);
+  assert.equal(derivedBeats.beats[1].typography.fontFamily, "Smiley Sans");
+  assert.deepEqual(derivedBeats.beats[1].captionCueIds, ["caption-0002"]);
+  script("check-caption-review-plan.mjs", [path.join(planJob, "captions", "caption-review-plan.json")]);
+  script("check-transcript-reconciliation.mjs", [path.join(planJob, "state", "transcript-reconciliation.json")]);
+
+  const firstPass = fs.readFileSync(path.join(planJob, "state", "beat-map.json"), "utf8");
+  script("generate-plan.mjs", [planJob, "--write"]);
+  assert.equal(fs.readFileSync(path.join(planJob, "state", "beat-map.json"), "utf8"), firstPass, "generate-plan must be idempotent");
+  const reconciliationPath = path.join(planJob, "state", "transcript-reconciliation.json");
+  const conflict = readJson(reconciliationPath);
+  conflict.items[0].type = "ambiguous";
+  conflict.items[0].resolution = "unresolved";
+  conflict.items[0].releaseImpact = true;
+  writeJson(reconciliationPath, conflict);
+  script("generate-plan.mjs", [planJob, "--write"]);
+  assert.equal(readJson(reconciliationPath).items[0].resolution, "unresolved", "rerun preserves unresolved conflicts");
+  const motionDocPath = path.join(planJob, "docs", "motion-plan.md");
+  const generatedDoc = fs.readFileSync(motionDocPath, "utf8");
+  fs.writeFileSync(motionDocPath, "manual edit\n");
+  const beforeFailure = sha256File(path.join(planJob, "state", "transcript.json"));
+  script("generate-plan.mjs", [planJob, "--write"], false, /existing manual content/);
+  assert.equal(fs.readFileSync(motionDocPath, "utf8"), "manual edit\n");
+  assert.equal(sha256File(path.join(planJob, "state", "transcript.json")), beforeFailure);
+  fs.writeFileSync(motionDocPath, generatedDoc);
+
+  const settledInputs = fs.readFileSync(path.join(planJob, "state", "planning-inputs.json"), "utf8");
+  const unsafe = readJson(path.join(planJob, "state", "planning-inputs.json"));
+  delete unsafe.beats[1].layout;
+  writeJson(path.join(planJob, "state", "planning-inputs.json"), unsafe);
+  script("generate-plan.mjs", [planJob, "--write"], false, /faceSafetyNote/);
+  fs.writeFileSync(path.join(planJob, "state", "planning-inputs.json"), settledInputs);
+
+  // A beat only names what it decides; the fields it shares with its MG
+  // component come from the component metadata, so the two cannot drift.
+  const beatMapFor = (beat) => buildBeatMap({
+    transcript: { duration: 6 },
+    captionMode: "subtitles",
+    fps: 30,
+    designSystem: {
+      typography: { displayFamily: "Smiley Sans", outlineReservePx: 18 },
+      captions: { fontSizePx: 96 }
+    },
+    beats: [{ id: "b01", start: 1, end: 3, text: "示例", layout: { faceSafetyNote: "Fixture" }, ...beat }]
+  }).beats[0];
+  const minimal = beatMapFor({ templateId: "correction", onScreenCopy: ["旧工具", "新工具"] });
+  const strikeMeta = resolveComponent("correction").meta;
+  for (const field of ["semanticTopology", "primaryFlowAxis", "motionFamily", "transitionFamily"]) assert.equal(minimal[field], strikeMeta[field]);
+  assert.equal(minimal.visualStyle, strikeMeta.summaryZh ?? strikeMeta.summary);
+  assert.equal(minimal.layout.safeAreaPass, undefined);
+  assert.equal(minimal.captionSafeZonePass, undefined);
+  assert.equal(
+    beatMapFor({ templateId: "correction", onScreenCopy: ["旧工具", "新工具"], transitionFamily: "strike-lock" }).transitionFamily,
+    "strike-lock",
+    "an explicit beat value must still win: the disagreements are editorial"
+  );
+  const flowMeta = resolveComponent("linear-flow").meta;
+  assert.equal(beatMapFor({ templateId: "linear-flow", onScreenCopy: ["工具", "影片"] }).visualStyle, flowMeta.summaryZh ?? flowMeta.summary);
+  assert.equal(beatMapFor({ recipe: "caption-only" }).semanticTopology, undefined, "caption-only beats do not consult the registry");
+
+  // The Global direction lines that describe the design system are rendered,
+  // not authored, so a job may not restate them.
+  const restated = readJson(path.join(planJob, "state", "planning-inputs.json"));
+  restated.documents.globalDirection = ["Palette：沿用设计系统纸面/钴蓝/珊瑚色"];
+  writeJson(path.join(planJob, "state", "planning-inputs.json"), restated);
+  script("generate-plan.mjs", [planJob, "--write"], false, /must not restate the derived "Palette" line/);
+
+  // The public example is a complete input for this fixture, not a pseudo-schema.
+  fs.copyFileSync(path.join(repositoryRoot, "templates", "planning-inputs.example.json"), path.join(planJob, "state", "planning-inputs.json"));
+  script("generate-plan.mjs", [planJob, "--write"]);
+  const exampleBeats = readJson(path.join(planJob, "state", "beat-map.json"));
+  assert.equal(exampleBeats.beats[1].templateId, "annotation");
+  assert.deepEqual(exampleBeats.beats[1].templateData.copy, ["演示见片尾"]);
+  script("check-visual-plan.mjs", [path.join(planJob, "state/beat-map.json"), path.join(planJob, "state/transcript.json"), path.join(planJob, "state/design-system.json")]);
+  script("assemble-mg.mjs", [planJob, "--write"]);
+  fs.copyFileSync(path.join(repositoryRoot, "templates/hyperframes/index.template.html"), path.join(planJob, "hyperframes/index.template.html"));
+  script("build-composition.mjs", [path.join(planJob, "hyperframes")]);
+  assert.match(fs.readFileSync(path.join(planJob, "hyperframes/index.html"), "utf8"), /演示见片尾/);
+
+  // Reference order remains exact while the released acoustic order reverses.
+  const referencePath = "input/reference-scripts/original.txt";
+  fs.mkdirSync(path.join(planJob, "input/reference-scripts"), { recursive: true });
+  const referenceText = "今天我要演示。这个新工具很好用。";
+  fs.writeFileSync(path.join(planJob, referencePath), referenceText);
+  const referenceSha = sha256File(path.join(planJob, referencePath));
+  const referenceWorkflow = readJson(path.join(planJob, "state/workflow.json"));
+  Object.assign(referenceWorkflow, { referenceScriptStatus: "provided", referenceScriptPath: referencePath, referenceScriptSha256: referenceSha });
+  writeJson(path.join(planJob, "state/workflow.json"), referenceWorkflow);
+  writeJson(path.join(planJob, "state/reference-script-annotations.json"), buildReferenceScriptAnnotations({ status: "provided", path: referencePath, sha256: referenceSha, text: referenceText }));
+  const originalReconciliation = readJson(reconciliationPath);
+  originalReconciliation.items = originalReconciliation.items.map((item) => ({ ...item, type: "matched", resolution: "accepted-speech", releaseImpact: false, referenceText: item.heardText }));
+  writeJson(reconciliationPath, originalReconciliation);
+  writeJson(path.join(planJob, "state/timeline-source-windows.json"), { clips: [clip(3, 6, 0), clip(0, 3, 3)] });
+  const reorderInputs = readJson(path.join(planJob, "state/planning-inputs.json"));
+  reorderInputs.cueLines.reverse();
+  reorderInputs.beats = [{ id: "reordered", sceneId: "one", sourceSegmentIds: ["s2", "s1"], text: "这个新工具很好用今天我要演示", start: 0, end: 6, intent: "重排" }];
+  writeJson(path.join(planJob, "state/planning-inputs.json"), reorderInputs);
+  script("generate-plan.mjs", [planJob, "--write"]);
+  const reorderedReconciliation = readJson(reconciliationPath);
+  assert.deepEqual(reorderedReconciliation.items.map((item) => item.segmentId), ["s2", "s1"]);
+  assert.deepEqual(reorderedReconciliation.referenceScript.itemOrder, ["r-s1", "r-s2"]);
+  script("check-transcript-reconciliation.mjs", [reconciliationPath]);
+  reorderedReconciliation.referenceScript.itemOrder = ["r-s1", "r-s1"];
+  writeJson(reconciliationPath, reorderedReconciliation);
+  script("check-transcript-reconciliation.mjs", [reconciliationPath], false, /every reference-bearing item exactly once/);
 
   console.log("Planning contract tests passed.");
 } finally {

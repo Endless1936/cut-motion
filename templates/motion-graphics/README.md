@@ -10,6 +10,8 @@ Reusable HyperFrames implementations for a 1080×1920 talking-head composition. 
 | [parallel-points](parallel-points/) | Independent benefits, conditions, features | Four unnumbered rows; restrained stagger without directional connectors |
 | [linear-flow](linear-flow/) | Input → processing → output | Four horizontal nodes; the connecting line advances with the spoken sequence |
 | [relation-map](relation-map/) | One source producing several outputs | One source branches into three destinations |
+| [converge-sources](converge-sources/) | Several inputs combining into one result | Four aligned source labels join a shared collector and reveal the result |
+| [map-transform](map-transform/) | One input transformed into one output | Two broad labels connected by a short descending arrow |
 | [comparison](comparison/) | Before/after or two alternatives | Two large columns; labels first, contrasting statements next |
 | [metric-proof](metric-proof/) | One measured result | Source label, large value and unit, then explanation |
 | [evidence-focus](evidence-focus/) | Show proof inside a screenshot | Preserve the image, dim its surroundings and move between focus regions |

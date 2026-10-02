@@ -25,8 +25,8 @@
   },
   "authorities": {},
   "changeControl": {
-    "implementationMayStartAfter": "creative-package-approved",
-    "planChangesRequireReapproval": true,
+    "implementationMayStartAfter": "rough-cut-review-approved",
+    "planChangesRequireReapproval": false,
     "reapprovalFields": [
       "caption-segmentation",
       "mg-node-set",

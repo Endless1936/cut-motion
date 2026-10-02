@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readJson, sha256File, writeJsonAtomic } from "./workflow-utils.mjs";
+import { computeCreativeAuthorities, readJson, sha256File, writeJsonAtomic } from "./workflow-utils.mjs";
 
 const [fontPath] = process.argv.slice(2);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -79,6 +79,41 @@ try {
     activeTimelineId: "runtime-timeline",
     recordedAt: new Date().toISOString()
   });
+  // The ChatCut transition validates the gap-candidate record. One retained item
+  // spanning exactly the spoken words leaves no candidate open.
+  const sourceWords = readJson(path.join(jobRoot, "state", "source-transcript.json")).segments
+    .flatMap((segment) => segment.words ?? []);
+  assert.ok(sourceWords.length > 0, "the runtime fixture needs source words");
+  const firstWord = sourceWords[0];
+  const lastWord = sourceWords[sourceWords.length - 1];
+  const retainedWindows = {
+    schemaVersion: 1,
+    sourceSha256: sha256File(path.join(jobRoot, "input", "source.mp4")),
+    sourceDurationUs: Math.round(lastWord.end * 1_000_000),
+    sourceAssetId: "runtime-asset",
+    timelineFps: { numerator: 30, denominator: 1 },
+    clips: [{
+      itemId: "runtime-item",
+      assetId: "runtime-asset",
+      timelineStartFrame: 0,
+      durationFrames: Math.round((lastWord.end - firstWord.start) * 30),
+      srcStartUs: Math.round(firstWord.start * 1_000_000),
+      srcEndUs: Math.round(lastWord.end * 1_000_000),
+      playbackRateNumerator: 1,
+      playbackRateDenominator: 1
+    }]
+  };
+  writeJson("state/timeline-source-windows.json", retainedWindows);
+  writeJson("state/timeline-source-windows.pre-cleanup.json", retainedWindows);
+  fs.writeFileSync(path.join(jobRoot, "state", "source-silence-db-scan.txt"), [
+    "[silencedetect@db30 @ 0x0] silence_start: 0",
+    "[silencedetect@db30 @ 0x0] silence_end: 0.3 | silence_duration: 0.3",
+    "[silencedetect@db35 @ 0x0] silence_start: 0",
+    "[silencedetect@db35 @ 0x0] silence_end: 0.3 | silence_duration: 0.3",
+    "[silencedetect@db40 @ 0x0] silence_start: 0",
+    "[silencedetect@db40 @ 0x0] silence_end: 0.3 | silence_duration: 0.3"
+  ].join("\n"));
+  script("classify-gaps.mjs", [jobRoot, "--write"]);
   script("workflow-state.mjs", [workflowPath, "advance", "--artifact", "state/chatcut-roughcut.json"]);
   script("workflow-state.mjs", [workflowPath, "set-caption-mode", "subtitles", "--actor", "agent", "--note", "Runtime caption recommendation"]);
  script("workflow-state.mjs", [workflowPath, "set-axis-mode", "a-axis-overlay", "--actor", "agent", "--note", "Runtime A-axis recommendation"]);
@@ -92,6 +127,13 @@ try {
  script("workflow-state.mjs", [workflowPath, "advance", "--artifact", "roughcut/a-roll.mp4"]);
 
   writeJson("state/beat-map.json", { fps: 30, duration: 3.2, captionMode: "subtitles", beats: [] });
+  // The composition transition requires a creative package whose declared
+  // authorities match the job, exactly as `generate-plan.mjs --write` leaves it.
+  writeJson("captions/caption-review-plan.json", { schemaVersion: "1.0.0", status: "proposed", cues: [] });
+  const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
+  const confirmation = readJson(confirmationPath);
+  confirmation.authorities = computeCreativeAuthorities(jobRoot, "subtitles");
+  writeJsonAtomic(confirmationPath, confirmation);
   fs.writeFileSync(
     path.join(jobRoot, "docs", "motion-plan.md"),
     "| Time | Audio phrase | Axis | Main flow | Visual reference | Visual treatment | Transition |\n"
