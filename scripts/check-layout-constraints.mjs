@@ -46,7 +46,7 @@ for (const match of composition.matchAll(/<[^>]+data-motion-role=["']label["'][^
     errors.push(`labels must declare data-information-role as one of: ${informationRoles.join(", ")}`);
   }
 }
-for (const match of composition.matchAll(/<[^>]+data-motion-group=["'][^"']+["'][^>]*>/gi)) {
+for (const match of composition.matchAll(/<[^>]*\bdata-motion-group(?:\s|=|>)[^>]*>/gi)) {
   for (const declaration of [
     /data-axis=["'](A|B)["']/i,
     /data-group-kind=["'](primary|auxiliary)["']/i,
@@ -54,7 +54,7 @@ for (const match of composition.matchAll(/<[^>]+data-motion-group=["'][^"']+["']
     /data-group-duration=["'][0-9.]+["']/i,
     /data-face-cover=["'](none|partial|intentional)["']/i,
     /data-primary-flow-axis=["'](horizontal|vertical)["']/i,
-    /data-semantic-topology=["'][^"']+["']/i
+    /data-topology=["'][^"']+["']/i
   ]) {
     if (!declaration.test(match[0])) errors.push("motion groups must declare axis, lifetime, face coverage, flow, and topology");
   }

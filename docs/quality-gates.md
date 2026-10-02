@@ -12,12 +12,12 @@ The default path is human-reviewed and intentionally light. Machine checks estab
 
 Run an optional audit, preview, or standalone validator only for a specific question. Caption promotion includes its release checks. The legacy trim-plan audit applies only to an explicit `ffmpeg-fallback` job.
 
-## Explicit `auto` / `fallback-auto` checks
+## Explicit `auto` / `fallback-auto` path
 
-These machine checks run only when the user selects the automatic path or explicitly asks for the relevant audit:
+Auto follows the same stages. The Agent performs the stage instructions; state transitions run only the code checks listed here and do not enforce every Agent action:
 
 - rough-cut: media probe, source-transcript lock, and wording reconciliation; the Agent performs the Golden Standard sequence, which scripts do not enforce. Only an explicit `roughCutEngine: "ffmpeg-fallback"` trim-plan export runs the legacy trim-plan audit;
-- transcript/captions: reconciliation, semantic one-line caption plan, caption installation, and timing checks;
+- transcript/captions: the Agent prepares and installs the approved caption plan and checks timing. State transitions validate reconciliation, caption-plan authority, and the creative package; they do not run caption installation or timing-check commands;
 - motion: beat-map/visual-plan and creative-confirmation checks at the existing state transitions. Font, layout, information-value, and standalone HyperFrames diagnostics remain explicit, on-demand commands;
 - delivery: detailed render/media receipt when the renderer produces one, plus FFprobe integrity.
 

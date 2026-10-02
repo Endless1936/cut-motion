@@ -16,7 +16,7 @@ node scripts/index-source-silence.mjs input/source.mov --output state/source-aud
 
 The schema-v4 index stores a 10 ms per-channel waveform envelope with peak, RMS, zero-crossing, and exact-zero features. It uses no amplitude threshold and creates no cut recommendations. Exact-zero runs can corroborate a trace but are uncommon in lossy audio. The dB candidate sweep is a separate whole-timeline pass. Legacy trim-plan validation applies only to explicit FFmpeg trim-plan output, not ChatCut timelines. The source SHA-256 is checked before and after decoding.
 
-Reuse a prior schema-v3 or schema-v4 index when its source SHA-256 matches the untouched job source and it contains the full per-channel waveform windows. Schema-v3 threshold fields are ignored and omitted from strict lookup output. Do not decode the same source again just to build a second timeline's seam map.
+For targeted `--lookup`, reuse a prior schema-v3 or schema-v4 index only when its source SHA-256 matches the untouched job source and it contains the full per-channel waveform windows accepted by that lookup. The default clip-edge calculator requires schema v4; rebuild a v3 index for that calculator. Schema-v3 threshold fields are ignored and omitted from strict lookup output. Do not decode the same source again just to build a second timeline's seam map.
 
 Do not pass a `--summary` output to `--lookup`; summaries intentionally omit the waveform windows.
 
@@ -79,7 +79,7 @@ The utility checks source hashes, operator-attested source-time map fields, item
 
 ## Default clip-edge calculator
 
-After semantic and gap-candidate cleanup, run `scripts/compute-seam-tightening.mjs` across the retained clips. It only refines edges of clips ChatCut has already selected; it never decides what content to keep or edits the timeline. Save `state/timeline-source-windows.json` with one record per retained video item, using `preview_timeline` for item, source, and timeline ranges and `inspect_item` to confirm `playbackRate: 1` for every item. Use the source SHA-256 and duration from the waveform index and the exact ChatCut asset ID.
+After semantic and gap-candidate cleanup, run `scripts/compute-seam-tightening.mjs` across the retained clips. It only refines edges of clips ChatCut has already selected; it never decides what content to keep or edits the timeline. Save `state/timeline-source-windows.json` with one record per retained video item, using `preview_timeline` for item, source, and timeline ranges and `inspect_item` to confirm `playbackRate: 1` for every item. Use the source SHA-256 and duration from the waveform index and the exact ChatCut asset ID. The calculator assumes `srcStartUs` and `srcEndUs` already use the same original-media time origin as the indexed audio; the manifest has no offset or scale mapping. Confirm the ChatCut asset's source, duration, and time origin against the indexed file. If the time mapping is unknown or differs, do not apply this candidate plan.
 
 ```json
 {

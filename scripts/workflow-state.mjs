@@ -54,6 +54,7 @@ for (let index = 0; index < rawArguments.length; index += 1) {
 const jobRoot = jobRootForWorkflow(workflowPath);
 recoverTranscriptTransaction(jobRoot);
 const workflow = ensureWorkflowDefaults(JSON.parse(fs.readFileSync(workflowPath, "utf8")));
+const initialState = workflow.currentState;
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const workflowGuideSections = {
   intake: "intake",
@@ -287,9 +288,8 @@ const selectAutomaticFallback = (entryActor, decisionNote) => {
   console.warn(`${warning}.`);
 };
 const save = () => {
-  const previousState = workflow.currentState;
   saveWorkflow(workflowPath, workflow, now);
-  if (workflow.currentState !== previousState) printStageGuideHint(workflow.currentState);
+  if (workflow.currentState !== initialState) printStageGuideHint(workflow.currentState);
 };
 
 const invalidateCreativeConfirmation = () => {
@@ -702,5 +702,5 @@ if (command === "advance") {
 save();
 console.log(`Workflow state: ${workflow.currentState}`);
 if (workflow.currentState === "rough-cut-review") {
-  console.log("Reminder (informational): Before presenting the rough cut, confirm semantic selection, timeline-wide candidate review, spoken-content coverage, and the single waveform seam lookup; briefly note any skipped or unavailable item. This reminder does not block the workflow.");
+  console.log("Reminder (informational): Before presenting the rough cut, confirm semantic selection, timeline-wide candidate review, spoken-content coverage, and the default clip-edge calculator. Use targeted waveform lookup only for a reported seam problem or a specific diagnosis request. Note any skipped or unavailable item. This reminder does not block the workflow.");
 }

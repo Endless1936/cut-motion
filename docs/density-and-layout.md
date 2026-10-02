@@ -38,7 +38,7 @@ Record bounds for entrance, maximum overshoot, hold, and exit. Rotation, outline
 - Set Chinese line breaks around complete phrases; keep at least two visible characters on each line when a semantic break is needed.
 - Give every panel meaningful copy, an icon, status, diagram, or animated state. Check the entrance, peak, hold, and exit at the rendered size.
 
-The on-demand `scripts/check-layout-constraints.mjs` is a static source diagnostic. It checks declared layout settings, motion-group and role metadata, connector/container markers, and caption placement/style declarations; it does not measure rendered DOM or judge visual quality.
+The on-demand `scripts/check-layout-constraints.mjs` is a static source diagnostic. It checks declared layout settings, motion-group and role metadata, connector/container markers, and caption placement/style declarations; it does not measure rendered DOM or judge visual quality. Motion groups use the boolean `data-motion-group` marker and `data-topology` attribute from the authoring contract.
 
 ## Visual review guidance
 
