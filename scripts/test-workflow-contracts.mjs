@@ -132,7 +132,52 @@ try {
     const workflowPath = path.join(job, "state", "workflow.json");
     const workflow = readJson(workflowPath);
     const sourceTranscriptPath = path.join(job, "state", "source-transcript.json");
-    writeJsonAtomic(sourceTranscriptPath, { schemaVersion: "1.0.0", revision: 1, segments: [] });
+    writeJsonAtomic(sourceTranscriptPath, {
+      schemaVersion: "1.0.0",
+      revision: 1,
+      language: "zh-CN",
+      duration: 2,
+      source: "chatcut",
+      segments: [
+        {
+          id: "s1",
+          text: "甲。",
+          start: 1,
+          end: 2,
+          confidence: null,
+          words: [{ id: "s1.w0", text: "甲。", start: 1, end: 2, confidence: null }]
+        }
+      ]
+    });
+    // A retained item that starts and ends exactly on the spoken words leaves no
+    // gap candidate, so this fixture exercises the gate rather than the cleanup.
+    const windows = {
+      schemaVersion: 1,
+      sourceSha256: "c".repeat(64),
+      sourceDurationUs: 2_000_000,
+      sourceAssetId: "asset-test",
+      timelineFps: { numerator: 30, denominator: 1 },
+      clips: [{
+        itemId: "item-test",
+        assetId: "asset-test",
+        timelineStartFrame: 0,
+        durationFrames: 30,
+        srcStartUs: 1_000_000,
+        srcEndUs: 2_000_000,
+        playbackRateNumerator: 1,
+        playbackRateDenominator: 1
+      }]
+    };
+    writeJsonAtomic(path.join(job, "state", "timeline-source-windows.json"), windows);
+    writeJsonAtomic(path.join(job, "state", "timeline-source-windows.pre-cleanup.json"), windows);
+    fs.writeFileSync(path.join(job, "state", "source-silence-db-scan.txt"), [
+      "[silencedetect@db30 @ 0x0] silence_start: 0.1",
+      "[silencedetect@db30 @ 0x0] silence_end: 0.4 | silence_duration: 0.3",
+      "[silencedetect@db35 @ 0x0] silence_start: 0.1",
+      "[silencedetect@db35 @ 0x0] silence_end: 0.4 | silence_duration: 0.3",
+      "[silencedetect@db40 @ 0x0] silence_start: 0.1",
+      "[silencedetect@db40 @ 0x0] silence_end: 0.4 | silence_duration: 0.3"
+    ].join("\n"));
     workflow.currentState = "rough-cut";
     workflow.pendingGate = null;
     workflow.sourceTranscriptSha256 = sha256File(sourceTranscriptPath);
@@ -148,8 +193,37 @@ try {
       activeTimelineId: "timeline-back",
       recordedAt: "2026-08-06T00:00:00.000Z"
     });
+    script("classify-gaps.mjs", [job, "--write"]);
     return { job, workflowPath };
   };
+
+  // The rough-cut transition refuses a ChatCut review with no gap-candidate record.
+  const missingGapReview = prepareChatcutReviewJob("chatcut-missing-gap-review");
+  const missingGapArtifact = path.join(missingGapReview.job, "state", "gap-candidates.json");
+  fs.rmSync(missingGapArtifact);
+  script("workflow-state.mjs", [
+    missingGapReview.workflowPath,
+    "advance",
+    "--artifact",
+    "state/chatcut-roughcut.json"
+  ], false, /gap-candidates\.json/);
+  script("classify-gaps.mjs", [missingGapReview.job, "--write"]);
+  const missingPreCleanup = readJson(missingGapArtifact);
+  missingPreCleanup.scan.decibelSweep.applied = false;
+  writeJsonAtomic(missingGapArtifact, missingPreCleanup);
+  script("workflow-state.mjs", [
+    missingGapReview.workflowPath,
+    "advance",
+    "--artifact",
+    "state/chatcut-roughcut.json"
+  ], false, /decibelSweep\.applied must be true/);
+  fs.rmSync(path.join(missingGapReview.job, "state", "timeline-source-windows.pre-cleanup.json"));
+  script("workflow-state.mjs", [
+    missingGapReview.workflowPath,
+    "advance",
+    "--artifact",
+    "state/chatcut-roughcut.json"
+  ], false, /pre-cleanup\.json/);
 
   const manualReview = prepareChatcutReviewJob("chatcut-manual-review");
   const manualProjectPath = path.join(manualReview.job, "state", "project.json");

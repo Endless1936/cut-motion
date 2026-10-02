@@ -37,6 +37,8 @@ Use [`state-machine.md`](state-machine.md) for transition commands, mode decisio
 When `revise` or `reopen rough-cut` returns the job here, reread this section and the linked standard from the top. Reassess the revised timeline; do not rely on memory of the prior pass.
 
 - ChatCut owns the editable talking-head timeline. Use the [Talking-Head Trim Standard](talking-head-trim-standard.md) as the sole detailed policy for semantic editing, candidate cleanup, speech coverage, and clip-edge closure. Keep valid recorded speech or record its editorial disposition.
+- Before candidate cleanup, copy `state/timeline-source-windows.json` to `state/timeline-source-windows.pre-cleanup.json`. That snapshot is the only record of the retained structure the cleanup steps started from, so the transition into `rough-cut-review` requires it.
+- Create or refresh the gap-candidate record with `node scripts/classify-gaps.mjs <job-directory> [--write]`. It detects every retained source span with no aligned ASR word for at least 0.3 s, cites the dB sweep hits for each one, and derives the pauses cleanup excised by comparing the pre-cleanup snapshot with the locked timeline. Classify each candidate in `state/gap-candidates.json` as `remove` or `preserve` and justify it; the command is a detector, not the editorial decision.
 - Build or reuse the job-local waveform index once per source. After candidate cleanup, run the clip-edge calculator across the retained timeline and apply its frame plan. Use the existing targeted seam lookup only when the user reports a rough seam. Record ChatCut project/timeline identifiers and measured stage timings in `state/chatcut-roughcut.json`; calculation and lookup files are evidence artifacts, not workflow states or approval gates.
 - Follow the standard's numbered sequence. If an operation cannot be completed, report it as skipped or blocked instead of saying it ran.
 - If ChatCut is unavailable, record `roughCutEngine: "ffmpeg-fallback"` and use the conservative FFmpeg fallback. `state/trim-plan.json` and its legacy audit apply only to that explicit fallback.
@@ -45,6 +47,7 @@ When `revise` or `reopen rough-cut` returns the job here, reread this section an
 
 - `rough-cut-review` is the only approval gate. In `review`, record the user's explicit approve, revise, or `fallback-auto` decision. In `auto`, record `automatic-fallback` only when the user selected that mode. Do not infer a decision from silence.
 - After the decision, promote the approved timeline once with `scripts/promote-job-media.mjs` to `roughcut/a-roll.mp4` and run the basic media lock before advancing. Keep the last known-good rough cut available.
+- A browser-rendered ChatCut export can carry an audio track longer than its video track, which the media lock rejects. Run `scripts/align-export.sh <exported.mp4>` on the export first: it copies the streams, trims the trailing overhang to just past the last video frame, and verifies the durations and frame count, so no frame is lost and nothing is re-encoded.
 
 ## Motion plan
 

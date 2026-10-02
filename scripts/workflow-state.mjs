@@ -107,6 +107,22 @@ const checkReconciliation = (allowPending, expectedMedia = null) => {
   );
 };
 
+// Steps 3-5 of docs/talking-head-trim-standard.md order gap-candidate cleanup
+// before edge tightening, but nothing used to record that it happened. The
+// pre-cleanup snapshot plus the classified candidate list make a skipped cleanup
+// fail the rough-cut transition instead of silently reaching review.
+const preCleanupWindowsPath = path.join(jobRoot, "state", "timeline-source-windows.pre-cleanup.json");
+const gapCandidatesPath = path.join(jobRoot, "state", "gap-candidates.json");
+const checkGapCandidates = () => {
+  if (!fs.existsSync(preCleanupWindowsPath)) {
+    throw new Error("ChatCut rough cut requires state/timeline-source-windows.pre-cleanup.json: snapshot the retained source structure before gap cleanup");
+  }
+  if (!fs.existsSync(gapCandidatesPath)) {
+    throw new Error("ChatCut rough cut requires state/gap-candidates.json: run scripts/classify-gaps.mjs --write and classify every candidate");
+  }
+  runCheck("check-gap-candidates.mjs", [gapCandidatesPath], "Gap candidate review failed");
+};
+
 const lockRoughCutMedia = (artifactPath, { audit = false, trimPlanAudit = false, requirePromotion = false } = {}) => {
   const mediaPath = path.relative(jobRoot, artifactPath);
   const trimPlanPath = path.join(jobRoot, "state", "trim-plan.json");
@@ -144,8 +160,7 @@ const lockRoughCutMedia = (artifactPath, { audit = false, trimPlanAudit = false,
 };
 
 const assertSourceTranscriptLock = () => {
-  if (!workflow.sourceTranscriptSha256) throw new Error("Source transcript has not been locked");
-  assertRegularContainedFile(path.join(jobRoot, "state"), sourceTranscriptPath, "Source transcript");
+  if (!workflow.sourceTranscriptSha256) throw new Error("Source transcript has not been locked");  assertRegularContainedFile(path.join(jobRoot, "state"), sourceTranscriptPath, "Source transcript");
   if (sha256File(sourceTranscriptPath) !== workflow.sourceTranscriptSha256) {
     throw new Error("Source transcript changed after its timeline lock");
   }
@@ -571,6 +586,7 @@ if (command === "advance") {
         if (project.roughCutEngine !== "chatcut") throw new Error("ChatCut rough-cut review requires project.roughCutEngine=chatcut");
         if (record.timelineIds.length === 0) throw new Error("ChatCut rough-cut review requires at least one timeline");
         assertSourceTranscriptLock();
+        checkGapCandidates();
         if (project.mediaArtifacts?.roughcut) {
           delete project.mediaArtifacts.roughcut;
           writeJsonAtomic(projectPath, project);

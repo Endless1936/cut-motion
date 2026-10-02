@@ -13,6 +13,16 @@ intake → transcription → rough-cut → rough-cut-review → rough-cut-export
 
 `rough-cut` keeps the editable ChatCut timeline as its artifact and completes [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) before `rough-cut-review`. `chatcut-roughcut.json` records project and timeline evidence; captions, MG, and B-axis composition are authored in HyperFrames. After manual approval or explicit automatic fallback, export once to `roughcut/a-roll.mp4` and run the basic media lock.
 
+The `rough-cut → rough-cut-review` transition for a ChatCut rough cut also validates the gap-candidate record, because steps 3-5 of the standard used to be unverifiable prose. It requires both `state/timeline-source-windows.pre-cleanup.json` (the retained structure before cleanup) and a passing `state/gap-candidates.json`, produced by `scripts/classify-gaps.mjs` and validated by `scripts/check-gap-candidates.mjs`:
+
+```bash
+cp jobs/<job-id>/state/timeline-source-windows.json jobs/<job-id>/state/timeline-source-windows.pre-cleanup.json
+node scripts/classify-gaps.mjs jobs/<job-id> --write   # then classify every candidate
+node scripts/check-gap-candidates.mjs jobs/<job-id>/state/gap-candidates.json
+```
+
+The check fails when a retained pause has no recorded disposition, when a pause is marked removed but is still on the timeline, when a pause excised from the pre-cleanup structure is unrecorded, when the artifact is stale for the timeline it describes, when the required dB sweep is missing, or when edge tightening was computed on a different item set than the locked timeline. The legacy `ffmpeg-fallback` path is unaffected and keeps its trim-plan audit.
+
 At `composition`, `workflow-state.mjs` rebuilds `hyperframes/index.html` from `index.template.html`, the Beat Map, transcript, and MG modules, then records that build's hash. Those authored files are the editing source; generated HTML is disposable and the render entrypoint rebuilds from the same source before rendering.
 
 To abandon the manual review explicitly:

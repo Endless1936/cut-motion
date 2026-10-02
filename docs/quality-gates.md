@@ -5,7 +5,7 @@ The default path is human-reviewed and intentionally light. Machine checks estab
 ## Default `review` path
 
 - Keep the original source unchanged.
-- Follow [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) during the rough-cut phase; it is the edit procedure, not an additional approval gate.
+- Follow [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) during the rough-cut phase. It is the edit procedure rather than an approval gate, but the `rough-cut → rough-cut-review` transition does validate its gap-candidate record (`state/timeline-source-windows.pre-cleanup.json` plus a passing `state/gap-candidates.json`); an unclassified retained pause blocks the transition.
 - After approval, export once and run only the basic rough-cut/media lock.
 - Build the HyperFrames composition, render once, and verify that the delivery has readable video/audio, dimensions, frame rate, duration, and a non-empty file.
 - Let the user judge the final captions, MG, timing, semantics, and visual quality.
@@ -16,9 +16,9 @@ Run an optional audit, preview, or standalone validator only for a specific ques
 
 Auto follows the same stages. The Agent performs the stage instructions; state transitions run only the code checks listed here and do not enforce every Agent action:
 
-- rough-cut: media probe, source-transcript lock, and wording reconciliation; the Agent performs the Golden Standard sequence, which scripts do not enforce. Only an explicit `roughCutEngine: "ffmpeg-fallback"` trim-plan export runs the legacy trim-plan audit;
+- rough-cut: media probe, source-transcript lock, wording reconciliation, and the gap-candidate record; the Agent performs the rest of the Golden Standard sequence, which scripts do not enforce. Only an explicit `roughCutEngine: "ffmpeg-fallback"` trim-plan export runs the legacy trim-plan audit;
 - transcript/captions: the Agent prepares and installs the approved caption plan and checks timing. State transitions validate reconciliation, caption-plan authority, and the creative package; they do not run caption installation or timing-check commands;
-- motion: beat-map/visual-plan and creative-confirmation checks at the existing state transitions. Font, layout, information-value, and standalone HyperFrames diagnostics remain explicit, on-demand commands;
+- motion: beat-map/visual-plan and creative-confirmation checks at the existing state transitions. Font, layout, information-value, and standalone HyperFrames diagnostics remain explicit, on-demand commands; run them together with `scripts/check-composition.sh <job-directory>`, which rebuilds the composition and checks a pruned staging root;
 - delivery: detailed render/media receipt when the renderer produces one, plus FFprobe integrity.
 
 Optional snapshots and reports are evidence artifacts, not approval gates. A short preview can be rendered for a specific visual question without changing the workflow state.
