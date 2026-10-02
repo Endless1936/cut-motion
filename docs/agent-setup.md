@@ -50,13 +50,22 @@ After dependency-install approval:
 
 ```bash
 ./scripts/check-environment.sh install-job jobs/<job-id> --yes
-mkdir -p jobs/<job-id>/hyperframes/assets/fonts
-cp /path/to/smiley-sans-oblique.woff2 jobs/<job-id>/hyperframes/assets/fonts/smiley-sans-oblique.woff2
+./scripts/install-font.sh jobs/<job-id>
 ```
 
-The font copy is optional; skip it when the file is unavailable.
+`install-font.sh` resolves the display font in this order: `--from <file>`, the shared cache under `assets/fonts/` (git-ignored, populated by the first job that has the font), fonts already installed in another job, and finally an explicit `--download` from the upstream release. It copies the font and its license into `hyperframes/<fontAsset>`, repoints `state/design-system.json` at the installed file, and rewrites the `@font-face` in the HyperFrames template so the format match is real rather than assumed. Skip it when no font is available; the composition falls back to sans-serif and the font check is optional.
 
 `install-job` first reuses exact-version dependencies already in the current job, then checks valid dependency trees in other jobs under the same repository, then npm's `_npx` cache. A dependency tree copied from another job includes its hoisted dependencies, so the new job does not depend on the old job remaining in place. Invalid links and version mismatches are skipped. GSAP is resolved independently and its browser runtime is regenerated from the verified package. Only when no exact local source exists does it install the pinned dependencies; it never requires a global HyperFrames installation or a user-configured cache path.
+
+## ChatCut preflight
+
+`./scripts/check-environment.sh check` probes the configured ChatCut MCP endpoint and reports the tool count. Run the probe on its own when it fails:
+
+```bash
+./scripts/check-environment.sh chatcut
+```
+
+It separates the three failures that look alike: an unreachable endpoint, a rejected credential, and a healthy endpoint whose tools are not mounted because the connector is not enabled or trusted. Each prints the matching remedy. A reachable, authenticated endpoint does not by itself mean the ChatCut tools are callable in the session; when the probe passes but no ChatCut tool exists, the connector needs to be enabled and trusted in the client.
 
 ## Render commands
 

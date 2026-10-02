@@ -8,10 +8,12 @@ usage() {
   cat <<'EOF'
 Usage:
   scripts/check-environment.sh check
+  scripts/check-environment.sh chatcut [probe arguments]
   scripts/check-environment.sh install-job <job-directory> --yes
 
-check verifies local cut-motion runtime dependencies. ChatCut is checked by the
-active Agent session because it cannot be reliably discovered from a shell.
+check verifies local cut-motion runtime dependencies and probes ChatCut when an
+MCP endpoint is configured. Run `chatcut` on its own to print the full tool list
+or to see the exact remedy when the connector is not usable.
 
 install-job first reuses exact-version modules already available to the local
 machine through job-local links or copies. It downloads only dependencies that
@@ -70,15 +72,24 @@ check_environment() {
     missing_count=$((missing_count + 1))
   fi
 
-  printf '%s\n' 'manual  ChatCut plugin — confirm it is enabled and authenticated when the selected workflow requires it'
   printf '%s\n' 'optional Licensed WOFF2 font — add it to a job when available; otherwise composition uses sans-serif'
+
+  # One probe replaces the manual ChatCut diagnosis. It is reported but not
+  # counted as missing: only ChatCut rough cuts need it, the FFmpeg fallback does not.
+  local chatcut_output=""
+  if chatcut_output="$(node "$script_directory/check-chatcut.mjs" --quiet --timeout 8 2>&1)"; then
+    printf '%s\n' "$chatcut_output"
+  else
+    printf '%s\n' "$(printf '%s' "$chatcut_output" | sed -n '1,2p')"
+    printf '%s\n' '         ChatCut is required only for ChatCut rough cuts; the FFmpeg fallback does not need it.'
+  fi
 
   if (( missing_count > 0 )); then
     printf '\nLocal preflight failed: %d required item(s) missing. Ask for user approval before installing anything.\n' "$missing_count" >&2
     return 1
   fi
 
-  printf '\nLocal preflight passed. Verify ChatCut when required; a local display font is optional.\n'
+  printf '\nLocal preflight passed. Confirm ChatCut is trusted when the job uses it; a local display font is optional.\n'
 }
 
 install_job() {
@@ -288,6 +299,10 @@ case "$command_name" in
   check)
     [[ $# -eq 1 ]] || { usage >&2; exit 64; }
     check_environment
+    ;;
+  chatcut)
+    shift
+    node "$script_directory/check-chatcut.mjs" "$@"
     ;;
   install-job)
     shift
