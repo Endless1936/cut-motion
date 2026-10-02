@@ -523,18 +523,7 @@ try {
   script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "docs/motion-plan.md"]);
   const boundState = readJson(bindingWorkflowPath);
   assert.equal(boundState.currentState, "composition");
-  assert.equal(boundState.approvedPlan.beatMapSha256, boundState.visualPlanSha256);
-  assert.deepEqual(Object.keys(boundState.approvedPlan.fields).sort(), [
-    "axis-mode",
-    "caption-segmentation",
-    "mg-count",
-    "mg-node-set",
-    "on-screen-copy",
-    "primary-flow-axis",
-    "support-role",
-    "visual-reference",
-    "visual-style"
-  ]);
+  assert.equal(typeof boundState.visualPlanSha256, "string", "motion-plan must record the beat-map fingerprint");
   script("workflow-state.mjs", [bindingWorkflowPath, "verify"]);
 
   const bindingTranscriptPath = path.join(bindingJob, "state", "transcript.json");
@@ -546,6 +535,10 @@ try {
   script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /creative authorities/);
   fs.writeFileSync(bindingTranscriptPath, settledTranscript);
 
+  // `supportRole` is one of the fields `changeControl.reapprovalFields` names.
+  // Nothing diffs that list field by field any more: the whole-file beat-map
+  // fingerprint moves when any listed field moves, so this single edit is caught
+  // without a second, per-field check.
   const bindingBeatMapPath = path.join(bindingJob, "state", "beat-map.json");
   const settledBeatMap = fs.readFileSync(bindingBeatMapPath, "utf8");
   const editedBeatMap = readJson(bindingBeatMapPath);
@@ -557,14 +550,15 @@ try {
   script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /requires the beat-map fingerprint recorded when the motion plan advanced/);
   writeJsonAtomic(bindingWorkflowPath, boundState);
 
-  // Caption segmentation is change-controlled but is not covered by the beat-map
-  // fingerprint, so this is the case only the reapproval digest can catch.
+  // Caption segmentation is change-controlled. It is not a beat-map field, but
+  // the caption plan is a creative authority, so the whole-file authority
+  // fingerprint catches this edit without a per-field digest.
   const bindingReviewPlanPath = path.join(bindingJob, "captions", "caption-review-plan.json");
   const settledReviewPlan = fs.readFileSync(bindingReviewPlanPath, "utf8");
   const editedReviewPlan = readJson(bindingReviewPlanPath);
   editedReviewPlan.cues[0].text += "改";
   writeJsonAtomic(bindingReviewPlanPath, editedReviewPlan);
-  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /Creative reapproval required: caption-segmentation/);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /creative authorities/);
   fs.writeFileSync(bindingReviewPlanPath, settledReviewPlan);
   script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
   assert.equal(readJson(bindingWorkflowPath).currentState, "render");

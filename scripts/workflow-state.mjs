@@ -6,7 +6,6 @@ import {
   assertCreativeAuthorities,
   assertNoWorkflowDrift,
   assertRegularContainedFile,
-  assertReapprovalFieldsUnchanged,
   beginWorkflowRevision,
   collectCreativeAuthorityDrift,
   collectWorkflowDrift,
@@ -16,7 +15,6 @@ import {
   invalidateCreativeArtifacts,
   jobRootForWorkflow,
   readJson,
-  recordApprovedPlan,
   recoverTranscriptTransaction,
   saveWorkflow,
   sha256File,
@@ -401,17 +399,8 @@ if (command === "status") {
 if (command === "verify") {
   const findings = collectWorkflowDrift(jobRoot, workflow);
   const settled = ["composition", "render", "complete"].includes(workflow.currentState);
-  if (settled || workflow.approvedPlan || workflow.currentState === "motion-plan") {
+  if (settled || workflow.currentState === "motion-plan") {
     findings.push(...collectCreativeAuthorityDrift(jobRoot, workflow));
-  }
-  // The reapproval baseline is only expected once the plan has been recorded;
-  // a job still sitting in motion-plan has not written one yet.
-  if (settled || workflow.approvedPlan) {
-    try {
-      assertReapprovalFieldsUnchanged(jobRoot, workflow);
-    } catch (error) {
-      findings.push(`reapproval tracking: ${error.message}`);
-    }
   }
   if (findings.length === 0) {
     console.log(`Workflow fingerprints verified: ${workflow.currentState} (revision ${workflow.revisionId})`);
@@ -674,10 +663,10 @@ if (command === "advance") {
         runCheck("check-visual-plan.mjs", [beatMapPath, path.join(jobRoot, "state", "transcript.json"), path.join(jobRoot, "state", "design-system.json")], "Motion plan requires a valid beat map");
         validateCreativePackage("Automatic full-audit validation", "agent");
       }
-      // Record what the approval covers, last, so the caption plan approval that
-      // validateCreativePackage performs is already on disk when the captions
-      // are digested.
-      recordApprovedPlan(jobRoot, workflow, now);
+      // The beat-map fingerprint is what a later composition or render advance
+      // compares against. Write it last, so the caption-plan approval that
+      // validateCreativePackage performs is already on disk when it is digested.
+      workflow.visualPlanSha256 = sha256File(beatMapPath);
     }
     if (workflow.currentState === "composition") {
       const generatedCompositionPath = path.join(jobRoot, "hyperframes", "index.html");
@@ -696,7 +685,6 @@ if (command === "advance") {
       if (workflow.visualPlanSha256 !== beatMapSha256) {
         throw new Error("The beat map changed after the motion plan advanced; reopen motion-plan and re-approve instead of building around the change");
       }
-      assertReapprovalFieldsUnchanged(jobRoot, workflow);
       const authorityDrift = collectCreativeAuthorityDrift(jobRoot, workflow);
       if (authorityDrift.length > 0) {
         throw new Error(`Composition requires a creative package whose authorities match the job artifacts (run scripts/generate-plan.mjs <job> --write): ${authorityDrift.join("; ")}`);
@@ -709,7 +697,6 @@ if (command === "advance") {
     }
     if (workflow.currentState === "render") {
       const canonicalDeliveryPath = path.join(jobRoot, "output", "final.mp4");
-      assertReapprovalFieldsUnchanged(jobRoot, workflow);
       const delivery = probeReviewVideo(artifactPath, "Final delivery");
       const receiptPath = `${artifactPath}.render.json`;
       if (fullAuditRequested && !fs.existsSync(receiptPath)) {

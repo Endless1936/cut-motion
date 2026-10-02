@@ -185,7 +185,6 @@ export const ensureWorkflowDefaults = (workflow) => {
   workflow.roughCutReviewDecision ??= "pending";
   workflow.lastKnownGoodDelivery ??= null;
   workflow.sourceTranscriptSha256 ??= null;
-  workflow.approvedPlan ??= null;
   workflow.history ??= [];
   workflow.gates ??= {};
   return workflow;
@@ -242,7 +241,6 @@ export const beginWorkflowRevision = (workflow, { invalidateVisualPlan = true } 
   workflow.revisionId += 1;
   if (invalidateVisualPlan) {
     workflow.visualPlanSha256 = null;
-    workflow.approvedPlan = null;
   }
 };
 export const saveWorkflow = (workflowPath, workflow, now = new Date().toISOString()) => {
@@ -332,9 +330,19 @@ export const assertCreativeAuthorities = (jobRoot, workflow, { requireApproved =
 
 /**
  * The fields `creative-confirmation.json` names in
- * `changeControl.reapprovalFields`. The list used to be typed out in the
- * generator, the checker and the prose; it lives here so the three cannot
- * disagree about what the approval covers.
+ * `changeControl.reapprovalFields`.
+ *
+ * This is a declaration aimed at the reader, not a machine gate. Every field it
+ * names is already covered by a fingerprint that runs on the whole artifact:
+ * `on-screen-copy`, `mg-node-set`, `mg-count`, `support-role`, `visual-style`,
+ * `primary-flow-axis` and `visual-reference` are all beat-map fields, and the
+ * whole-file `visualPlanSha256` moves whenever any of them does;
+ * `caption-segmentation` lives in `captions/caption-review-plan.json`, which the
+ * `captionPlan` authority covers; `axis-mode` is set by the explicit
+ * `set-axis-mode` command, which writes its own history entry. A per-field diff
+ * would re-run checks that already fire, name a field that cannot move alone,
+ * and still miss nothing - so the list stays prose and the fingerprints do the
+ * enforcing.
  */
 export const REAPPROVAL_FIELD_NAMES = [
   "caption-segmentation",
@@ -347,70 +355,6 @@ export const REAPPROVAL_FIELD_NAMES = [
   "visual-reference",
   "axis-mode"
 ];
-
-/**
- * The values behind `changeControl.reapprovalFields`.
- *
- * The declaration alone was only ever checked for completeness - nothing
- * verified that these fields had not actually changed, so an agent could edit
- * the beat map after the plan was accepted and neither the checker nor the
- * transition would notice. Recording the values turns the declaration into
- * something a later advance can diff and name.
- */
-export const computeReapprovalFields = (jobRoot, workflow) => {
-  const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
-  if (!fs.existsSync(beatMapPath)) throw new Error("Reapproval tracking requires state/beat-map.json");
-  const beats = readJson(beatMapPath).beats ?? [];
-  const byId = (pick) => Object.fromEntries(beats.map((beat) => [beat.id, pick(beat) ?? null]));
-  const captionPlanPath = path.join(jobRoot, "captions", "caption-review-plan.json");
-  const captionSegmentation = fs.existsSync(captionPlanPath)
-    ? (readJson(captionPlanPath).cues ?? []).map((cue) => ({
-      id: cue.id,
-      startWordId: cue.startWordId ?? null,
-      endWordId: cue.endWordId ?? null,
-      text: cue.text ?? null
-    }))
-    : null;
-  const localBeats = beats.filter((beat) => beat.mgScope === "local");
-  return {
-    "caption-segmentation": captionSegmentation,
-    "mg-node-set": localBeats.map((beat) => beat.id).sort(),
-    "mg-count": localBeats.length,
-    "on-screen-copy": byId((beat) => beat.onScreenCopy ?? []),
-    "support-role": byId((beat) => beat.supportRole),
-    "visual-style": byId((beat) => beat.visualStyle),
-    "primary-flow-axis": byId((beat) => beat.primaryFlowAxis),
-    "visual-reference": byId((beat) => beat.visualReference),
-    "axis-mode": workflow.visualAxisMode ?? null
-  };
-};
-
-export const changedReapprovalFields = (recorded, current) => REAPPROVAL_FIELD_NAMES.filter(
-  (name) => JSON.stringify(recorded?.[name] ?? null) !== JSON.stringify(current?.[name] ?? null)
-);
-
-/** Record the values `changeControl.reapprovalFields` names, at the moment they are accepted. */
-export const recordApprovedPlan = (jobRoot, workflow, recordedAt) => {
-  const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
-  workflow.visualPlanSha256 = sha256File(beatMapPath);
-  workflow.approvedPlan = {
-    recordedAt,
-    revisionId: workflow.revisionId,
-    beatMapSha256: workflow.visualPlanSha256,
-    fields: computeReapprovalFields(jobRoot, workflow)
-  };
-  return workflow.approvedPlan;
-};
-
-export const assertReapprovalFieldsUnchanged = (jobRoot, workflow) => {
-  if (!workflow.approvedPlan) {
-    throw new Error("Creative reapproval baseline is missing: reopen motion-plan so the plan and its change-controlled fields are recorded again");
-  }
-  const changed = changedReapprovalFields(workflow.approvedPlan.fields, computeReapprovalFields(jobRoot, workflow));
-  if (changed.length > 0) {
-    throw new Error(`Creative reapproval required: ${changed.join(", ")} changed after the plan was recorded at revision ${workflow.approvedPlan.revisionId}; reopen motion-plan and re-approve instead of rebuilding around the change`);
-  }
-};
 
 /**
  * Every fingerprint the workflow records next to an artifact it produced. The
@@ -427,7 +371,13 @@ const workflowDriftTargets = (jobRoot, workflow) => {
     }
   };
   record("visual plan", "state/beat-map.json", workflow.visualPlanSha256);
-  record("composition", workflow.compositionArtifactPath, workflow.compositionArtifactSha256);
+  // The composition fingerprint describes whatever file the last transition
+  // produced. While the job sits inside the composition stage, rebuilding
+  // index.html *is* the work: the advance that leaves the stage rewrites the
+  // fingerprint. Comparing it here would make every rebuild look like drift.
+  if (workflow.currentState !== "composition") {
+    record("composition", workflow.compositionArtifactPath, workflow.compositionArtifactSha256);
+  }
   record("authoritative media", workflow.authoritativeMediaPath, workflow.authoritativeMediaSha256);
   record("trim plan", "state/trim-plan.json", workflow.trimPlanSha256);
   record("creative confirmation", "state/creative-confirmation.json", workflow.creativeConfirmationSha256);
