@@ -8,6 +8,7 @@ import { requireItems, panelCss, panelEntrance, eventTime, round, PANEL_OPEN } f
 export const meta = {
   name: "strikeout",
   summary: "Strike a label through at the moment the narration rejects it.",
+  summaryZh: "口播否定的那一刻，把标签划掉。",
   primaryFlowAxis: "horizontal",
   semanticTopology: "emphasis",
   motionFamily: "editorial",

@@ -7,6 +7,7 @@ import { requireItems, panelCss, panelEntrance, eventTime, eventTimes, round, PA
 export const meta = {
   name: "convergence",
   summary: "Merge two to four labelled sources into a single result container.",
+  summaryZh: "两到四个素材标签并成一组，汇入同一个结果容器。",
   primaryFlowAxis: "vertical",
   semanticTopology: "convergence",
   motionFamily: "technical",

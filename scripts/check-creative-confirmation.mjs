@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { computeCreativeAuthorities } from "./workflow-utils.mjs";
+import { computeCreativeAuthorities, REAPPROVAL_FIELD_NAMES } from "./workflow-utils.mjs";
 
 const [confirmationPath, confirmationDocPath, beatMapPath, workflowPath] = process.argv.slice(2);
 
@@ -103,7 +103,7 @@ try {
 } catch (error) {
   errors.push(error.message);
 }
-const requiredReapprovalFields = new Set(["caption-segmentation", "mg-node-set", "mg-count", "on-screen-copy", "support-role", "visual-style", "primary-flow-axis", "visual-reference", "axis-mode"]);
+const requiredReapprovalFields = new Set(REAPPROVAL_FIELD_NAMES);
 const actualReapprovalFields = new Set(confirmation.changeControl?.reapprovalFields ?? []);
 if (confirmation.changeControl?.implementationMayStartAfter !== "creative-package-approved"
   || confirmation.changeControl?.planChangesRequireReapproval !== true

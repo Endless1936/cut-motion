@@ -8,6 +8,7 @@
  * defaults) is derived here so it cannot drift between jobs.
  */
 import { sha256File } from "./workflow-utils.mjs";
+import { resolveComponent } from "../mg-library/index.mjs";
 
 export const decimal = (value, places = 6) => Number(Number(value).toFixed(places));
 const pad3 = (value) => String(value).padStart(3, "0");
@@ -214,6 +215,29 @@ export const buildCaptionPlan = ({
   };
 };
 
+/**
+ * Fields a local MG beat shares with its component. They are derived from the
+ * component's `meta` so a beat map stops restating what the component already
+ * declares - on the delivered job 15 of the 16 values were verbatim copies of
+ * the component metadata. An explicit value on the beat still wins, because the
+ * disagreements that exist are editorial: a hand-tuned panel band, or a second
+ * use of the same gesture under a different transition.
+ */
+const DERIVED_BEAT_FIELDS = ["semanticTopology", "primaryFlowAxis", "motionFamily", "transitionFamily"];
+
+const applyComponentDefaults = (beat) => {
+  const component = resolveComponent(beat.mgComponent) ?? resolveComponent(beat.recipe);
+  if (!component) return beat;
+  for (const field of DERIVED_BEAT_FIELDS) {
+    if (beat[field] === undefined && component.meta[field] !== undefined) beat[field] = component.meta[field];
+  }
+  if (beat.visualStyle === undefined) {
+    const summary = component.meta.summaryZh ?? component.meta.summary;
+    if (summary !== undefined) beat.visualStyle = summary;
+  }
+  return beat;
+};
+
 const CAPTION_ONLY = {
   recipe: "caption-only",
   mgScope: "none",
@@ -266,6 +290,9 @@ export const buildBeatMap = ({
       if (out.recipe === undefined) out.recipe = CAPTION_ONLY.recipe;
       if (out.mgScope === undefined) out.mgScope = out.recipe === "caption-only" ? "none" : "local";
       if (out.axis === undefined) out.axis = CAPTION_ONLY.axis;
+      // Component metadata fills the shared fields before the generic defaults,
+      // so a beat only names what it actually decides.
+      if (out.mgScope === "local") applyComponentDefaults(out);
       if (out.motionFamily === undefined) out.motionFamily = CAPTION_ONLY.motionFamily;
       if (out.transitionFamily === undefined) out.transitionFamily = out.mgScope === "local" ? "custom" : CAPTION_ONLY.transitionFamily;
       if (out.mgScope === "local") {

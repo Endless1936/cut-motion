@@ -8,6 +8,7 @@ import { panelCss, panelEntrance, requireItems, revealCadence, PANEL_OPEN } from
 const VARIANTS = {
   "list-ordered": {
     summary: "A vertical numbered list that reveals item by item.",
+    summaryZh: "纵向编号列表，逐条揭示。",
     primaryFlowAxis: "vertical",
     semanticTopology: "sequence",
     transitionFamily: "list-build",
@@ -15,6 +16,7 @@ const VARIANTS = {
   },
   "list-unordered": {
     summary: "A vertical bulleted list that reveals item by item.",
+    summaryZh: "纵向项目符号列表，逐条揭示。",
     primaryFlowAxis: "vertical",
     semanticTopology: "sequence",
     transitionFamily: "list-build",
@@ -22,18 +24,21 @@ const VARIANTS = {
   },
   quote: {
     summary: "A single quoted line held behind a rule.",
+    summaryZh: "一条引文停在分隔线之上。",
     primaryFlowAxis: "horizontal",
     semanticTopology: "evidence",
     transitionFamily: "quote-reveal"
   },
   "code-block": {
     summary: "A bordered block whose lines type on in sequence.",
+    summaryZh: "带边框的代码块，逐行键入。",
     primaryFlowAxis: "vertical",
     semanticTopology: "sequence",
     transitionFamily: "code-build"
   },
   heading: {
     summary: "One large statement that scales into place.",
+    summaryZh: "一句大字陈述放大就位。",
     primaryFlowAxis: "horizontal",
     semanticTopology: "emphasis",
     transitionFamily: "title-reveal"

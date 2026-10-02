@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseReferenceScript } from "./reference-script-annotations.mjs";
+import { buildBeatMap } from "./plan-artifacts.mjs";
 import { sha256File } from "./workflow-utils.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -339,10 +340,45 @@ try {
   script("generate-plan.mjs", [planJob, "--write"]);
   assert.equal(fs.readFileSync(path.join(planJob, "state", "beat-map.json"), "utf8"), firstPass, "generate-plan must be idempotent");
 
+  const settledInputs = fs.readFileSync(path.join(planJob, "state", "planning-inputs.json"), "utf8");
   const unsafe = readJson(path.join(planJob, "state", "planning-inputs.json"));
   delete unsafe.beats[1].layout;
   writeJson(path.join(planJob, "state", "planning-inputs.json"), unsafe);
   script("generate-plan.mjs", [planJob, "--write"], false, /faceSafetyNote/);
+  fs.writeFileSync(path.join(planJob, "state", "planning-inputs.json"), settledInputs);
+
+  // A beat only names what it decides; the fields it shares with its MG
+  // component come from the component metadata, so the two cannot drift.
+  const beatMapFor = (beat) => buildBeatMap({
+    transcript: { duration: 6 },
+    captionMode: "subtitles",
+    fps: 30,
+    designSystem: {
+      typography: { displayFamily: "Smiley Sans", outlineReservePx: 18 },
+      captions: { fontSizePx: 96 }
+    },
+    beats: [{ id: "b01", start: 1, end: 3, text: "示例", layout: { faceSafetyNote: "Fixture" }, ...beat }]
+  }).beats[0];
+  const minimal = beatMapFor({ recipe: "tool-strikeout", onScreenCopy: ["新工具"] });
+  assert.equal(minimal.semanticTopology, "emphasis");
+  assert.equal(minimal.primaryFlowAxis, "horizontal");
+  assert.equal(minimal.motionFamily, "editorial");
+  assert.equal(minimal.transitionFamily, "strike-reveal");
+  assert.equal(minimal.visualStyle, "口播否定的那一刻，把标签划掉。");
+  assert.equal(
+    beatMapFor({ recipe: "tool-strikeout", onScreenCopy: ["新工具"], transitionFamily: "strike-lock" }).transitionFamily,
+    "strike-lock",
+    "an explicit beat value must still win: the disagreements are editorial"
+  );
+  assert.equal(beatMapFor({ recipe: "link-build", onScreenCopy: ["工具", "影片"] }).visualStyle, "用一条单向连线把输入标签接到输出标签。");
+  assert.equal(beatMapFor({ recipe: "caption-only" }).semanticTopology, undefined, "caption-only beats do not consult the registry");
+
+  // The Global direction lines that describe the design system are rendered,
+  // not authored, so a job may not restate them.
+  const restated = readJson(path.join(planJob, "state", "planning-inputs.json"));
+  restated.documents.globalDirection = ["Palette：沿用设计系统纸面/钴蓝/珊瑚色"];
+  writeJson(path.join(planJob, "state", "planning-inputs.json"), restated);
+  script("generate-plan.mjs", [planJob, "--write"], false, /must not restate the derived "Palette" line/);
 
   console.log("Planning contract tests passed.");
 } finally {

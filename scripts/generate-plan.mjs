@@ -23,7 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { readJson, sha256File, sha256Text, writeJsonAtomic } from "./workflow-utils.mjs";
+import { readJson, REAPPROVAL_FIELD_NAMES, sha256File, sha256Text, writeJsonAtomic } from "./workflow-utils.mjs";
 import { resolveCaptionCues } from "./caption-review-utils.mjs";
 import {
   buildBeatMap,
@@ -171,17 +171,7 @@ const creativeConfirmation = {
   changeControl: {
     implementationMayStartAfter: "creative-package-approved",
     planChangesRequireReapproval: true,
-    reapprovalFields: [
-      "caption-segmentation",
-      "mg-node-set",
-      "mg-count",
-      "on-screen-copy",
-      "support-role",
-      "visual-style",
-      "primary-flow-axis",
-      "visual-reference",
-      "axis-mode"
-    ]
+    reapprovalFields: [...REAPPROVAL_FIELD_NAMES]
   },
   axisPolicy: inputs.axisPolicy ?? {
     A: {

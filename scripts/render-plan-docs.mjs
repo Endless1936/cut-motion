@@ -24,6 +24,38 @@ const cueLabel = (beat, cues) => {
 
 const cueText = (beat, cues) => cuesForBeat(beat, cues).map((cue) => cue.text).join(" / ");
 
+/**
+ * The first three Global-direction lines describe the design system, not the
+ * film, so they are derived from `state/design-system.json` instead of being
+ * typed out per job - which is where the two drifted apart. Only the editorial
+ * lines (which axes are used, how the film ends) remain authored, and an
+ * authored line may not restate a derived one.
+ */
+const DERIVED_DIRECTION_PREFIXES = ["Caption mode", "Typography", "Palette"];
+
+const derivedGlobalDirection = ({ captionMode, cues, designSystem }) => {
+  const typography = designSystem.typography ?? {};
+  const captions = designSystem.captions ?? {};
+  const palette = designSystem.palette ?? {};
+  const accents = ["cobalt", "coral", "green", "yellow", "violet"]
+    .filter((token) => palette[token] !== undefined)
+    .map((token) => `${token} \`${palette[token]}\``);
+  return [
+    `Caption mode：\`${captionMode}\`，${cues.length} 条单行字幕承载全部措辞`,
+    `Typography：${typography.displayNameZh ?? typography.displayFamily}（${typography.displayFamily}）${typography.fontWeight}；主文案 ${(typography.primarySizePx ?? []).join("–")} px，次级 ${(typography.secondarySizePx ?? []).join("–")} px，outlineReserve ${typography.outlineReservePx} px；字幕 ${captions.fontSizePx} px / 行高 ${captions.lineHeight} / 最多 ${captions.maximumLines} 行`,
+    `Palette：纸面 \`${palette.paper}\`、正文 \`${palette.ink}\`、强调 ${accents.join(" / ")}、连线取 \`${designSystem.motionContract?.connectorColorToken ?? "connector"}\` token`
+  ];
+};
+
+const assertNoDerivedDirectionRestated = (globalDirection = []) => {
+  for (const item of globalDirection) {
+    const clash = DERIVED_DIRECTION_PREFIXES.find((prefix) => new RegExp(`^-?\\s*${prefix}\\s*[:：]`).test(item));
+    if (clash) {
+      throw new Error(`documents.globalDirection must not restate the derived "${clash}" line; it is rendered from state/design-system.json`);
+    }
+  }
+};
+
 export const renderMotionPlanDoc = ({ jobId, captionMode, visualAxisMode, transcript, beatMap, cues, designSystem, extra = {} }) => {
   const lines = [];
   const localBeats = beatMap.beats.filter((beat) => beat.mgScope === "local");
@@ -44,7 +76,11 @@ export const renderMotionPlanDoc = ({ jobId, captionMode, visualAxisMode, transc
     "## Global direction",
     ""
   );
-  for (const item of extra.globalDirection ?? []) lines.push(`- ${item}`);
+  assertNoDerivedDirectionRestated(extra.globalDirection);
+  for (const item of [
+    ...derivedGlobalDirection({ captionMode, cues, designSystem }),
+    ...(extra.globalDirection ?? [])
+  ]) lines.push(`- ${item.replace(/^-\s*/, "")}`);
   lines.push(
     "",
     "## 分镜表",

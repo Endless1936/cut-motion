@@ -117,6 +117,8 @@ Components read their timings from the named micro events in the Beat Map rather
 - Components never emit `<script>`, `<style>`, `<video>` or `<audio>`, and only drive class selectors that their own fragment renders.
 - `scripts/test-mg-components.mjs` enforces all of the above, including the empty-container rule, by replaying the emitted tween source.
 
+A Beat Map must not restate what its component already declares. `semanticTopology`, `primaryFlowAxis`, `motionFamily`, `transitionFamily` and `visualStyle` are filled from the component's `meta` (`summaryZh` for the style line) by `scripts/generate-plan.mjs`; the beat only carries a value when it deliberately differs — a hand-tuned panel band, or a second use of the same gesture under another transition. A new component therefore needs its `meta` filled in, not a new paragraph in every job's plan.
+
 ## Evidence and claims
 
 - A factual addition needs a traceable source in the project research record.

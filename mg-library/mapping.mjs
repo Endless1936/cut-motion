@@ -8,6 +8,7 @@ import { requireItems, panelCss, panelEntrance, eventTime, needsSilhouette, silh
 export const meta = {
   name: "mapping",
   summary: "Connect a source label to an output label with one directional link.",
+  summaryZh: "用一条单向连线把输入标签接到输出标签。",
   primaryFlowAxis: "vertical",
   semanticTopology: "mapping",
   motionFamily: "technical",
