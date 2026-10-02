@@ -1,6 +1,6 @@
 # Source-Audio Candidate and Waveform Seam Checks
 
-Use this file for waveform-index format and batch-lookup mechanics. The sole rough-cut and seam policy is [`talking-head-trim-standard.md`](talking-head-trim-standard.md). Start building or reusing the index as soon as the source is probed; continue ChatCut import and semantic editing while it builds, then batch-lookup the edited seams after cleanup. The index must be ready before that lookup.
+Use this file for waveform-index format and targeted seam-lookup mechanics. The sole rough-cut policy is [`talking-head-trim-standard.md`](talking-head-trim-standard.md). Start building or reusing the index as soon as the source is probed; continue ChatCut import and semantic editing while it builds. The default calculator uses this index after candidate cleanup; run the targeted batch lookup only for a user-reported seam or a specific diagnosis request.
 
 ## Candidate-scan invocation
 
@@ -20,9 +20,9 @@ Reuse a prior schema-v3 or schema-v4 index when its source SHA-256 matches the u
 
 Do not pass a `--summary` output to `--lookup`; summaries intentionally omit the waveform windows.
 
-## Batch lookup
+## Targeted seam lookup
 
-After ChatCut has completed semantic and candidate cleanup, put every retained cut in/out edge in one manifest: each seam records the outgoing clip's source end and the incoming clip's source start. This checks waveform padding inside both clips, even when timeline items touch with no timeline gap. Candidate discovery stays in the preceding step; do not use this seam lookup to enumerate unrelated pauses. Add a same-item candidate span only for a specific unresolved blank or transient; set `leftAssetEndUs` to the candidate start and `rightAssetStartUs` to its end, and set `lookupPaddingMs` to at least half that candidate's source-time span. The lookup rejects a same-item span when the padding would leave its middle uninspected. The manifest must carry the source SHA-256, timeline frame rate, both item IDs, asset-clock edge times, and an operator-attested asset-to-source map based on a fresh ChatCut asset inspection and the original-file probe. The script checks that the attested ID, hash, duration, offset, and scale agree with the map; this consistency check does not independently prove the remote asset's identity. Schema v2 is the only accepted lookup format. Do not downgrade to legacy schema v1. dB intervals may be used to find regions for inspection, never to choose the physical edge returned by this lookup.
+Use the batch lookup below only when the user reports that the default clip-edge pass still leaves a rough seam, or asks for a specific seam diagnosis. It provides localized evidence for the existing audio-led review; it does not replace the default calculator or choose a cut frame.
 
 ```json
 {
@@ -76,3 +76,38 @@ The Golden Standard defines edge placement and ambiguity handling. This index su
 ## Lookup contract
 
 The utility checks source hashes, operator-attested source-time map fields, item IDs, and edge-time ranges for consistency. It does not verify the remote ChatCut asset bytes or decide whether an edge should move. Use the batch traces for targeted triage under the Golden Standard; exhaustive per-seam playback and boundary confirmation are not required.
+
+## Default clip-edge calculator
+
+After semantic and gap-candidate cleanup, run `scripts/compute-seam-tightening.mjs` across the retained clips. It only refines edges of clips ChatCut has already selected; it never decides what content to keep or edits the timeline. Save `state/timeline-source-windows.json` with one record per retained video item, using `preview_timeline` for item, source, and timeline ranges and `inspect_item` to confirm `playbackRate: 1` for every item. Use the source SHA-256 and duration from the waveform index and the exact ChatCut asset ID.
+
+```json
+{
+  "schemaVersion": 1,
+  "sourceSha256": "<waveform-index source hash>",
+  "sourceDurationUs": 120000000,
+  "sourceAssetId": "<ChatCut asset ID>",
+  "timelineFps": { "numerator": 30, "denominator": 1 },
+  "clips": [
+    {
+      "itemId": "<timeline item ID>",
+      "assetId": "<same ChatCut asset ID>",
+      "timelineStartFrame": 0,
+      "durationFrames": 90,
+      "srcStartUs": 577000,
+      "srcEndUs": 3577000,
+      "playbackRateNumerator": 1,
+      "playbackRateDenominator": 1
+    }
+  ]
+}
+```
+
+```bash
+node scripts/compute-seam-tightening.mjs \
+  --index state/source-audio-waveform-index.json \
+  --windows state/timeline-source-windows.json \
+  --out state/seam-tightening-plan.json
+```
+
+For each retained source interval, the script finds the first and last sustained primary activity (RMS16 200 over three 10 ms windows, using the louder channel). It retains one timeline frame at each proposed edge and backs off to sustained lower-level activity (RMS16 100) when present. These thresholds measure signal level; they do not label speech, breath, or noise. The scan uses `audio.startTimeUs` and exact sample bounds, stays within each clip's source interval, and quantizes to timeline frames only at the end. It rejects source/hash/duration mismatches, intervals outside indexed audio, non-contiguous timeline positions, duration/rate mismatches, and output overwrites. Apply nonzero edge trims through ChatCut `edit_item` using the plan's frame counts, adjusted timeline starts, and durations. This is the default rough-cut closure pass; it adds no workflow gate.

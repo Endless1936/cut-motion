@@ -12,7 +12,7 @@ Read this only when a matching problem occurs. Identify whether the failure is i
 | A waveform index or tool response differs from an example | Inspect one real record's field names, units, window duration, and time origin before writing a consumer or changing a mapping. |
 | A proposed optional pass or dependency adds work | Identify which later step consumes its output; defer it until needed if no current step uses it. |
 | The Agent starts a later stage early or repeats work after a handoff | Check `state/workflow.json` with `scripts/workflow-state.mjs ... status`, then follow only that state's route in [the workflow guide](workflow.md#active-state-route). Files alone do not establish a transition or approval. |
-| A tail remains after silence compression | Silence compression preserves a pause floor; it is not the terminal-tail trim. Return to the terminal-tail step in the [rough-cut standard](talking-head-trim-standard.md) and place the cut from the original recording evidence. |
+| A seam still feels loose after default edge tightening | Follow the user's rough-cut revision route and run one targeted source-waveform lookup for the reported seam; use the [rough-cut standard](talking-head-trim-standard.md#user-feedback-seam-review) to place any supported correction. |
 | A failed take survives inside a retained transcript row | Recheck the row with Script's inline `~~…~~` strike; see step 1 of the [rough-cut standard](talking-head-trim-standard.md#fast-review-path). |
 
 Add an entry only after the cause and recovery are supported by a real incident or an official tool guide. Keep each entry to the symptom and the shortest reliable recovery; the workflow standards remain the source of editing policy.

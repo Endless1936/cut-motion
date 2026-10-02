@@ -8,7 +8,7 @@ Use this document as a just-in-time phase router. At the start or resume of a jo
 | --- | --- |
 | `intake` | [Intake](#intake) and [Environment preflight](agent-setup.md#environment-preflight) |
 | `transcription` | [Transcript and alignment](#transcript-and-alignment) |
-| `rough-cut` | [Rough cut](#rough-cut) and [Talking-head trim standard](talking-head-trim-standard.md); read [source-audio lookup mechanics](source-audio-silence-index.md) only when building the index or looking up seams |
+| `rough-cut` | [Rough cut](#rough-cut) and [Talking-head trim standard](talking-head-trim-standard.md); read [source-audio index mechanics](source-audio-silence-index.md) when building the index or handling user-requested seam diagnosis |
 | `rough-cut-review` | [Rough-cut review and export](#rough-cut-review-and-export), [State machine](state-machine.md), and [Quality checks](quality-gates.md) |
 | `rough-cut-export` | [Rough-cut review and export](#rough-cut-review-and-export) and [State machine](state-machine.md) |
 | `motion-plan` | [Motion plan](#motion-plan), then only the applicable [caption](caption-modes.md), [subtitle segmentation](subtitle-segmentation-standard.md), [subtitle MG](subtitle-mg-standard.md), [visual language](visual-language.md), and [density/layout](density-and-layout.md) guides |
@@ -36,8 +36,8 @@ Use [`state-machine.md`](state-machine.md) for transition commands, mode decisio
 
 When `revise` or `reopen rough-cut` returns the job here, reread this section and the linked standard from the top. Reassess the revised timeline; do not rely on memory of the prior pass.
 
-- ChatCut owns the editable talking-head timeline. Use the [Talking-Head Trim Standard](talking-head-trim-standard.md) as the sole detailed policy for semantic editing, candidate cleanup, speech coverage, terminal tails, and seams. Keep valid recorded speech or record its editorial disposition.
-- Build or reuse the job-local source-audio waveform index once per source and use one batch seam lookup. Record ChatCut project/timeline identifiers, durations, and stage timings in `state/chatcut-roughcut.json`; optional seam lookup files are evidence artifacts, not workflow states or approval gates.
+- ChatCut owns the editable talking-head timeline. Use the [Talking-Head Trim Standard](talking-head-trim-standard.md) as the sole detailed policy for semantic editing, candidate cleanup, speech coverage, and clip-edge closure. Keep valid recorded speech or record its editorial disposition.
+- Build or reuse the job-local waveform index once per source. After candidate cleanup, run the clip-edge calculator across the retained timeline and apply its frame plan. Use the existing targeted seam lookup only when the user reports a rough seam. Record ChatCut project/timeline identifiers and measured stage timings in `state/chatcut-roughcut.json`; calculation and lookup files are evidence artifacts, not workflow states or approval gates.
 - If ChatCut is unavailable, record `roughCutEngine: "ffmpeg-fallback"` and use the conservative FFmpeg fallback. `state/trim-plan.json` and its legacy audit apply only to that explicit fallback.
 
 ## Rough-cut review and export
