@@ -100,12 +100,6 @@ try {
       error: /mgScope/
     },
     {
-      name: "missing-cognition-gap",
-      source: validSubtitles,
-      mutate: (map) => { delete map.beats[0].viewerQuestion; },
-      error: /viewerQuestion/
-    },
-    {
       name: "missing-copy",
       source: validSubtitles,
       mutate: (map) => { delete map.beats[0].onScreenCopy; },
@@ -361,6 +355,15 @@ try {
   planningWorkflow.currentState = "motion-plan";
   planningWorkflow.sourceTranscriptSha256 = sha256File(path.join(planJob, "state/source-transcript.json"));
   writeJson(path.join(planJob, "state/workflow.json"), planningWorkflow);
+
+  // Outline IDs must use the same corrected word sequence as plan generation.
+  writeJson(path.join(planJob, "state/planning-inputs.json"), { ...planInputs, corrections: { "今天我要": "今天我会" } });
+  script("generate-plan.mjs", [planJob, "--outline"]);
+  const correctedOutline = readJson(path.join(planJob, "state/planning-outline.json"));
+  assert.deepEqual(correctedOutline.segments[0].words.map((word) => [word.text, word.index, word.id]), [
+    ["今天我会", 1, "s1:word-001"], ["演示", 2, "s1:word-002"]
+  ]);
+  writeJson(path.join(planJob, "state/planning-inputs.json"), planInputs);
 
   const dryRun = script("generate-plan.mjs", [planJob]);
   assert.match(dryRun.stdout, /\(dry run/);

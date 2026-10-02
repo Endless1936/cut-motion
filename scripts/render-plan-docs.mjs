@@ -115,10 +115,8 @@ export const renderMotionPlanDoc = ({ jobId, captionMode, visualAxisMode, transc
       `- 语义拓扑 \`${beat.semanticTopology}\`；主推进轴 \`${beat.primaryFlowAxis}\`；继承范式 \`${beat.visualReference}\``,
       `- 上屏原文（仅此${beat.onScreenCopy.length}项可入画）：${beat.onScreenCopy.map((copy) => `\`${copy}\``).join(" ")}`,
       `- 对应字幕：${cueIds} — ${escapeCell(cueText(beat, cues))}`,
-      `- 观众问题：${escapeCell(beat.viewerQuestion)}；任务 \`${beat.supportRole}\``,
+      `- 用途：${escapeCell(beat.intent)}；任务 \`${beat.supportRole}\``,
       `- 动画样式：${escapeCell(beat.visualStyle)}`,
-      `- 删除后的损失：${escapeCell(beat.removalLoss)}`,
-      `- 信息增量：${escapeCell(beat.visualEncoding)}`,
       `- 布局：x ${beat.layout.primaryBoundsNormalized.x} / y ${beat.layout.primaryBoundsNormalized.y} / ${beat.layout.primaryBoundsNormalized.width}×${beat.layout.primaryBoundsNormalized.height}；占高 ${beat.layout.primaryOccupancyRatio}；面板内边距 ${beat.layout.panelPaddingPx} px`,
       `- 遮脸判断：\`${beat.layout.faceCover}\` — ${escapeCell(beat.layout.faceSafetyNote)}`
     );
@@ -238,12 +236,12 @@ export const renderCreativeConfirmationDoc = ({
 
   lines.push(
     "",
-    "### 字幕模式 MG 审核清单",
+    "### 字幕模式 MG",
     "",
-    "仅为 `mgScope: local` 的节点填写；纯字幕节点不填。每项必须说明为什么不只是“让画面更活跃”。",
+    "由模板与内容决策生成；纯字幕节点不重复填写。",
     "",
-    "| 时间 / 对应字幕 | 最终上屏原文 | 信息增量 | 动画样式 | 关系结构 / 启动词 | 主推进轴 | 继承范式 | 主要任务 | 删除后的具体损失 | 注意力成本 | 事实来源 / 高成本理由 |",
-    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    "| 时间 / 对应字幕 | 最终上屏原文 | 用途 | 动画样式 | 关系结构 / 启动词 | 主推进轴 | 继承范式 | 主要任务 | 注意力成本 | 事实来源 / 高成本理由 |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
   );
   for (const beat of localBeats) {
     const cost = extra.mgCostNotes?.[beat.id]
@@ -253,13 +251,12 @@ export const renderCreativeConfirmationDoc = ({
     lines.push([
       `${beat.id} ${formatClock(beat.start)}–${formatClock(beat.end)} / ${cueLabel(beat, cues)}`,
       beat.onScreenCopy.join(" "),
-      escapeCell(beat.visualEncoding),
+      escapeCell(beat.intent),
       escapeCell(beat.visualStyle),
       escapeCell(`${beat.semanticTopology} 关系；从「${beat.entryAnchorText ?? "起点"}」起`),
       beat.primaryFlowAxis,
       beat.visualReference,
       beat.supportRole,
-      escapeCell(beat.removalLoss),
       escapeCell(extra.attentionLabels?.[beat.attentionCost] ?? ({ low: "低", medium: "中", high: "高" }[beat.attentionCost] ?? beat.attentionCost)),
       escapeCell(cost)
     ].join(" | ").replace(/^(.*)$/, "| $1 |"));

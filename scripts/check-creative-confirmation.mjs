@@ -130,19 +130,7 @@ if (confirmation.visualAxisMode === "hybrid" && (!usedAxes.has("A") || !usedAxes
 
 if (!["ready", "approved"].includes(confirmation.review?.status)) errors.push("creative confirmation must be ready before plan review");
 
-if (!document.includes("# 创意确认包")) errors.push("creative confirmation document is missing its title");
-if (!document.includes("## 用户选择") || !document.includes("## 逐字稿对齐") || !document.includes("## 逐字稿画面批注") || !document.includes("## A/B 轴执行规则") || !document.includes("## 分镜动画方案")) {
-  errors.push("creative confirmation document is missing a required review section");
-}
-if (confirmation.captionMode === "subtitles" && beatMap.beats.some((beat) => beat.mgScope === "local")) {
-  if (!document.includes("### 字幕模式 MG 审核清单")) errors.push("subtitle creative confirmation must include the local MG review table");
-  if (!document.includes("### 明确不加 MG 的段落")) errors.push("subtitle creative confirmation must list the passages that intentionally remain caption-only");
-  for (const heading of ["最终上屏原文", "信息增量", "动画样式", "主要任务", "删除后的具体损失", "注意力成本"]) {
-    if (!document.includes(heading)) errors.push(`subtitle creative confirmation MG table is missing ${heading}`);
-  }
-}
 if (!/(?:字幕模式|Caption mode).*?(?:motion-copy|subtitles)/is.test(document)) errors.push("creative confirmation document must state caption mode");
-if ((document.match(/^\s*\|.*\|\s*$/gm) ?? []).length < 5) errors.push("creative confirmation document must include review tables");
 const reconciliationPath = path.join(jobRoot, "state", "transcript-reconciliation.json");
 if (!fs.existsSync(reconciliationPath)) {
   errors.push("creative confirmation requires transcript reconciliation");
@@ -201,8 +189,6 @@ if (confirmation.captionMode === "subtitles" && !fs.existsSync(captionPlanPath))
       for (const [field, value] of [
         ["id", beat.id],
         ["support role", beat.supportRole],
-        ["viewer question", beat.viewerQuestion],
-        ["removal loss", beat.removalLoss],
         ["visual style", beat.visualStyle],
         ["primary flow", beat.primaryFlowAxis],
         ["visual reference", beat.visualReference],

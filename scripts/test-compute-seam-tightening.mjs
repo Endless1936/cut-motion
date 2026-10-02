@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -291,41 +290,6 @@ try {
   const standalone = calculate(windowsPath);
   assert.equal(standalone.status, 0);
   assert.equal(standalone.stderr, "", "standalone use has no workflow reminders");
-  const stateRoot = path.join(temporaryRoot, "state");
-  fs.mkdirSync(stateRoot);
-  const jobWindows = path.join(stateRoot, "timeline-source-windows.json");
-  fs.writeFileSync(jobWindows, JSON.stringify(manifest));
-  fs.writeFileSync(path.join(stateRoot, "workflow.json"), "{}");
-  const missing = calculate(jobWindows);
-  assert.equal(missing.status, 0);
-  assert.match(missing.stderr, /non-blocking.*missing/);
-  assert.equal(missing.stdout, standalone.stdout, "reminders leave the computed plan unchanged");
-  const gapPath = path.join(stateRoot, "gap-candidates.json");
-  const gap = {
-    timeline: { sha256: crypto.createHash("sha256").update(fs.readFileSync(jobWindows)).digest("hex") },
-    candidates: [{ classification: "unclassified" }],
-  };
-  fs.writeFileSync(gapPath, JSON.stringify(gap));
-  assert.match(calculate(jobWindows).stderr, /need classification or removal/);
-  gap.candidates[0].classification = "remove";
-  fs.writeFileSync(gapPath, JSON.stringify(gap));
-  assert.match(calculate(jobWindows).stderr, /need classification or removal/);
-  gap.candidates[0].classification = "preserve";
-  fs.writeFileSync(gapPath, JSON.stringify(gap));
-  assert.match(calculate(jobWindows).stderr, /baseline is not recorded/);
-  fs.copyFileSync(jobWindows, path.join(stateRoot, "timeline-source-windows.pre-cleanup.json"));
-  gap.timeline.preCleanupPath = "state/timeline-source-windows.pre-cleanup.json";
-  gap.timeline.preCleanupSha256 = gap.timeline.sha256;
-  fs.writeFileSync(gapPath, JSON.stringify(gap));
-  assert.equal(calculate(jobWindows).stderr, "");
-  gap.timeline.sha256 = "outdated";
-  fs.writeFileSync(gapPath, JSON.stringify(gap));
-  assert.match(calculate(jobWindows).stderr, /stale/);
-  fs.writeFileSync(gapPath, "invalid JSON");
-  const malformed = calculate(jobWindows);
-  assert.equal(malformed.status, 0);
-  assert.match(malformed.stderr, /could not be read/);
-  assert.equal(malformed.stdout, standalone.stdout);
   const overwriteInput = spawnSync(process.execPath, [
     scriptPath, "--index", indexPath, "--windows", windowsPath, "--out", indexPath,
   ], { encoding: "utf8" });
@@ -339,6 +303,16 @@ try {
   ], { encoding: "utf8" });
   assert.notEqual(overwriteOutput.status, 0);
   assert.equal(fs.readFileSync(occupiedOutput, "utf8"), "keep");
+  const force = (out) => spawnSync(process.execPath, [
+    scriptPath, "--index", indexPath, "--windows", windowsPath, "--out", out, "--force",
+  ], { encoding: "utf8" });
+  assert.equal(force(occupiedOutput).status, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(occupiedOutput, "utf8")), JSON.parse(standalone.stdout));
+  assert.notEqual(force(indexPath).status, 0);
+  const alias = path.join(temporaryRoot, "index-alias.json");
+  fs.symlinkSync(indexPath, alias);
+  assert.notEqual(force(alias).status, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(indexPath, "utf8")), index);
 } finally {
   fs.rmSync(temporaryRoot, { recursive: true, force: true });
 }

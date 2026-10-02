@@ -26,13 +26,13 @@ These are planning zones, not rigid rows. Primary text should not default to the
 
 ## Peak-state measurement
 
-Record bounds for entrance, maximum overshoot, hold, and exit. Rotation, outline, shadow, blur, and scale all count toward occupied space. A scene fails when transformed glyphs clip even if the resting frame is clean.
+Approved templates reuse their implemented bounds. For a custom or resized layout, account for entrance overshoot, rotation, outline and shadows; inspect the affected moment if clipping is uncertain. Separate measurement reports for every animation phase are not required.
 
 ## Timing and typography bounds
 
 - Begin phrase motion within three frames of its acoustic onset; anchor the first meaningful event to a spoken word within 400ms. Connected elements in one reveal group start within two frames.
 - In subtitle mode, use 0.8–1.8 seconds as a spacing guide for meaningful micro-events inside approved local MG; trigger each event from speech or meaning, not a fixed timer. Caption-only passages need no animation.
-- Vary transition families across phrases; when reusing a complete visual signature, record one `reuseGroup` and a concrete `reuseReason`.
+- Reuse the selected template's transition family consistently; vary it when the content benefits, without a repetition quota or reuse justification.
 - For 1080×1920 vertical video, primary Chinese copy is normally 84–156 px and secondary copy at least 42 px. Use 0.92–1.12 display line height and 1.15–1.35 body-copy line height.
 - Keep 54 px horizontal and 88 px vertical canvas clearance, with 18 px around outlined or transformed glyphs. Panel padding is normally 48–72 px.
 - Set Chinese line breaks around complete phrases; keep at least two visible characters on each line when a semantic break is needed.

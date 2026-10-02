@@ -68,14 +68,14 @@ lines.push(
   "",
   "## MG 节点",
   "",
-  "| 节点 | 时间 / 对应字幕 | 对应原句 | 最终上屏原文 | 观众问题 | 信息任务 | 删除损失 | 动画样式 |",
-  "| --- | --- | --- | --- | --- | --- | --- | --- |"
+  "| 节点 | 时间 / 对应字幕 | 对应原句 | 最终上屏原文 | 用途 | 信息任务 | 动画样式 |",
+  "| --- | --- | --- | --- | --- | --- | --- |"
 );
 for (const beat of localBeats) {
   const cueRange = beat.captionCueIds.length === 1
     ? beat.captionCueIds[0]
     : `${beat.captionCueIds[0]}–${beat.captionCueIds.at(-1)}`;
-  lines.push(`| ${beat.id} | ${formatTime(beat.start)}–${formatTime(beat.end)} / ${cueRange} | ${escapeCell(cueTextForBeat(beat))} | ${escapeCell(beat.onScreenCopy.join(" / "))} | ${escapeCell(beat.viewerQuestion)} | ${escapeCell(beat.supportRole)} | ${escapeCell(beat.removalLoss)} | ${escapeCell(beat.visualStyle)} |`);
+  lines.push(`| ${beat.id} | ${formatTime(beat.start)}–${formatTime(beat.end)} / ${cueRange} | ${escapeCell(cueTextForBeat(beat))} | ${escapeCell(beat.onScreenCopy.join(" / "))} | ${escapeCell(beat.intent)} | ${escapeCell(beat.supportRole)} | ${escapeCell(beat.visualStyle)} |`);
 }
 
 lines.push(

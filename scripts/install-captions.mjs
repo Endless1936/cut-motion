@@ -3,9 +3,9 @@ import path from "node:path";
 import { buildComposition } from "./build-composition.mjs";
 import { assertCaptionSequence, frameWindowTiming } from "./frame-window-utils.mjs";
 
-const [captionsPath, compositionPath, designSystemPath] = process.argv.slice(2);
-if (!captionsPath || !compositionPath || !designSystemPath) {
-  console.error("Usage: node install-captions.mjs <captions.json> <hyperframes-index.html> <design-system.json>");
+const [captionsPath, compositionPath, designSystemPath, ...flags] = process.argv.slice(2);
+if (!captionsPath || !compositionPath || !designSystemPath || flags.some((flag) => flag !== "--defer-build")) {
+  console.error("Usage: node install-captions.mjs <captions.json> <hyperframes-index.html> <design-system.json> [--defer-build]");
   process.exit(64);
 }
 
@@ -76,5 +76,5 @@ if (Number.isFinite(style.bottomOffsetRatio)) {
 }
 updated = updated.replace(/data-caption-font-weight=["'][0-9]+["']/, `data-caption-font-weight="${style.fontWeight ?? 400}"`);
 fs.writeFileSync(authoredCompositionPath, updated);
-if (authoredCompositionPath !== compositionPath) buildComposition(path.dirname(compositionPath));
+if (authoredCompositionPath !== compositionPath && !flags.includes("--defer-build")) buildComposition(path.dirname(compositionPath));
 console.log(`Installed ${captions.cues.length} caption cue(s) into ${authoredCompositionPath}`);

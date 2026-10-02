@@ -112,7 +112,7 @@
           },
           "layout": {
             "type": "object",
-            "required": ["primaryOccupancyRatio", "primaryBoundsNormalized", "supportingElementCount", "emptyComponentCount", "panelPaddingPx", "safeAreaPass", "faceCover"],
+            "required": ["primaryOccupancyRatio", "primaryBoundsNormalized", "supportingElementCount", "emptyComponentCount", "panelPaddingPx", "faceCover"],
             "properties": {
               "primaryOccupancyRatio": { "type": "number", "minimum": 0, "maximum": 1 },
               "primaryBoundsNormalized": {

@@ -3,7 +3,6 @@
 // waveform. This calculator never decides which content to keep or edits a timeline.
 
 import fs from "node:fs";
-import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -286,6 +285,8 @@ export function computeSeamTighteningPlan(indexJson, manifest) {
       durationFramesAfterTrim,
       sourceStartUs: Number(sourceStartUs),
       sourceEndUs: Number(sourceEndUs),
+      sourceStartUsAfterTrim: toSafeNumber(sourceStartUs + roundDiv(BigInt(proposedHeadTrimFrames) * MICROSECONDS_PER_SECOND * map.fpsDenominator, map.fpsNumerator), itemId + " adjusted start"),
+      sourceEndUsAfterTrim: toSafeNumber(sourceEndUs - roundDiv(BigInt(proposedTailTrimFrames) * MICROSECONDS_PER_SECOND * map.fpsDenominator, map.fpsNumerator), itemId + " adjusted end"),
       primaryActivityStartSourceUs: primaryStart ? toSafeNumber(primaryStart.startUs, itemId + " primary start") : null,
       primaryActivityEndSourceUs: primaryEnd ? toSafeNumber(primaryEnd.endUs, itemId + " primary end") : null,
       lowLevelFallbackStartSourceUs: headFallbackUs === null ? null : toSafeNumber(headFallbackUs, itemId + " low-level head fallback"),
@@ -319,62 +320,33 @@ export function computeSeamTighteningPlan(indexJson, manifest) {
 
 function parseArguments(argv) {
   const parsed = {};
-  const allowed = new Set(["index", "windows", "out"]);
+  const allowed = new Set(["index", "windows", "out", "force"]);
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
     if (!token.startsWith("--") || !allowed.has(token.slice(2))) {
-      fail("Unknown argument " + token + ". Use --index, --windows, and optional --out.");
+      fail("Unknown argument " + token + ". Use --index, --windows, and optional --out and --force.");
     }
     const key = token.slice(2);
     if (parsed[key] !== undefined) fail("Duplicate argument --" + key + ".");
+    if (key === "force") { parsed.force = true; continue; }
     const value = argv[i + 1];
     if (!value || value.startsWith("--")) fail("Missing value for --" + key + ".");
     parsed[key] = value;
     i += 1;
   }
-  if (!parsed.index || !parsed.windows) fail("Usage: node scripts/compute-seam-tightening.mjs --index <index.json> --windows <timeline-windows.json> [--out <plan.json>]");
+  if (!parsed.index || !parsed.windows) fail("Usage: node scripts/compute-seam-tightening.mjs --index <index.json> --windows <timeline-windows.json> [--out <plan.json>] [--force]");
+  if (parsed.force && !parsed.out) fail("--force requires --out.");
   return parsed;
 }
 
-// Informative only: standalone calculations stay silent, and no scan runs here.
-function remindGapCleanup(windowsPath) {
-  const stateRoot = path.dirname(windowsPath);
-  if (path.basename(stateRoot) !== "state" || !fs.existsSync(path.join(stateRoot, "workflow.json"))) return;
-  const artifactPath = path.join(stateRoot, "gap-candidates.json");
-  let message;
-  try {
-    if (!fs.existsSync(artifactPath)) {
-      message = "gap-candidates.json is missing; classify and apply pause cleanup before edge tightening.";
-    } else {
-      const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
-      const currentHash = crypto.createHash("sha256").update(fs.readFileSync(windowsPath)).digest("hex");
-      const candidates = Array.isArray(artifact.candidates) ? artifact.candidates : [];
-      const pending = candidates.filter((entry) => entry.classification !== "preserve").length;
-      const issues = [];
-      if (!Array.isArray(artifact.candidates)) issues.push("candidate list is invalid");
-      if (artifact.timeline?.sha256 !== currentHash) issues.push("gap record is stale for these source windows");
-      if (!artifact.timeline?.preCleanupPath) issues.push("cleanup baseline is not recorded");
-      if (artifact.timeline?.preCleanupPath) {
-        const baselinePath = path.resolve(stateRoot, "..", artifact.timeline.preCleanupPath);
-        if (!fs.existsSync(baselinePath)) issues.push("recorded cleanup baseline is missing");
-        else if (crypto.createHash("sha256").update(fs.readFileSync(baselinePath)).digest("hex") !== artifact.timeline.preCleanupSha256) {
-          issues.push("recorded cleanup baseline has changed");
-        }
-      }
-      if (pending) issues.push(`${pending} candidate(s) still need classification or removal`);
-      if (issues.length) message = `${issues.join("; ")}. Refresh the cleanup record before using this edge plan.`;
-    }
-  } catch {
-    message = "gap record could not be read; check the cleanup record before using this edge plan.";
-  }
-  if (message) process.stderr.write(`Cleanup reminder (non-blocking): ${message}\n`);
-}
-
 function runCli() {
+  if (process.argv.slice(2).includes("--help")) {
+    console.log("Usage: node scripts/compute-seam-tightening.mjs --index <index.json> --windows <timeline-windows.json> [--out <plan.json>] [--force]\nFor a ChatCut job, use prepare-rough-cut.mjs <job> tighten <saved-preview-pages.json>... to build these inputs automatically.");
+    return;
+  }
   const args = parseArguments(process.argv.slice(2));
   const indexPath = path.resolve(args.index);
   const windowsPath = path.resolve(args.windows);
-  remindGapCleanup(windowsPath);
   const plan = computeSeamTighteningPlan(
     JSON.parse(fs.readFileSync(indexPath, "utf8")),
     JSON.parse(fs.readFileSync(windowsPath, "utf8")),
@@ -388,7 +360,12 @@ function runCli() {
   if (outputPath === indexPath || outputPath === windowsPath) {
     fail("--out must not overwrite an input file.");
   }
-  fs.writeFileSync(outputPath, output, { flag: "wx" });
+  if (args.force && fs.existsSync(outputPath)) {
+    const target = fs.lstatSync(outputPath);
+    if (!target.isFile() || target.nlink > 1) fail("--force requires a regular output file without symbolic or hard links.");
+    if ([indexPath, windowsPath].some((input) => fs.realpathSync(input) === fs.realpathSync(outputPath))) fail("--out must not overwrite an input file.");
+  }
+  fs.writeFileSync(outputPath, output, { flag: args.force ? "w" : "wx" });
   process.stdout.write("Wrote candidate plan: " + outputPath + "\n");
 }
 

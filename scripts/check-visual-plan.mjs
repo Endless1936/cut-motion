@@ -18,7 +18,6 @@ const beats = [...beatMap.beats].sort((left, right) => left.start - right.start)
 const transcriptById = new Map(transcript.segments.map((segment) => [segment.id, segment]));
 const wordsById = transcriptWordsById(transcript);
 const sourceUsage = new Map();
-const signatureUsage = new Map();
 const renderWindows = new Map();
 const normalize = (value) => value.replace(/[\s，。！？、,.!?]/g, "").toLowerCase();
 const captionMode = beatMap.captionMode ?? "motion-copy";
@@ -112,7 +111,6 @@ for (let index = 0; index < beats.length; index += 1) {
   // Shared stage animation is background/speaker geometry, not a foreground
   // information panel. Its interval is validated by the assembler.
   if (stageTemplate) continue;
-  if (captionMode === "subtitles" && beat.captionSafeZonePass !== true) errors.push(`${beat.id}: local MG must pass caption safe-zone review`);
   if (captionMode === "subtitles") {
     if (!Array.isArray(beat.captionCueIds) || beat.captionCueIds.length === 0) errors.push(`${beat.id}: subtitle MG must map to captionCueIds`);
     if (typeof beat.visualStyle !== "string" || beat.visualStyle.trim().length === 0) errors.push(`${beat.id}: subtitle MG must declare visualStyle`);
@@ -127,9 +125,6 @@ for (let index = 0; index < beats.length; index += 1) {
         const visibleCharacters = [...copy.replace(/[\s·/｜|→↔+\-]/g, "")].length;
         if (!component && visibleCharacters > 12) errors.push(`${beat.id}: onScreenCopy[${copyIndex}] exceeds 12 visible characters`);
       }
-    }
-    for (const field of ["viewerQuestion", "removalLoss", "visualEncoding", "stillFrameValue", "attentionCost"]) {
-      if (typeof beat[field] !== "string" || beat[field].trim().length === 0) errors.push(`${beat.id}: subtitle MG must declare ${field}`);
     }
     if (!subtitleSupportRoles.has(beat.supportRole)) errors.push(`${beat.id}: subtitle MG has an invalid supportRole`);
     if (!["low", "medium", "high"].includes(beat.attentionCost)) errors.push(`${beat.id}: subtitle MG attentionCost must be low, medium, or high`);
@@ -167,7 +162,6 @@ for (let index = 0; index < beats.length; index += 1) {
   if (beat.layout.supportingElementCount < density.supportingElementCount[0] || beat.layout.supportingElementCount > density.supportingElementCount[1]) errors.push(`${beat.id}: supporting element count is outside the approved range`);
   if (beat.layout.supportingElementCount !== beat.components.length) errors.push(`${beat.id}: component list does not match supporting element count`);
   if (beat.layout.emptyComponentCount !== density.emptyComponentCount) errors.push(`${beat.id}: empty components are forbidden`);
-  if (!beat.layout.safeAreaPass) errors.push(`${beat.id}: declared layout does not pass the safe area`);
   if (!annotationTemplate && (beat.layout.panelPaddingPx < spacing.panelPaddingPx[0] || beat.layout.panelPaddingPx > spacing.panelPaddingPx[1])) errors.push(`${beat.id}: panel padding is outside the approved range`);
 
   const bounds = beat.layout.primaryBoundsNormalized;
@@ -250,22 +244,6 @@ for (let index = 0; index < beats.length; index += 1) {
   }
   if (microEvents.some((event) => event.visualRole === "connector" && !event.revealGroup)) errors.push(`${beat.id}: connector events must declare revealGroup`);
 
-  const visualSignature = JSON.stringify({
-    axis: beat.axis,
-    visualReference: beat.visualReference,
-    semanticTopology: beat.semanticTopology,
-    primaryFlowAxis: beat.primaryFlowAxis,
-    motionFamily: beat.motionFamily,
-    visualStyle: beat.visualStyle ?? null
-  });
-  const signatureBeats = signatureUsage.get(visualSignature) ?? [];
-  signatureBeats.push(beat);
-  signatureUsage.set(visualSignature, signatureBeats);
-
-  if (index >= rhythm.maximumRepeatedTransitionFamily) {
-    const recent = beats.slice(index - rhythm.maximumRepeatedTransitionFamily, index + 1);
-    if (recent.every((candidate) => candidate.transitionFamily === beat.transitionFamily)) errors.push(`${beat.id}: transition family repeats too many times`);
-  }
 }
 
 const aAxisMotionBeats = beats.filter((beat) => beat.axis === "A" && !(captionMode === "subtitles" && beat.mgScope === "none") && !resolveComponent(beat.templateId ?? beat.recipe)?.meta.name.startsWith("stage/"));
@@ -282,32 +260,12 @@ for (const [index, beat] of aAxisMotionBeats.entries()) {
   if (previousWindow && renderWindow.start < previousWindow.end) errors.push(`${beat.id}: A-axis information groups overlap instead of replacing`);
 }
 
-for (const repeatedBeats of signatureUsage.values()) {
-  if (repeatedBeats.length < 2) continue;
-  const reuseGroups = new Set(repeatedBeats.map((beat) => beat.reuseGroup).filter(Boolean));
-  if (reuseGroups.size !== 1 || repeatedBeats.some((beat) => typeof beat.reuseReason !== "string" || beat.reuseReason.trim().length === 0)) {
-    errors.push(`${repeatedBeats.map((beat) => beat.id).join(", ")}: repeated visual signature requires one reuseGroup and a reason`);
-  }
-}
-
 for (const segment of transcript.segments) {
   if (!sourceUsage.has(segment.id)) errors.push(`${segment.id}: transcript segment is missing from the beat map`);
 }
 
 for (const [sourceId, uses] of sourceUsage) {
   if (uses.length > 1 && !uses.every((beat) => beat.reuseSource)) errors.push(`${sourceId}: transcript segment is reused without an explicit reason`);
-}
-
-let sceneStart = beats[0]?.start ?? 0;
-let currentScene = beats[0]?.sceneId;
-for (const beat of beats.slice(1)) {
-  if (beat.sceneId !== currentScene) {
-    const sceneDuration = beat.start - sceneStart;
-    if (sceneDuration < rhythm.majorSceneGapSeconds[0] && !beat.majorSceneException) errors.push(`${beat.id}: major scene changes after only ${sceneDuration.toFixed(2)}s`);
-    if (sceneDuration > rhythm.majorSceneGapSeconds[1]) warnings.push(`${currentScene}: major scene lasts ${sceneDuration.toFixed(2)}s; confirm micro-events keep it alive`);
-    sceneStart = beat.start;
-    currentScene = beat.sceneId;
-  }
 }
 
 let axisRunStart = 0;

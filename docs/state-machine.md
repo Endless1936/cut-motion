@@ -13,14 +13,13 @@ intake → transcription → rough-cut → rough-cut-review → rough-cut-export
 
 `rough-cut` keeps the editable ChatCut timeline as its artifact and completes [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) before `rough-cut-review`. `chatcut-roughcut.json` records project and timeline evidence; captions, MG, and B-axis composition are authored in HyperFrames. After manual approval or explicit automatic fallback, export once to `roughcut/a-roll.mp4` and run the basic media lock.
 
-The ChatCut `rough-cut → rough-cut-review` transition checks the gap-candidate record against the current source mapping. Before cleanup, with the silence scan saved:
+For ChatCut, local transcription records are optional before listening. From intake, transcription or rough-cut, record the editable cut and enter the existing review gate directly:
 
 ```bash
-node scripts/classify-gaps.mjs jobs/<job-id> --write
-# Classify candidates, apply edits, refresh timeline-source-windows.json, then rerun.
+node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json review-cut --project-id <id> --timeline-id <id>
 ```
 
-The script automatically saves its starting mapping once. The transition checks classifications, applied removals, fingerprints and scan completion; it does not establish listening or semantic correctness. Zero-hit scans are valid. Existing jobs may start with their current cut as the baseline without reconstructing prior edits. A seam-plan item-count mismatch is only a warning. The `ffmpeg-fallback` path keeps its existing trim-plan audit.
+This writes the project/timeline record, preserves existing source-transcript locks and requests the user's decision. It does not claim to validate listening quality or require cleanup history. After approval, import source words for planning and bind them with `lock-transcript`; subsequent changes to that snapshot are still rejected. The `ffmpeg-fallback` path keeps its existing trim-plan audit.
 
 At `composition`, `workflow-state.mjs` rebuilds `hyperframes/index.html` from `index.template.html`, the Beat Map, transcript, and MG modules, then records that build's hash. Those authored files are the editing source; generated HTML is disposable and the render entrypoint rebuilds from the same source before rendering.
 

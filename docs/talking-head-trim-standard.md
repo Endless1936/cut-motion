@@ -1,59 +1,47 @@
-# Talking-Head Rough-Cut Golden Standard
+# Talking-Head Rough Cut
 
-This is the sole detailed standard for talking-head rough cuts. All ChatCut rough cuts use the same sequence: select takes, clean remaining transcript and gap candidates, verify spoken-content coverage, then run the default clip-edge calculator before `rough-cut-review`. The calculator refines only the boundaries of clips already selected for retention; it does not decide what speech stays or search within clips. Use the existing targeted waveform review only if the user later reports that a seam still feels loose.
+Default: **one semantic pass → one pause-cleanup pass → one edge-tightening pass → deliver the ChatCut project for listening**. For a 5–6 minute recording, target roughly ten minutes to this handoff when tools are available. Report a blocking tool failure promptly with the usable result so far. The user judges listening quality in `rough-cut-review`.
 
-Use [`source-audio-silence-index.md`](source-audio-silence-index.md) only for the index format and batch-lookup mechanics. `AGENTS.md`, `docs/quality-gates.md`, and `docs/state-machine.md` describe workflow operations; they do not define alternative cut criteria.
+## Start or resume
 
-Use a 30 fps project timeline by default, even when the source is 29.97 fps; honor another rate only when the user requests it and keep source timing distinct from the timeline frame grid.
+Create the job once; this entry point copies the source and creates workflow state:
 
-The default calculator scans the original-source interval at both ends of every retained clip. It uses primary and lower RMS thresholds with a one-frame safety margin; ASR does not set the physical edge. It measures signal level, not sound category, so it cannot guarantee that low-level speech is preserved. Internal pauses and between-word gaps remain part of candidate cleanup. Preserve an edge when the source mapping is uncertain or the recording shows quiet speech at that boundary.
+```bash
+./scripts/scaffold-project.sh jobs/<job-id> /absolute/source.mov review
+```
 
-## Fast review path
+Resume from `workflow-state.mjs ... status`. Match the source to its ChatCut asset once. If a usable cut already exists, give the user its project link and apply only requested revisions. Local source-word conversion, reconciliation, Caption Plan and MG planning belong after rough-cut approval.
 
-1. **Select speech semantically in ChatCut:** use Script and the recording to remove misspeaks, failed starts, retries, repeated takes, and contextually confirmed filler words. Check retained rows for a failed restart merged with the correct take; use Script's inline `~~…~~` strike to remove only the failed fragment. Keep the last complete, correct take by default. Preserve quiet speech, meaningful interjections, natural breaths, and intentional emphasis. Do not rely on transcript row length alone to choose a take.
-2. **Protect Chinese words during filler cleanup:** never run `clean_script({only:"fillers"})` on Chinese speech; its fixed list removes every `额` token, including the lexical `额` in `免费额度`. Remove `呃`/`额` only through Script after confirming each hit is a standalone disfluency. ASR omissions do not identify mouth clicks; remove a click only when audio evidence confirms it is non-speech. If playback is unavailable, preserve ambiguous sound for the complete rough-cut review.
-3. **Find gap candidates:** compare source-aligned word timings in `state/source-transcript.json` with the retained timeline and read Script with `showSilence:true`. Every other retained source span with no aligned ASR word for at least 0.3 seconds—including internal pauses and between-word gaps—is a candidate for inspection, not an automatic deletion. Run `scripts/detect-silence.sh <original-source>` once with its default `-30`, `-35`, and `-40 dB` sweep (minimum detected duration 0.45 seconds); consider only intervals that overlap retained source footage. Merge overlapping candidates and classify them using the audio-led rules in “Seam classification” below. The dB sweep complements ASR; it does not label a sound or authorize a cut.
-4. **Classify candidates and protect content:** mark each remaining candidate for removal or retention in `state/gap-candidates.json`, using a short `reasonCode` or `reason`. Remove confirmed dead air, hiccups, clicks, false starts, and resets; preserve quiet words, natural breaths, meaningful pauses, and ambiguous sounds. Compare the retained timeline with the recording-backed source transcript and reconciled reference wording: every valid spoken phrase must remain once or have an explicit editorial disposition. Never remove a complete correct phrase solely because its wording differs from the reference or ASR. `clean_script({only:"silence",longSilence:800})` is allowed only when every affected pause is clearly expendable; do not lower this bulk-cleanup setting to 0.3 seconds. If playback is unavailable, preserve ambiguous sound for the complete rough-cut review.
-5. **Check speech coverage:** re-read the retained timeline with `showSilence:true` and confirm every valid spoken phrase remains once or has an explicit editorial disposition. No gap candidate may remain unexplained before edge tightening.
-6. **Run default edge tightening:** build or reuse the original-source waveform index, create `state/timeline-source-windows.json` from the current ChatCut timeline, and confirm every item's explicit 1x playback rate and source-time mapping. Run `scripts/compute-seam-tightening.mjs` once across the retained clips. Apply its candidate frame plan through one ChatCut `edit_item` update batch, using the plan's adjusted timeline starts and durations and advancing each source start by its proposed head-trim frames. The calculator does not classify speech or guarantee that low-level speech is preserved; keep an original edge when its mapping is uncertain or the recording contradicts the proposal. Use the existing rough-cut review for the result; do not add per-seam playback as a default gate. Do not run the targeted seam lookup unless the user reports a loose seam or asks for a diagnosis.
-7. **Keep transitions local:** do not run global `smooth_audio` by default. If a confirmed hard pop remains after the physical boundary is correct, use a local 0–2 frame transition and recheck the onset; default to 0.
-8. **Review:** open the tightened rough cut in ChatCut. This remains the existing `rough-cut-review` gate; the calculator adds no workflow state or approval gate.
+## Three editing passes
 
-For steps 3–5, save the silence sweep to `state/source-silence-db-scan.txt`, including its completion markers. Run `node scripts/classify-gaps.mjs <job> --write` before edits: it snapshots the current mapping once and merges ASR/dB candidates. After applying the decisions and tightening, refresh `timeline-source-windows.json` from ChatCut and rerun classification; existing decisions carry forward. The rough-cut transition checks classified coverage and whether proposed removals remain. A successful zero-hit scan is valid. `audioChecked` never becomes true from ASR, waveform or notes, and false does not block.
+1. **Semantic edit.** Read ChatCut Script and remove misspeaks, failed starts, repeated takes and production chatter. Keep the last complete correct take by default, preserving meaningful emphasis and rhetorical self-correction. Use inline deletion for failed fragments within a row. For Chinese, remove only contextually confirmed standalone fillers: bulk filler cleanup can delete the lexical `额` in `免费额度`.
+2. **Pause cleanup.** Read the retained Script with `showSilence:true`; remove empty delays and restart preparation, including pauses inside clips. Use one `scripts/detect-silence.sh <source>` scan when needed to locate remaining low-level gaps. Word timing and quiet intervals support these edits; ambiguous breaths or possible quiet words remain for user listening. Absence of an ASR word alone does not identify a mouth click. Process candidates directly; no classification ledger, pre-cleanup snapshot, per-candidate reason or full speech-coverage report is required.
+3. **Edge tightening.** Save the current `preview_timeline` structured response (all pages) and run the command below. Apply the plan once in a batch. It already handles source bounds, waveform offsets, low-level tails and frame safety margins. ASR intervals are often wider than the physical sound: overlap with an ASR word is not a reason to re-audit every edge or reject the plan. If the mapping is unsupported, keep those edges and disclose that limitation at handoff.
 
-For an older cut without a starting snapshot, the first run records the current timeline as its baseline; it does not claim to verify earlier removals. Continue from that cut instead of restoring deleted footage to recreate paperwork.
+## Edge command
 
-When run with a job's source windows, the edge calculator prints a nonblocking reminder if the cleanup record is absent, stale or unfinished. Candidate reports show removed/preserved counts and the longest preserved pause; use these to catch skipped cleanup before presenting the rough cut.
+Use a 30 fps timeline by default. Save tool responses directly as JSON under the job; pass multiple files for paginated results:
 
-Record elapsed seconds while working in `state/chatcut-roughcut.json` under the schema's existing `elapsedSecondsByStage` keys: project/asset lookup as `projectAndAssetLookup`, transfer as `assetTransfer`, semantic editing as `semanticCut`, the default calculator as `wholeTimelineSweep`, transcription as `transcription`, source-index work as `sourceWaveformIndex`, targeted fallback lookup as `batchSeamLookup`, applied edge changes as `seamAdjustment`, and end-to-end duration as `total`. Omit stages that were not run or not measured; use `0` only for confirmed zero-duration work. Do not estimate timings afterward.
-## User-feedback seam review
+```bash
+node scripts/prepare-rough-cut.mjs jobs/<job-id> tighten jobs/<job-id>/state/chatcut-timeline.json
+```
 
-If the user reports that a seam still feels loose after the default calculator, follow the normal rough-cut revision route and use one targeted batch lookup for the reported edge or edges. Follow [`source-audio-silence-index.md`](source-audio-silence-index.md) for the schema-v2 lookup, then use the existing audio-led seam classification and localized playback when available. Apply supported corrections together; preserve ambiguous edges. This is the fallback path, not an additional default pass.
+The command builds/reuses the waveform index, converts timeline entries into source windows, and writes `state/seam-tightening-plan.json`. It supports a single source video track at an integer timeline fps with a linear 1x mapping; the source span must agree with each clip's frame duration. Fetch another timeline page only when pagination requires it. Query individual items only to resolve missing or unsupported mapping data.
 
-## Legacy FFmpeg trim-plan path
+For each plan clip, send ChatCut the computed `timelineStartFrameAfterShift`, `durationFramesAfterTrim`, `sourceStartUsAfterTrim` and `sourceEndUsAfterTrim` in the tool's corresponding fields. Keep item IDs unchanged. The companion `timeline-source-windows.proposed.json` contains the resulting mapping: adopt it as `timeline-source-windows.json` only after the entire batch succeeds. For a partial failure, fetch the actual current timeline once and report the outcome rather than reapplying the old batch.
 
-This is a separate explicit fallback, not a second rough-cut standard. `scripts/apply-trim-plan.sh` applies authored frame ranges; `scripts/finalize-trim-plan.mjs` audits that output, including threshold-relative dB checks. The audit can reject a trim-plan result, but it does not choose or move cut frames. It is not run for ChatCut timelines.
+One final timeline read confirms the batch landed. Deliver immediately; no further scan, ASR-overlap sweep, gap reclassification, per-seam playback or MP4 export precedes listening. Do not run global audio smoothing by default.
 
-## Editorial heuristics
+## Handoff
 
-These guide ChatCut selection and Agent judgment. They do not add schema fields, validator failures, or review gates.
+```bash
+node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json review-cut --project-id <project-id> --timeline-id <timeline-id>
+```
 
-- **Repeated expression:** remove retries and repetitions that add no information. Keep the last complete, correct take by default; use an earlier take only when the later one is incomplete or incorrect, never merely because the earlier transcript alignment looks cleaner. Preserve intentional emphasis, recap, and comic repetition.
-- **Correction and restart:** remove confirmed slips, failed openings, and production chatter such as requests to restart, then keep the last successful delivery. Preserve meaningful negation, contrast, and rhetorical self-correction.
-- **Breath and pacing:** remove reading, searching, restart preparation, and empty delay while retaining natural breath and pauses needed for comprehension or emphasis. Prefer a conservative boundary when audio evidence is ambiguous.
+This generates the rough-cut record and enters the existing `rough-cut-review` from intake, transcription or rough-cut. It checks any existing source-transcript lock but does not demand one to hear the cut. Give the project link, current duration and any skipped operation; then wait for the user's decision. The command records a handoff, not proof that edits or listening occurred.
 
-## Seam classification
+## After user feedback
 
-For sentence-tail candidates, use original-source audio evidence to establish where speech ends; the aligned ASR endpoint only locates where to inspect. Do not cut at the ASR endpoint alone or trim a tail solely because of gaze, head, or body movement. Use picture only to help identify a false start/restart or take reset. Preserve the tail when the audio evidence is ambiguous.
+Repair only the reported passages. A targeted waveform lookup or `inspect-media-window.mjs` can help with a specific seam; see [audio index mechanics](source-audio-silence-index.md). `classify-gaps.mjs` and `check-gap-candidates.mjs` remain optional diagnostics for a requested cleanup investigation.
 
-Preserve a pause when at least one of these is true and no reset signal is present:
-
-- it supports comprehension, emphasis, humor, or a deliberate change of thought;
-- the breath is part of continuous delivery and removing it makes speech sound clipped.
-
-Remove a pause only when audio confirms expendable non-speech or semantic review confirms a false start/restart:
-
-- the next phrase begins like a restart rather than continuous delivery;
-- room tone or breath noise extends well beyond the last spoken phoneme.
-
-Use `scripts/inspect-media-window.mjs` only for conflicting or low-confidence evidence. Its aligned filmstrip and waveform may help identify a false start/restart and assess audio continuity; it is internal diagnostic evidence, not a required artifact for every seam or a new review gate.
+For an explicit FFmpeg fallback, use the existing trim-plan commands and their media checks. This is not a second pass on a ChatCut cut.

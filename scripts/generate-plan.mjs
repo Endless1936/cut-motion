@@ -17,13 +17,14 @@
  *         docs/caption-plan.md              (via render-caption-review-doc.mjs)
  *         docs/creative-confirmation.md
  *
- * Without --write it prints the plan and touches nothing.
+ * Without --write it prints the plan and touches nothing; --outline writes only
+ * the released word outline needed to author the input.
  */
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { readJson, REAPPROVAL_FIELD_NAMES, sha256File, sha256Text } from "./workflow-utils.mjs";
+import { readJson, REAPPROVAL_FIELD_NAMES, sha256File, sha256Text, writeJsonAtomic } from "./workflow-utils.mjs";
 import { resolveCaptionCues } from "./caption-review-utils.mjs";
 import {
   buildBeatMap,
@@ -37,7 +38,7 @@ import { renderCreativeConfirmationDoc, renderMotionPlanDoc } from "./render-pla
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const [jobArgument, ...flags] = process.argv.slice(2);
 if (!jobArgument) {
-  console.error("Usage: node scripts/generate-plan.mjs <job-directory> [--write] [--replace-existing]");
+  console.error("Usage: node scripts/generate-plan.mjs <job-directory> [--outline | --write [--replace-existing]]");
   process.exit(64);
 }
 const write = flags.includes("--write");
@@ -49,6 +50,30 @@ const require_ = (relative) => {
   if (!fs.existsSync(absolute)) throw new Error(`missing required input: ${relative}`);
   return absolute;
 };
+
+// Expose release-time word IDs before authoring cue ranges. This uses the same
+// mapper as generation, so Agents do not need a temporary conversion script.
+if (flags.includes("--outline")) {
+  const workflow = read("state/workflow.json");
+  const project = read("state/project.json");
+  const inputs = fs.existsSync(rel("state/planning-inputs.json")) ? read("state/planning-inputs.json") : {};
+  if (workflow.sourceTranscriptSha256 && workflow.sourceTranscriptSha256 !== sha256File(rel("state/source-transcript.json"))) throw new Error("Locked source transcript changed");
+  const transcript = inputs.releasedTranscript
+    ? { ...read("state/transcript.json"), ...inputs.releasedTranscript }
+    : buildReleasedTranscript({
+    sourceTranscript: read("state/source-transcript.json"), timelineWindows: read("state/timeline-source-windows.json"),
+    fps: project.fps ?? inputs.fps ?? 30, corrections: inputs.corrections ?? {},
+    revision: inputs.revision ?? 2, language: project.language ?? "zh-CN"
+  });
+  writeJsonAtomic(rel("state/planning-outline.json"), {
+    ...transcript,
+    segments: transcript.segments.map((s) => ({ ...s,
+      words: s.words.map((w, i) => ({ ...w, index: i + 1, id: `${s.id}:word-${String(i + 1).padStart(3, "0")}` }))
+    }))
+  });
+  console.log("Wrote state/planning-outline.json: use its segment IDs and 1-based word indices in planning-inputs.json. Set corrections before authoring cue ranges; changed corrections require a refreshed outline and cue ranges.");
+  process.exit(0);
+}
 
 require_("state/planning-inputs.json");
 const inputs = read("state/planning-inputs.json");
@@ -81,7 +106,7 @@ const captionPlan = buildCaptionPlan({
   lexicon: inputs.lexicon ?? {},
   rules: inputs.cueRules ?? {},
   exceptions: inputs.cueExceptions ?? {},
-  status: inputs.captionStatus ?? "proposed"
+  status: inputs.captionStatus ?? "approved"
 });
 
 const cues = resolveCaptionCues(captionPlan, released);

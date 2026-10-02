@@ -5,7 +5,7 @@ The default path is human-reviewed and intentionally light. Machine checks estab
 ## Default `review` path
 
 - Keep the original source unchanged.
-- Follow [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) during the rough-cut phase. It is the edit procedure rather than an approval gate, but the `rough-cut → rough-cut-review` transition does validate its gap-candidate record (`state/timeline-source-windows.pre-cleanup.json` plus a passing `state/gap-candidates.json`); an unclassified retained pause blocks the transition.
+- Follow the [rough-cut sequence](talking-head-trim-standard.md), then deliver the ChatCut project for listening. The transition checks project/timeline identity and any existing source-transcript lock. Candidate ledgers, cleanup snapshots, reconciliation and coverage reports are not review prerequisites.
 - After approval, export once and run only the basic rough-cut/media lock.
 - Build the HyperFrames composition, render once, and verify that the delivery has readable video/audio, dimensions, frame rate, duration, and a non-empty file.
 - Each transition checks its consumed dependencies; composition permits scoped review-mode visual edits and records the rebuilt result. `node scripts/workflow-state.mjs <workflow.json> verify` is the optional full fingerprint audit, including media and prior delivery.
@@ -17,7 +17,7 @@ Run an optional audit, preview, or standalone validator only for a specific ques
 
 Auto follows the same stages. The Agent performs the stage instructions; state transitions run only the code checks listed here and do not enforce every Agent action:
 
-- rough-cut: media probe, source-transcript lock, wording reconciliation and gap-candidate classification/application checks. No item-by-item listening gate; `audioChecked=false` is valid. The Agent still performs semantic editing and coverage review. Only explicit `ffmpeg-fallback` exports run the legacy trim-plan audit;
+- rough-cut: the same single editing pass and basic identity checks as review mode; retain existing source-transcript locks. Only explicit `ffmpeg-fallback` exports run the legacy trim-plan audit;
 - transcript/captions: the Agent prepares and installs the approved caption plan and checks timing. State transitions validate reconciliation, caption-plan authority, and the creative package; they do not run caption installation or timing-check commands;
 - motion: beat-map/visual-plan and creative-confirmation checks at the existing state transitions. Font, layout, information-value, and standalone HyperFrames diagnostics remain explicit, on-demand commands; run them together with `scripts/check-composition.sh <job-directory>`, which rebuilds the composition and checks a pruned staging root;
 - delivery: detailed render/media receipt when the renderer produces one, plus FFprobe integrity.

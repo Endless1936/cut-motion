@@ -27,7 +27,7 @@ import { buildComposition } from "./build-composition.mjs";
 const [workflowPath, command, ...rawArguments] = process.argv.slice(2);
 
 if (!workflowPath || !command) {
-  console.error("Usage: node workflow-state.mjs <workflow.json> <status|verify|advance|approve|revise|fallback-auto|replan|reopen|set-mode|set-caption-mode|set-axis-mode> [value] [--actor name] [--artifact path] [--note text]");
+  console.error("Usage: node workflow-state.mjs <workflow.json> <status|verify|advance|review-cut|lock-transcript|approve|revise|fallback-auto|replan|reopen|set-mode|set-caption-mode|set-axis-mode> [value] [--actor name] [--artifact path] [--note text]\nreview-cut --project-id <id> --timeline-id <id> records a ChatCut cut for listening; lock-transcript binds state/transcript.json after review.");
   process.exit(64);
 }
 
@@ -75,8 +75,8 @@ const printStageGuideHint = (state) => {
   const section = workflowGuideSections[state];
   if (section) console.error(`Stage guidance: docs/workflow.md#${section}`);
 };
-const actor = String(options.actor ?? (command === "advance" ? "agent" : "user"));
-const artifact = options.artifact ? String(options.artifact) : null;
+const actor = String(options.actor ?? (["advance", "review-cut", "lock-transcript"].includes(command) ? "agent" : "user"));
+const artifact = command === "review-cut" ? "state/chatcut-roughcut.json" : options.artifact ? String(options.artifact) : null;
 const note = options.note ? String(options.note) : null;
 const now = new Date().toISOString();
 const visualBaselinePath = path.join(jobRoot, "state", "visual-plan-baseline.json");
@@ -113,28 +113,13 @@ const checkReconciliation = (allowPending, expectedMedia = null) => {
   );
 };
 
-// Steps 3-5 of docs/talking-head-trim-standard.md order gap-candidate cleanup
-// before edge tightening, but nothing used to record that it happened. The
-// pre-cleanup snapshot plus the classified candidate list make a skipped cleanup
-// fail the rough-cut transition instead of silently reaching review.
-const preCleanupWindowsPath = path.join(jobRoot, "state", "timeline-source-windows.pre-cleanup.json");
-const gapCandidatesPath = path.join(jobRoot, "state", "gap-candidates.json");
-const checkGapCandidates = () => {
-  if (!fs.existsSync(preCleanupWindowsPath)) {
-    throw new Error("ChatCut rough cut requires state/timeline-source-windows.pre-cleanup.json: snapshot the retained source structure before gap cleanup");
-  }
-  if (!fs.existsSync(gapCandidatesPath)) {
-    throw new Error("ChatCut rough cut requires state/gap-candidates.json: run scripts/classify-gaps.mjs --write and classify every candidate");
-  }
-  runCheck("check-gap-candidates.mjs", [gapCandidatesPath], "Gap candidate review failed");
-};
-
 const lockRoughCutMedia = (artifactPath, { audit = false, trimPlanAudit = false, requirePromotion = false } = {}) => {
   const mediaPath = path.relative(jobRoot, artifactPath);
   const trimPlanPath = path.join(jobRoot, "state", "trim-plan.json");
 
   probeReviewVideo(artifactPath, "Rough-cut export");
-  assertSourceTranscriptLock();
+  const projectForLock = readJson(path.join(jobRoot, "state", "project.json"));
+  if (workflow.sourceTranscriptSha256 || projectForLock.roughCutEngine !== "chatcut") assertSourceTranscriptLock();
 
   if (requirePromotion) {
     const project = readJson(path.join(jobRoot, "state", "project.json"));
@@ -178,9 +163,12 @@ const lockSourceTranscript = (transcriptPath) => {
     return;
   }
   if (fs.existsSync(sourceTranscriptPath)) {
-    throw new Error("Unbound source transcript already exists");
+    if (sha256File(sourceTranscriptPath) !== sha256File(transcriptPath)) {
+      throw new Error("Unbound source transcript differs from the incoming transcript");
+    }
+  } else {
+    writeJsonAtomic(sourceTranscriptPath, readJson(transcriptPath));
   }
-  writeJsonAtomic(sourceTranscriptPath, readJson(transcriptPath));
   workflow.sourceTranscriptSha256 = sha256File(sourceTranscriptPath);
 };
 
@@ -248,7 +236,7 @@ const validateRoughCutReview = () => {
   const recordedArtifactPath = assertJobArtifact(recordedArtifact, expectedDirectory);
   if (chatcutRoughCutArtifact(recordedArtifact)) {
     validateChatcutRoughCutRecord(recordedArtifactPath);
-    assertSourceTranscriptLock();
+    if (workflow.sourceTranscriptSha256) assertSourceTranscriptLock();
     return;
   }
   probeReviewVideo(recordedArtifactPath, "Rough cut");
@@ -577,6 +565,53 @@ if (command === "reopen") {
   console.log(`Workflow reopened at ${target}: ${scope}`);
   process.exit(0);
 }
+// Hand off an editable cut without reconstructing its editing history.
+if (command === "review-cut") {
+  if (!["intake", "transcription", "rough-cut"].includes(workflow.currentState)) {
+    throw new Error("review-cut requires intake, transcription or rough-cut; use revise/reopen for a settled cut");
+  }
+  const project = readJson(path.join(jobRoot, "state", "project.json"));
+  assertRegularContainedFile(path.join(jobRoot, "input"), path.resolve(jobRoot, project.sourceVideo), "Source media");
+  if (workflow.sourceTranscriptSha256) assertSourceTranscriptLock();
+  const projectId = options["project-id"];
+  const timelineId = options["timeline-id"];
+  if (typeof projectId !== "string" || !projectId.trim() || typeof timelineId !== "string" || !timelineId.trim()) {
+    throw new Error("review-cut requires --project-id <id> --timeline-id <id>");
+  }
+  writeJsonAtomic(path.join(jobRoot, artifact), {
+    schemaVersion: "1.0.0", source: "chatcut", projectId,
+    timelineIds: [timelineId], activeTimelineId: timelineId, recordedAt: now,
+    ...(note ? { note } : {})
+  });
+  project.roughCutEngine = "chatcut";
+  if (project.mediaArtifacts?.roughcut) delete project.mediaArtifacts.roughcut;
+  writeJsonAtomic(path.join(jobRoot, "state", "project.json"), project);
+  workflow.authoritativeMediaPath = null;
+  workflow.authoritativeMediaSha256 = null;
+  workflow.trimPlanSha256 = null;
+  workflow.roughCutReviewDecision = "pending";
+  move("rough-cut-review", "review-cut");
+  workflow.reconciliationReturnState = null;
+  if (workflow.mode === "auto") selectAutomaticFallback("agent", "Automatic mode selected");
+  save();
+  console.log(`${workflow.mode === "auto" ? "Automatic cut recorded" : "Ready for listening"}: https://app.chatcut.io/editor/${encodeURIComponent(projectId)}`);
+  process.exit(0);
+}
+
+if (command === "lock-transcript") {
+  if (!["transcription", "rough-cut", "rough-cut-export", "motion-plan"].includes(workflow.currentState)) {
+    throw new Error("Lock the source transcript during editing or after the rough-cut decision");
+  }
+  const transcriptPath = assertJobArtifact("state/transcript.json", "state");
+  const transcript = readJson(transcriptPath);
+  if (!Array.isArray(transcript.segments) || !transcript.segments.length) throw new Error("Source transcript has no segments");
+  lockSourceTranscript(transcriptPath);
+  appendHistory("lock-transcript", workflow.currentState, workflow.currentState);
+  save();
+  console.log("Source transcript locked; reconciliation is generated during motion planning.");
+  process.exit(0);
+}
+
 const currentStage = stages[workflow.currentState];
 if (!currentStage) throw new Error(`Unknown current state: ${workflow.currentState}`);
 
@@ -609,7 +644,6 @@ if (command === "advance") {
     if (workflow.currentState === "transcription") {
       const transcriptPath = path.join(jobRoot, "state", "transcript.json");
       if (artifactPath !== transcriptPath) throw new Error("Transcription must use state/transcript.json");
-      checkReconciliation(true);
       lockSourceTranscript(transcriptPath);
     }
     if (workflow.currentState === "rough-cut") {
@@ -619,8 +653,7 @@ if (command === "advance") {
         const project = readJson(projectPath);
         if (project.roughCutEngine !== "chatcut") throw new Error("ChatCut rough-cut review requires project.roughCutEngine=chatcut");
         if (record.timelineIds.length === 0) throw new Error("ChatCut rough-cut review requires at least one timeline");
-        assertSourceTranscriptLock();
-        checkGapCandidates();
+        if (workflow.sourceTranscriptSha256) assertSourceTranscriptLock();
         if (project.mediaArtifacts?.roughcut) {
           delete project.mediaArtifacts.roughcut;
           writeJsonAtomic(projectPath, project);
@@ -645,30 +678,21 @@ if (command === "advance") {
       const isChatCutRoughCut = chatcutRoughCutArtifact(reviewArtifact);
       const project = readJson(path.join(jobRoot, "state", "project.json"));
       lockRoughCutMedia(artifactPath, {
-        audit: workflow.roughCutReviewDecision === "automatic-fallback",
+        audit: workflow.roughCutReviewDecision === "automatic-fallback" && !isChatCutRoughCut,
         trimPlanAudit: workflow.roughCutReviewDecision === "automatic-fallback" && project.roughCutEngine === "ffmpeg-fallback" && !isChatCutRoughCut,
         requirePromotion: isChatCutRoughCut
       });
     }
     if (workflow.currentState === "motion-plan") {
+      if (workflow.sourceTranscriptSha256) assertSourceTranscriptLock();
       if (!workflow.captionModeAcknowledged || !workflow.visualAxisModeAcknowledged || !workflow.referenceScriptAcknowledged) {
         throw new Error("Motion planning requires preferences accepted with the locked rough cut");
       }
-      const motionPlan = fs.readFileSync(artifactPath, "utf8");
-      const tableRows = motionPlan.split("\n").filter((line) => /^\s*\|.*\|\s*$/.test(line));
-      const hasCaptionMode = /(?:Caption mode|当前字幕模式).*?(?:motion-copy|subtitles)/i.test(motionPlan);
-      if (tableRows.length < 3) throw new Error("Motion plan must contain at least one storyboard row");
-      if (!hasCaptionMode) throw new Error("Motion plan must state the active caption mode");
       const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
       const confirmationDocPath = path.join(jobRoot, "docs", "creative-confirmation.md");
       const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
       if (!fs.existsSync(confirmationPath) || !fs.existsSync(confirmationDocPath)) {
         throw new Error("Motion plan requires a creative confirmation package");
-      }
-      const proposedConfirmation = readJson(confirmationPath);
-      if (!workflow.visualAxisModeAcknowledged) {
-        workflow.visualAxisMode = proposedConfirmation.visualAxisMode;
-        workflow.visualAxisModeSource = "default";
       }
       if (!fs.existsSync(beatMapPath)) throw new Error("Motion plan requires state/beat-map.json");
       if (fullAuditRequested) {
@@ -797,5 +821,5 @@ if (command === "advance") {
 save();
 console.log(`Workflow state: ${workflow.currentState}`);
 if (workflow.currentState === "rough-cut-review") {
-  console.log("Reminder (informational): Before presenting the rough cut, confirm semantic selection, timeline-wide candidate review, spoken-content coverage, and the default clip-edge calculator. Use targeted waveform lookup only for a reported seam problem or a specific diagnosis request. Note any skipped or unavailable item. This reminder does not block the workflow.");
+  console.log("Deliver the ChatCut project link and current duration now; report any skipped operation, then wait for the user's listening decision.");
 }

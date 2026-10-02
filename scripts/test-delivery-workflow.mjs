@@ -79,41 +79,6 @@ try {
     activeTimelineId: "runtime-timeline",
     recordedAt: new Date().toISOString()
   });
-  // The ChatCut transition validates the gap-candidate record. One retained item
-  // spanning exactly the spoken words leaves no candidate open.
-  const sourceWords = readJson(path.join(jobRoot, "state", "source-transcript.json")).segments
-    .flatMap((segment) => segment.words ?? []);
-  assert.ok(sourceWords.length > 0, "the runtime fixture needs source words");
-  const firstWord = sourceWords[0];
-  const lastWord = sourceWords[sourceWords.length - 1];
-  const retainedWindows = {
-    schemaVersion: 1,
-    sourceSha256: sha256File(path.join(jobRoot, "input", "source.mp4")),
-    sourceDurationUs: Math.round(lastWord.end * 1_000_000),
-    sourceAssetId: "runtime-asset",
-    timelineFps: { numerator: 30, denominator: 1 },
-    clips: [{
-      itemId: "runtime-item",
-      assetId: "runtime-asset",
-      timelineStartFrame: 0,
-      durationFrames: Math.round((lastWord.end - firstWord.start) * 30),
-      srcStartUs: Math.round(firstWord.start * 1_000_000),
-      srcEndUs: Math.round(lastWord.end * 1_000_000),
-      playbackRateNumerator: 1,
-      playbackRateDenominator: 1
-    }]
-  };
-  writeJson("state/timeline-source-windows.json", retainedWindows);
-  writeJson("state/timeline-source-windows.pre-cleanup.json", retainedWindows);
-  fs.writeFileSync(path.join(jobRoot, "state", "source-silence-db-scan.txt"), [
-    "[silencedetect@db30 @ 0x0] silence_start: 0",
-    "[silencedetect@db30 @ 0x0] silence_end: 0.3 | silence_duration: 0.3",
-    "[silencedetect@db35 @ 0x0] silence_start: 0",
-    "[silencedetect@db35 @ 0x0] silence_end: 0.3 | silence_duration: 0.3",
-    "[silencedetect@db40 @ 0x0] silence_start: 0",
-    "[silencedetect@db40 @ 0x0] silence_end: 0.3 | silence_duration: 0.3"
-  ].join("\n"));
-  script("classify-gaps.mjs", [jobRoot, "--write"]);
   script("workflow-state.mjs", [workflowPath, "advance", "--artifact", "state/chatcut-roughcut.json"]);
   script("workflow-state.mjs", [workflowPath, "set-caption-mode", "subtitles", "--actor", "agent", "--note", "Runtime caption recommendation"]);
  script("workflow-state.mjs", [workflowPath, "set-axis-mode", "a-axis-overlay", "--actor", "agent", "--note", "Runtime A-axis recommendation"]);

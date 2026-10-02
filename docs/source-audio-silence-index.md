@@ -1,6 +1,6 @@
 # Source-Audio Candidate and Waveform Seam Checks
 
-Use this file for waveform-index format and targeted seam-lookup mechanics. The sole rough-cut policy is [`talking-head-trim-standard.md`](talking-head-trim-standard.md). Start building or reusing the index as soon as the source is probed; continue ChatCut import and semantic editing while it builds. The default calculator uses this index after candidate cleanup; run the targeted batch lookup only for a user-reported seam or a specific diagnosis request.
+Use this file for on-demand index-format and seam diagnosis. The default [rough-cut command](talking-head-trim-standard.md#edge-command) builds/reuses the index automatically; the Agent need not study this format for normal editing.
 
 ## Candidate-scan invocation
 
@@ -79,7 +79,7 @@ The utility checks source hashes, operator-attested source-time map fields, item
 
 ## Default clip-edge calculator
 
-After semantic and gap-candidate cleanup, run `scripts/compute-seam-tightening.mjs` across the retained clips. It only refines edges of clips ChatCut has already selected; it never decides what content to keep or edits the timeline. Save `state/timeline-source-windows.json` with one record per retained video item, using `preview_timeline` for item, source, and timeline ranges and `inspect_item` to confirm `playbackRate: 1` for every item. Use the source SHA-256 and duration from the waveform index and the exact ChatCut asset ID. The calculator assumes `srcStartUs` and `srcEndUs` already use the same original-media time origin as the indexed audio; the manifest has no offset or scale mapping. Confirm the ChatCut asset's source, duration, and time origin against the indexed file. If the time mapping is unknown or differs, do not apply this candidate plan.
+The default `prepare-rough-cut.mjs <job> tighten <saved-preview-pages.json>...` command builds the index and manifest and calculates the edge plan. Match the asset to the original source once. It checks source/timeline durations for a linear 1x mapping; individual `inspect_item` calls are needed only for missing or conflicting mapping data. The calculator's source intervals use the original-media time origin; offset or retimed assets require a separate mapping and must not be passed as ordinary 1x footage.
 
 ```json
 {

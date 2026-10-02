@@ -67,6 +67,15 @@ Inspect the active Agent's loaded tools first. If ChatCut tools are callable, co
 
 It distinguishes endpoint/network/authentication failures from a responding server. Its JSON config discovery covers WorkBuddy/CodeBuddy/Cursor-style configs; native desktop integrations may not use those files. Missing config is not proof of a missing plugin. A healthy endpoint does not prove that the active client mounted its tools; check that client's enabled/trusted state.
 
+## Import a local recording into ChatCut
+
+Check for an existing asset first. Use the active integration's import skill and tool contract; hosted plugins and desktop MCP clients can expose different import routes and helper arguments.
+
+- When the hosted plugin supports same-machine editor import, use its bundled local-media helper and `import_media action=from_editor`. Keep the editor open for sync and transcription.
+- Otherwise use the supported desktop import tool or `import_media action=create_session` and its matching upload helper. Follow that helper's arguments; do not transplant `--input`, retry, or transcription-only flags from another client. Keep import tokens out of chat, logs and Git.
+- On a timeout, inspect progress and the existing asset before retrying. A helper still retrying is not a terminal failure; resume the same asset through its supported recovery path instead of starting another upload/transcode.
+- Wait for transcription readiness using the integration's progress/asset tools before Script editing. An upload acknowledgment alone does not establish transcript readiness, and a provisional status alone does not justify re-uploading.
+
 ## Render commands
 
 From `jobs/<job-id>/hyperframes`:
