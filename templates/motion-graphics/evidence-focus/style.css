@@ -1,0 +1,13 @@
+.evidence-root {
+  position:absolute; inset:0; opacity:0; visibility:hidden; pointer-events:none;
+  font-family:"Smiley Sans",sans-serif;
+}
+.evidence-surface {
+  position:absolute; top:var(--mg-top,28%); left:6%; width:88%; overflow:hidden;
+  border-radius:24px; background:#171b21; box-shadow:0 24px 70px rgba(0,0,0,.24);
+}
+.evidence-image { display:block; width:100%; height:auto; }
+.evidence-focus {
+  position:absolute; box-sizing:border-box; border:4px solid #7DF2C4; border-radius:13px;
+  box-shadow:0 0 0 1500px rgba(0,0,0,.60); opacity:0;
+}

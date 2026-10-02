@@ -4,12 +4,15 @@
   "kind": "style-kit",
   "sourceCase": "Book Video",
   "captionMode": "subtitles",
-  "axisModes": ["A", "B"],
-  "sourceOfTruth": "hyperframes/",
+  "axisModes": [
+    "A",
+    "B"
+  ],
+  "sourceOfTruth": "../../templates/motion-graphics/",
   "modules": [
-    "b-axis-horizon-grid",
-    "mg-annotation-caption",
-    "axis-stage-transitions"
+    "stage/b-axis-horizon-grid",
+    "annotation",
+    "stage/axis-stage-transition"
   ],
   "localAssets": "none"
 }

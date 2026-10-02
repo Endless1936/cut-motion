@@ -1,0 +1,113 @@
+.linear-flow {
+  position: absolute;
+  top: var(--mg-top, 28%);
+  left: 6%;
+  width: 88%;
+  color: #F4F1E8;
+  font-family: "Smiley Sans", sans-serif;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.linear-flow .flow-panel {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 360px;
+  padding: 50px 25px 34px;
+  overflow: hidden;
+  border-radius: 30px;
+  background: rgba(18, 20, 24, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+}
+
+.linear-flow .flow-nodes {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  min-height: 260px;
+}
+
+.linear-flow .flow-line {
+  position: absolute;
+  z-index: 0;
+  top: 79.5px;
+  right: calc(12.5% + 18.75px);
+  left: calc(12.5% + 18.75px);
+  height: 3px;
+}
+
+.linear-flow .flow-line-base,
+.linear-flow .flow-line-progress {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: 3px;
+}
+
+.linear-flow .flow-line-base {
+  background: rgba(244, 241, 232, 0.2);
+}
+
+.linear-flow .flow-line-progress {
+  background: linear-gradient(90deg, #7DF2C4, #FFD15C);
+  box-shadow: 0 0 16px rgba(125, 242, 196, 0.42);
+}
+
+.linear-flow .flow-node {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  min-width: 0;
+  opacity: 0;
+}
+
+.linear-flow .flow-orb {
+  display: grid;
+  box-sizing: border-box;
+  width: 62px;
+  height: 62px;
+  place-items: center;
+  border: 2px solid rgba(244, 241, 232, 0.52);
+  border-radius: 50%;
+  background: #121418;
+}
+
+.linear-flow .flow-orb i {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #7DF2C4;
+  box-shadow: 0 0 20px rgba(125, 242, 196, 0.52);
+}
+
+.linear-flow .flow-node:last-child .flow-orb {
+  border-color: #FFD15C;
+}
+
+.linear-flow .flow-node:last-child .flow-orb i {
+  background: #FFD15C;
+  box-shadow: 0 0 20px rgba(255, 209, 92, 0.5);
+}
+
+.linear-flow .flow-copy {
+  padding: 0 6px;
+  text-align: center;
+}
+
+.linear-flow .flow-copy h3 {
+  margin: 0;
+}
+
+.linear-flow .flow-copy h3 {
+  margin-top: 24px;
+  color: #F4F1E8;
+  font-size: 68px;
+  font-weight: 650;
+  line-height: 1.2;
+  white-space: nowrap;
+}

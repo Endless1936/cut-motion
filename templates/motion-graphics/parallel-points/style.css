@@ -1,0 +1,63 @@
+.parallel-points {
+  position: absolute;
+  top: var(--mg-top, 28%);
+  left: 6%;
+  width: 88%;
+  color: #F4F1E8;
+  font-family: "Smiley Sans", sans-serif;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.parallel-points .points-panel {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 18px 48px;
+  overflow: hidden;
+  border-radius: 30px;
+  background: rgba(18, 20, 24, 0.94);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+}
+
+.parallel-points .points-list {
+  display: grid;
+}
+
+.parallel-points .point {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 26px;
+  align-items: center;
+  min-height: 154px;
+  border-bottom: 1px solid rgba(244, 241, 232, 0.15);
+  opacity: 0;
+}
+
+.parallel-points .point:last-child {
+  border-bottom: 0;
+}
+
+.parallel-points .point-mark {
+  width: 19px;
+  height: 19px;
+  border-radius: 4px;
+  background: #7DF2C4;
+  box-shadow: 0 0 18px rgba(125, 242, 196, 0.32);
+  transform: rotate(45deg);
+}
+
+.parallel-points .point:nth-child(even) .point-mark {
+  background: #FFD15C;
+  box-shadow: 0 0 18px rgba(255, 209, 92, 0.3);
+}
+
+.parallel-points .point p {
+  margin: 0;
+  color: #F4F1E8;
+  font-size: 68px;
+  font-weight: 620;
+  letter-spacing: 0.01em;
+  line-height: 1.22;
+}

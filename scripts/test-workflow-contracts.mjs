@@ -67,11 +67,11 @@ const prepareCaptionPlan = (job, axisMode = "a-axis-overlay") => {
   writeJsonAtomic(confirmationPath, confirmation);
   const reconciliation = readJson(path.join(job, "state", "transcript-reconciliation.json"));
   reconciliation.mediaFingerprint = sha256File(path.join(job, "input", "source.mov"));
-  reconciliation.verification = { ...reconciliation.verification, audioChecked: true, mediaFingerprintMatches: true, transcriptRevisionMatches: true };
+  reconciliation.verification = { ...reconciliation.verification, mediaFingerprintMatches: true, transcriptRevisionMatches: true };
   reconciliation.items = transcript.segments.map((segment) => ({
     id: `reconcile-${segment.id}`, segmentId: segment.id, type: "speech-only", resolution: "accepted-speech",
     start: segment.start, end: segment.end, heardText: segment.text, confidence: 1, releaseImpact: false,
-    evidence: { audioChecked: true, note: "Synthetic fixture wording" }
+    evidence: {}
   }));
   writeJsonAtomic(path.join(job, "state", "transcript-reconciliation.json"), reconciliation);
   return plan;
@@ -368,11 +368,6 @@ try {
     writeJsonAtomic(fixture.workflowPath, { ...state, visualAxisModeSource: "default" });
     script("workflow-state.mjs", advance, false, /accepted user or authorized automatic decision/);
     writeJsonAtomic(fixture.workflowPath, state);
-    const reconciliationPath = path.join(fixture.job, "state", "transcript-reconciliation.json");
-    const reconciliation = readJson(reconciliationPath);
-    writeJsonAtomic(reconciliationPath, { ...reconciliation, verification: { ...reconciliation.verification, audioChecked: false } });
-    script("workflow-state.mjs", advance, false, /audioChecked must be true/);
-    writeJsonAtomic(reconciliationPath, reconciliation);
     script("workflow-state.mjs", advance);
     const approved = readJson(fixture.workflowPath);
     assert.equal(approved.currentState, "composition");

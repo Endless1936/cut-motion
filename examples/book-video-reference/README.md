@@ -1,12 +1,12 @@
 # Book Video motion reference
 
-Reusable HyperFrames references extracted from Book Video, without job media, transcript, or private project state. The code under [`hyperframes/`](hyperframes/) is the implementation source.
+Reusable HyperFrames references extracted from Book Video, without job media, transcript, or private project state. The implementations have been promoted to the [motion template library](../../templates/motion-graphics/README.md); this directory retains the case and reproduction notes.
 
 For faithful reuse, follow [`REPRODUCTION.md`](REPRODUCTION.md). Treat these source files as the visual baseline; do not redraw the effects from screenshots or substitute a new design.
 
-- [`b-axis-horizon-grid/`](hyperframes/b-axis-horizon-grid/) builds two mirrored perspective grid planes. The upper and lower planes scroll in opposite directions and fade toward a clear center horizon.
-- [`mg-annotation-caption/`](hyperframes/mg/mg-annotation-caption/) adds a short annotation below the regular speech caption. It is supplemental copy; the speech caption remains complete and independent.
-- [`axis-stage/`](hyperframes/axis-stage/) moves the full-frame speaker into a circular PiP as A switches to B, then expands the PiP back to full frame as B switches to A.
+- [`b-axis-horizon-grid/`](../../templates/motion-graphics/stage/b-axis-horizon-grid/) builds two mirrored perspective grid planes. The upper and lower planes scroll in opposite directions and fade toward a clear center horizon.
+- [`mg-annotation-caption/`](../../templates/motion-graphics/annotation/) adds a short annotation below the regular speech caption. It is supplemental copy; the speech caption remains complete and independent.
+- [`axis-stage/`](../../templates/motion-graphics/stage/axis-stage-transition/) moves the full-frame speaker into a circular PiP as A switches to B, then expands the PiP back to full frame as B switches to A.
 
 The reference composition is 1080×1920 at 30 fps and uses Smiley Sans (得意黑). The font and footage are intentionally not copied here; use the destination job's local font when available, and keep the sans-serif fallback if it is missing. Keep the reference values unchanged when the user asks for the same look. Change only job-specific copy, media selectors, beat IDs, and timeline intervals. Add motion to the destination's existing paused composition timeline; these examples do not create extra timelines.
 

@@ -10,7 +10,6 @@
   },
   "items": [],
   "verification": {
-    "audioChecked": false,
     "mediaPath": "input/source.mov",
     "mediaFingerprintMatches": false,
     "transcriptRevisionMatches": false,

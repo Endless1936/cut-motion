@@ -11,4 +11,4 @@ timeline.fromTo(bottom,
   { "--grid-scroll-offset": "0px" },
   { "--grid-scroll-offset": `${-travel}px`, duration: beat.duration, ease: "none", immediateRender: false },
   beat.start);
-timeline.to(root, { autoAlpha: 0, duration: 0.8, ease: "power2.in" }, beat.end - 0.8);
+// The composition builder supplies the final exit from the Beat Map.

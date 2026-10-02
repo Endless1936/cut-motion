@@ -28,26 +28,27 @@ Use [`state-machine.md`](state-machine.md) for transition commands, mode decisio
 ## Transcript and alignment
 
 - Use ChatCut for transcription and timing; do not substitute local ASR. Local silence analysis may support a targeted seam review but does not provide transcript or speech authority.
-- Preserve a supplied reference script unchanged under `input/reference-scripts/` and record its SHA-256 in `state/workflow.json` and `state/reference-script-annotations.json`. The recording determines what was spoken; reconcile omissions and additions before release. ChatCut/ASR supplies timing evidence.
+- Preserve a supplied reference script unchanged under `input/reference-scripts/` and record its SHA-256 in `state/workflow.json` and `state/reference-script-annotations.json`. The recording determines what was spoken; reconcile omissions and additions before release. ChatCut transcription and timing are provisional audio-derived evidence for the rough cut.
 - In a reference script, `【】` contains medium-strength visual notes scoped to the immediately preceding semantic clause unless the note specifies another range. Keep notes separate from speech; only reconciled `speechText` can enter released wording. Ordinary `[]` is spoken text. Reject empty, nested, unclosed, or unmatched `【】` during intake.
-- Store transcript timings in `state/transcript.json` and reconciliation evidence in `state/transcript-reconciliation.json`. On the transcription transition, snapshot source-timeline word timings to immutable `state/source-transcript.json`; preserve its hash across rough-cut revisions.
+- Store transcript timings in `state/transcript.json` and reconciliation evidence in `state/transcript-reconciliation.json`. ChatCut transcription and timing guide the rough cut; the user's complete playback and explicit decision happen at the existing `rough-cut-review`. On the transcription transition, snapshot source-timeline word timings to immutable `state/source-transcript.json`; preserve its hash across rough-cut revisions.
 
 ## Rough cut
 
 When `revise` or `reopen rough-cut` returns the job here, reread this section and the linked standard from the top. Reassess the revised timeline; do not rely on memory of the prior pass.
 
 - ChatCut owns the editable talking-head timeline. Use the [Talking-Head Trim Standard](talking-head-trim-standard.md) as the sole detailed policy for semantic editing, candidate cleanup, speech coverage, and clip-edge closure. Keep valid recorded speech or record its editorial disposition.
-- Build or reuse the job-local waveform index once per source. After candidate cleanup, run the clip-edge calculator across the retained timeline and apply its frame plan. Use the existing targeted seam lookup only when the user reports a rough seam. Record ChatCut project/timeline identifiers and measured stage timings in `state/chatcut-roughcut.json`; calculation and lookup files are evidence artifacts, not workflow states or approval gates.
+- Before edge tightening, finish candidate removal or retention in ChatCut; the silence scan only finds candidates. Preserve ambiguous sounds for the user's full rough-cut review. Then run the clip-edge calculator on the cleaned timeline and apply its frame plan. Use the existing targeted seam lookup only when the user reports a rough seam. Record ChatCut project/timeline identifiers and measured stage timings in `state/chatcut-roughcut.json`; calculation and lookup files are evidence artifacts, not workflow states or approval gates.
 - Follow the standard's numbered sequence. If an operation cannot be completed, report it as skipped or blocked instead of saying it ran.
 - If ChatCut is unavailable, record `roughCutEngine: "ffmpeg-fallback"` and use the conservative FFmpeg fallback. `state/trim-plan.json` and its legacy audit apply only to that explicit fallback.
 
 ## Rough-cut review and export
 
-- `rough-cut-review` is the only approval gate. In `review`, record the user's explicit approve, revise, or `fallback-auto` decision. In `auto`, record `automatic-fallback` only when the user selected that mode. Do not infer a decision from silence.
+- `rough-cut-review` is the only approval gate and the user's normal full playback in ChatCut. Do not ask for a separate item-by-item listening pass. Record the user's explicit approve, revise, or `fallback-auto` decision in `review`; in `auto`, record `automatic-fallback` only when the user selected that mode. Do not infer a decision from silence.
 - After the decision, promote the approved timeline once with `scripts/promote-job-media.mjs` to `roughcut/a-roll.mp4` and run the basic media lock before advancing. Keep the last known-good rough cut available.
 
 ## Motion plan
 
+- Choose supplemental MG from the [motion template catalog](../templates/motion-graphics/README.md). In the Motion Plan and creative-confirmation package, record each MG's template ID (or `custom` with a brief reason), Beat ID, copy, assets, layout choice, and spoken timing anchors. These are planning details in the existing documents; they add no state or approval gate.
 - Create `state/beat-map.json` before animation code. Every spoken sentence must be represented; split long sentences into meaningful phrases. For each beat, record its exact interval, source transcript IDs, intent/emphasis, axis, coverage, timing, and layout/safety notes.
 - For motion-approved beats, record one primary recipe, flow axis and visual reference, semantic topology, word-level entry and exit anchors, motion and transition families, micro-event timing/roles, supporting components, and entrance/hold/exit timing. Subtitle-only beats use `mgScope: "none"` with empty motion fields; `motion-copy` covers all speech.
 - Start from `assets/design-system.default.json`; change it only for a user request or supplied brand. For `subtitles`, prepare captions from reconciled speech and reserve MG for supplemental meaning. For `motion-copy`, place all spoken wording in the designed motion. Choose A-axis overlay or B-axis stage from the phrase's meaning and record the recommendation and reason with the rough-cut decision; record the resolved choice in workflow and creative-confirmation state.
@@ -56,6 +57,7 @@ When `revise` or `reopen rough-cut` returns the job here, reread this section an
 
 ## Composition
 
+- Instantiate the planned template by copying its source into the Beat module and filling the planned copy, media, IDs, position, and timing. Follow the catalog's integration instructions and keep the template's visual structure; reuse the settled plan or user-requested revision without reopening earlier approvals.
 - Author captions, MG, axis composition, and timing in HyperFrames. Follow the linked composition contract and applicable visual-language and layout guides. Build `hyperframes/index.html` from its sources with `scripts/build-composition.mjs`; the render entrypoint rebuilds from the same source before rendering.
 
 ## Delivery

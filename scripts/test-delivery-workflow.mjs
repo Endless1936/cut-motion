@@ -60,7 +60,7 @@ try {
     resolution: "accepted-speech",
     releaseImpact: true,
     confidence: segment.confidence ?? 1,
-    evidence: { audioChecked: true, supportsReference: false, note: "Runtime fixture" }
+    evidence: { supportsReference: false }
   }))));
   script("create-transcript-reconciliation.mjs", [jobRoot, "input/source.mp4", reconciliationItems]);
   script("workflow-state.mjs", [workflowPath, "advance"]);

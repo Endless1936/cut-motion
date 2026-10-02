@@ -1,3 +1,4 @@
+// Promoted from the approved Book Video stage transition.
 (() => {
   const DEFAULT_FRAME = { width: 1080, height: 1920 };
   const DEFAULT_PIP = { left: 46, bottom: 184, size: 222 };

@@ -3,7 +3,7 @@
 The repository uses mode-specific references rather than one fixed template:
 
 - `examples/traework-reference/` is the preferred reference for `captionMode: subtitles`: independent captions, localized supplemental MG, evidence-first composition, and selective B-axis staging.
-- `examples/book-video-reference/` provides individual B-axis grid, annotation, and reversible axis-transition modules.
+- [`templates/motion-graphics/`](../templates/motion-graphics/README.md) provides reusable B-axis grid, annotation, and reversible axis-transition modules. [`examples/book-video-reference/`](../examples/book-video-reference/) records their original case and integration.
 
 These examples show specific structures and components. They do not provide reusable coordinates, copy, assets, timecodes, or a complete motion-copy composition.
 

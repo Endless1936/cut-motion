@@ -4,7 +4,7 @@ This is the preferred code-backed reference for `captionMode: subtitles` talking
 
 The implementation source is under [`hyperframes/mg/`](hyperframes/mg/). Each module contains `fragment.html`, `style.css`, and `timeline.mjs`. Use [`manifest.json`](manifest.json) for the module inventory, [`recipes/traework-subtitles.json`](../../recipes/traework-subtitles.json) for authoring rules, and `visual-breakdown.md` for the scene decisions that made the reference readable. `timeline-map.json` lists representative patterns, not a timeline to paste into a new job.
 
-For Book Video's B-axis grid, annotation caption, and reversible axis transition, see [`../book-video-reference/`](../book-video-reference/). Those modules are focused component references, not a complete `motion-copy` template.
+For reusable B-axis grid, annotation caption, and reversible axis-transition code, see [`../../templates/motion-graphics/`](../../templates/motion-graphics/README.md). [`../book-video-reference/`](../book-video-reference/) retains their original case and integration notes; they are focused components, not a complete `motion-copy` template.
 
 ## Reference contract
 

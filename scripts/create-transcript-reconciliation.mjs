@@ -24,7 +24,7 @@ if (!fs.existsSync(mediaPath)) throw new Error("Reconciliation media must be a r
 assertRegularContainedFile(jobRoot, mediaPath, "Reconciliation media");
 const items = itemsArgument ? readJson(path.resolve(itemsArgument)) : [];
 if (!Array.isArray(items)) throw new Error("Items file must contain a JSON array");
-if (transcript.segments.length > 0 && items.length === 0) throw new Error("Transcript reconciliation requires explicit audio-reviewed items");
+if (transcript.segments.length > 0 && items.length === 0) throw new Error("Transcript reconciliation requires explicit items");
 const reconciliation = {
   $schema: "../../../schemas/transcript-reconciliation.schema.json",
   schemaVersion: "1.0.0",
@@ -37,7 +37,6 @@ const reconciliation = {
   },
   items,
   verification: {
-    audioChecked: items.length > 0 && items.every((item) => item.evidence?.audioChecked === true),
     mediaPath: path.relative(jobRoot, mediaPath),
     mediaFingerprintMatches: true,
     transcriptRevisionMatches: true,

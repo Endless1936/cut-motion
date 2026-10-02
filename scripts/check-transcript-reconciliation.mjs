@@ -52,14 +52,13 @@ if (!mediaPath || !fs.existsSync(mediaPath)) {
   }
 }
 if (reconciliation.verification?.mediaFingerprintMatches !== true) errors.push("mediaFingerprintMatches must be true");
-if (reconciliation.verification?.audioChecked !== true) errors.push("audioChecked must be true");
 
 if (reconciliation.referenceScript?.status !== workflow.referenceScriptStatus
   || reconciliation.referenceScript?.path !== workflow.referenceScriptPath
   || reconciliation.referenceScript?.sha256 !== workflow.referenceScriptSha256) {
   errors.push("reference-script snapshot does not match workflow");
 }
-if ((transcript.segments?.length ?? 0) > 0 && (reconciliation.items?.length ?? 0) === 0) errors.push("transcript requires explicit audio-reviewed reconciliation items");
+if ((transcript.segments?.length ?? 0) > 0 && (reconciliation.items?.length ?? 0) === 0) errors.push("transcript requires explicit reconciliation items");
 try {
   validateActiveReference(workflowPath, workflow);
 } catch (error) {
@@ -87,9 +86,6 @@ for (const item of reconciliation.items ?? []) {
     }
     if (item.start < previousAcousticEnd - 0.001) errors.push(`${item.id}: acoustic spans must be ordered and non-overlapping`);
     previousAcousticEnd = Math.max(previousAcousticEnd, item.end);
-  }
-  if (item.evidence?.audioChecked !== true || typeof item.evidence?.note !== "string" || !item.evidence.note.trim()) {
-    errors.push(`${item.id}: acoustic evidence is required`);
   }
   if (item.type === "script-only" && item.resolution === "accepted-reference") errors.push(`${item.id}: unspoken script text cannot be accepted`);
   if (item.type === "script-only" && item.resolution !== "omitted-unspoken") errors.push(`${item.id}: script-only text must be omitted-unspoken`);

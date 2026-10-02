@@ -1,6 +1,6 @@
 # Density and Layout Specification
 
-This document gives measurable layout guidance for the available references and each job's creative plan. Use `examples/traework-reference/` for subtitle-led structure and `examples/book-video-reference/` for its grid, annotation, and A/B transition modules. Motion-copy is planned per job; the repository does not maintain a complete motion-copy reference composition.
+This document gives measurable layout guidance for the available references and each job's creative plan. Use `examples/traework-reference/` for subtitle-led structure and [`templates/motion-graphics/`](../templates/motion-graphics/README.md) for reusable modules; [`examples/book-video-reference/`](../examples/book-video-reference/) documents the original case and integration. Motion-copy is planned per job; the repository does not maintain a complete motion-copy reference composition.
 
 ## Three rhythm layers
 

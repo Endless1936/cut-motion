@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="660" viewBox="0 0 960 660">
+  <rect width="960" height="660" fill="#20252d"/>
+  <g font-family="sans-serif" fill="#f4f1e8">
+    <text x="72" y="88" font-size="42" font-weight="600">导出设置</text>
+    <text x="732" y="84" font-size="24" fill="#9ca5b1">示例界面</text>
+    <path d="M64 130H896" stroke="#3a414d" stroke-width="2"/>
+    <rect x="68" y="172" width="824" height="132" rx="12" fill="#2b323d"/>
+    <text x="96" y="254" font-size="34" fill="#b5bdc8">视频格式</text>
+    <text x="698" y="254" font-size="42">MP4</text>
+    <rect x="68" y="324" width="824" height="132" rx="12" fill="#2b323d"/>
+    <text x="96" y="406" font-size="34" fill="#b5bdc8">分辨率</text>
+    <text x="505" y="406" font-size="42">1080 × 1920</text>
+    <text x="96" y="551" font-size="34" fill="#b5bdc8">帧率</text>
+    <text x="680" y="551" font-size="42">30 fps</text>
+  </g>
+</svg>

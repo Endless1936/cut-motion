@@ -1,3 +1,4 @@
+/* Use on the existing composition root and direct-child speaker media. */
 .axis-stage-root {
   position: relative;
   isolation: isolate;

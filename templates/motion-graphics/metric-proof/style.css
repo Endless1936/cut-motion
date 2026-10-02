@@ -1,0 +1,63 @@
+.mg-root {
+  position: absolute;
+  top: var(--mg-top, 28%);
+  left: 6%;
+  width: 88%;
+  max-width: 960px;
+  padding: 36px 42px 40px;
+  color: #F4F1E8;
+  font-family: "Smiley Sans", sans-serif;
+  box-sizing: border-box;
+  border-left: 5px solid #7DF2C4;
+  background: rgba(18, 20, 24, 0.92);
+  opacity: 0;
+  visibility: hidden;
+}
+
+.mg-root *,
+.mg-root *::before,
+.mg-root *::after {
+  box-sizing: border-box;
+}
+
+.mg-root [data-at] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.proof-source {
+  margin: 0 0 14px;
+  color: #FFD15C;
+  font-size: 42px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.proof-reading {
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  white-space: nowrap;
+}
+
+.proof-value {
+  color: #7DF2C4;
+  font-size: 240px;
+  font-weight: 700;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.proof-unit {
+  color: #F4F1E8;
+  font-size: 72px;
+  font-weight: 550;
+}
+
+.proof-caption {
+  margin: 22px 0 0;
+  color: rgba(244, 241, 232, 0.78);
+  font-size: 54px;
+  line-height: 1.3;
+}
