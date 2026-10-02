@@ -106,6 +106,17 @@ Do not introduce a technical term, formula, or benchmark that creates more unans
 - Do not add a simultaneous reading task during the densest caption phrase.
 - Use motion to expose change, dependency, comparison, or hierarchy. If a static state communicates equally well, keep the motion restrained.
 
+## Component library
+
+An MG module is assembled from `mg-library/`, not hand-written per job. Each component exports the same contract (`meta` plus `render(...) -> { inner, style, timeline }`), and `scripts/assemble-mg.mjs` supplies the `data-beat-id` root so geometry, axis and motion-group metadata stay data-driven. A Beat Map reaches a component through `beat.mgComponent` or through the recipe alias it already carries.
+
+Components read their timings from the named micro events in the Beat Map rather than from array position, so inserting or splitting an event cannot silently retime a module.
+
+- **Never an empty container.** A container that opens before the label filling it must hold a dim silhouette of that label until the label's own reveal lands. A tinted box that settles blank for more than about 0.4 seconds reads as a broken placeholder instead of a pending result. `shared.mjs` owns the threshold (`SILHOUETTE_LEAD_SECONDS`) and the reveal helper; the label's own reveal then continues from the silhouette rather than restarting from zero.
+- Components never animate the root's opacity: the composition builder owns the exit fade.
+- Components never emit `<script>`, `<style>`, `<video>` or `<audio>`, and only drive class selectors that their own fragment renders.
+- `scripts/test-mg-components.mjs` enforces all of the above, including the empty-container rule, by replaying the emitted tween source.
+
 ## Evidence and claims
 
 - A factual addition needs a traceable source in the project research record.
@@ -135,5 +146,6 @@ Every proposed MG must pass:
 - a fixed-cadence pattern interrupt with no semantic purpose;
 - A-axis information groups accumulated into a page instead of being replaced;
 - a transient graphic whose resolved meaning never remains visible;
+- a container that settles visibly empty while its label waits on the audio;
 - any overlap with captions, PiP, evidence, or protected UI, or prolonged face coverage without a recorded user instruction, or accumulated face coverage;
 - an MG that cannot state a concrete `removalLoss`.
