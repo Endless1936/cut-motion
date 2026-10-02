@@ -6,6 +6,7 @@ node_modules/
 [Jj][Oo][Bb][Ss]/
 .codex/
 .claude/
+.workbuddy/
 .npmrc
 *.pem
 *.key

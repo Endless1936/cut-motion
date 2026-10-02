@@ -67,6 +67,18 @@ Inspect the active Agent's loaded tools first. If ChatCut tools are callable, co
 
 It distinguishes endpoint/network/authentication failures from a responding server. Its JSON config discovery covers WorkBuddy/CodeBuddy/Cursor-style configs; native desktop integrations may not use those files. Missing config is not proof of a missing plugin. A healthy endpoint does not prove that the active client mounted its tools; check that client's enabled/trusted state.
 
+## Getting a local recording into ChatCut
+
+The preflight above covers the local toolchain and whether ChatCut's tools are mounted; neither moves media. Nothing in the official setup guides covers this step either, so follow this sequence rather than discovering it by trial:
+
+1. Call `import_media` with `action: "create_session"`. It returns a short-lived import token, an endpoint, and the matching import helper. Treat the token and endpoint as credentials: keep them out of chat, logs, and Git.
+2. Download the helper the response points at and run it with the local Node against the file in the job's `input/`. Do not hand-roll the multipart flow; the helper performs the probe, the source transcode, the transcription-audio extraction, and the asset registration in the order the service expects.
+3. Pass the file with `--input`, and optionally `--json-out` to capture the result. `--asset-id` re-runs against an asset that already exists, and `--transcription-only` handles a recording whose media uploaded but whose transcript did not.
+4. Read the helper's stage lines as progress, not as errors. Long multipart uploads retry transient timeouts by design, so a `request timed out` line followed by a retry is normal.
+5. Confirm readiness by inspecting the asset, not by trusting an early status field. An import that has just finished can still report a provisional `transcription.status`; the asset is usable when its `state` is `complete` and its transcript reports `readyForEditing: true`. Do not re-upload because of that field alone — a redundant re-upload costs the whole transcode again.
+
+Record the resulting project, timeline, and asset IDs in `state/chatcut-roughcut.json`; later phases address the timeline by those IDs.
+
 ## Render commands
 
 From `jobs/<job-id>/hyperframes`:

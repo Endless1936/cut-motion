@@ -91,12 +91,19 @@ try {
   const dryRun = script("classify-gaps.mjs", [job]);
   assert.match(dryRun, /Candidates on the locked timeline \(2\)/);
   assert.match(dryRun, /Pauses cleanup excised \(1, 2\.6s total\)/);
+  assert.match(dryRun, /\[reason required\]/);
   assert.match(dryRun, /unclassified/);
   assert.match(dryRun, /1 removed, 0 preserved, 2 unclassified; longest retained candidate 1\.600s/);
   assert.equal(fs.existsSync(artifactPath), false, "a dry run must not write the artifact");
 
-  // --write emits every detected candidate plus the derived excision.
-  script("classify-gaps.mjs", [job, "--write"]);
+  // A derived removal with no reason is refused rather than emitted: writing it
+  // would only move the failure to check-gap-candidates.mjs.
+  script("classify-gaps.mjs", [job, "--write"], false, /have no reason/);
+  assert.equal(fs.existsSync(artifactPath), false, "a refused write must not emit an artifact");
+
+  // --removal-reason-code labels the removals this run first derives.
+  script("classify-gaps.mjs", [job, "--write", "--removal-reason-code", "dead-air-compressed",
+    "--removal-reason", "Internal dead air confirmed by the dB sweep."]);
   const skeleton = readJson(artifactPath);
   assert.equal(skeleton.schemaVersion, "1.0.0");
   assert.equal(skeleton.timeline.preCleanupItemCount, 1);
@@ -105,15 +112,24 @@ try {
   assert.equal(skeleton.removedCandidates.length, 1);
   assert.equal(skeleton.removedCandidates[0].originalPauseSeconds, 3.02);
   assert.equal(skeleton.removedCandidates[0].retainedSeconds, 0.42);
-  assert.equal(skeleton.removedCandidates[0].reason, "");
+  assert.equal(skeleton.removedCandidates[0].reasonCode, "dead-air-compressed");
+  assert.match(skeleton.removedCandidates[0].reason, /dead air/);
   const tailCandidate = skeleton.candidates.find((entry) => entry.boundary === "tail");
   const internalCandidate = skeleton.candidates.find((entry) => entry.boundary === "internal");
   assert.equal(tailCandidate.durationSeconds, 0.4);
   assert.equal(internalCandidate.durationSeconds, 1.6);
 
-  // Unclassified candidates and unexplained removals must block the gate.
+  // Unclassified candidates must block the gate.
   script("check-gap-candidates.mjs", [artifactPath], false, /still unclassified/);
+
+  // A removal stripped of its reason is still rejected, so the labelling path and
+  // the validator agree on what an unexplained removal is.
+  const strippedRemoval = readJson(artifactPath);
+  strippedRemoval.removedCandidates[0].reasonCode = null;
+  strippedRemoval.removedCandidates[0].reason = "";
+  writeJson(artifactPath, strippedRemoval);
   script("check-gap-candidates.mjs", [artifactPath], false, /removed candidates require a reason/);
+  writeJson(artifactPath, skeleton);
 
   // Fill in the editorial decisions the standard requires.
   const filled = readJson(artifactPath);
@@ -195,13 +211,15 @@ try {
   script("check-gap-candidates.mjs", [artifactPath]);
 
   // Re-running the classifier preserves decisions for candidates that are unchanged.
-  script("classify-gaps.mjs", [job, "--write"]);
+  script("classify-gaps.mjs", [job, "--write", "--removal-reason-code", "should-not-overwrite"]);
   const afterRerun = readJson(artifactPath);
   assert.equal(afterRerun.coverage.classifiedCount, 2);
   assert.equal(afterRerun.coverage.unexplainedCount, 0);
   assert.equal(afterRerun.candidates[0].evidence.audioChecked, false);
   assert.equal(afterRerun.removedCandidates[0].evidence.audioChecked, false);
   assert.ok(afterRerun.removedCandidates[0].reason.length > 0, "an authored removal reason must survive a re-run");
+  assert.equal(afterRerun.removedCandidates[0].reasonCode, "dead-air-internal-pause",
+    "the flag labels new removals only; an authored reason is never overwritten");
 
   // Zero detections are valid; a failed/incomplete scan is not.
   const success = "scan_thresholds_db=-30,-35,-40\nscan_completed=true\n";

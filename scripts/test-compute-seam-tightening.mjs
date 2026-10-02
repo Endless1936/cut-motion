@@ -338,7 +338,22 @@ try {
     scriptPath, "--index", indexPath, "--windows", windowsPath, "--out", occupiedOutput,
   ], { encoding: "utf8" });
   assert.notEqual(overwriteOutput.status, 0);
+  assert.match(overwriteOutput.stderr, /Refusing to overwrite/);
   assert.equal(fs.readFileSync(occupiedOutput, "utf8"), "keep");
+
+  // The standard recomputes the plan after the cleanup record is refreshed, so an
+  // explicit --force must be able to replace the stale candidate plan.
+  const forcedOutput = spawnSync(process.execPath, [
+    scriptPath, "--index", indexPath, "--windows", windowsPath, "--out", occupiedOutput, "--force",
+  ], { encoding: "utf8" });
+  assert.equal(forcedOutput.status, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(occupiedOutput, "utf8")), JSON.parse(standalone.stdout),
+    "--force replaces an occupied output with the newly computed plan");
+  const unknownOption = spawnSync(process.execPath, [
+    scriptPath, "--index", indexPath, "--windows", windowsPath, "--overwrite",
+  ], { encoding: "utf8" });
+  assert.notEqual(unknownOption.status, 0);
+  assert.match(unknownOption.stderr, /Unknown argument --overwrite/);
 } finally {
   fs.rmSync(temporaryRoot, { recursive: true, force: true });
 }
