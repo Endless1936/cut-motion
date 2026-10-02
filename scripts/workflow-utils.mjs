@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 export const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, "utf8"));
 
@@ -242,6 +243,32 @@ export const beginWorkflowRevision = (workflow, { invalidateVisualPlan = true } 
   if (invalidateVisualPlan) {
     workflow.visualPlanSha256 = null;
   }
+};
+
+// Only changed fields enter history; the latest comparison baseline stays off the always-read workflow record.
+export const visualPlanChanges = (before, after) => {
+  const changes = [];
+  const changedFields = (left, right, exclude = []) => Object.fromEntries(
+    [...new Set([...Object.keys(left), ...Object.keys(right)])]
+      .filter((key) => !exclude.includes(key) && !isDeepStrictEqual(left[key], right[key]))
+      .map((key) => [key, { before: left[key] ?? null, after: right[key] ?? null }])
+  );
+  const planFields = changedFields(before, after, ["beats"]);
+  if (!isDeepStrictEqual((before.beats ?? []).map((beat) => beat.id), (after.beats ?? []).map((beat) => beat.id))) {
+    planFields.beatOrder = { before: (before.beats ?? []).map((beat) => beat.id), after: (after.beats ?? []).map((beat) => beat.id) };
+  }
+  if (Object.keys(planFields).length) changes.push({ beatId: null, change: "updated", fields: planFields });
+  const oldBeats = new Map((before.beats ?? []).map((beat) => [beat.id, beat]));
+  const newBeats = new Map((after.beats ?? []).map((beat) => [beat.id, beat]));
+  for (const id of new Set([...oldBeats.keys(), ...newBeats.keys()])) {
+    const oldBeat = oldBeats.get(id), newBeat = newBeats.get(id);
+    if (!oldBeat || !newBeat) changes.push({ beatId: id, change: oldBeat ? "removed" : "added", before: oldBeat ?? null, after: newBeat ?? null });
+    else {
+      const fields = changedFields(oldBeat, newBeat);
+      if (Object.keys(fields).length) changes.push({ beatId: id, change: "updated", fields });
+    }
+  }
+  return changes;
 };
 export const saveWorkflow = (workflowPath, workflow, now = new Date().toISOString()) => {
   workflow.completed = workflow.currentState === "complete";

@@ -5,21 +5,21 @@ import { fileURLToPath } from "node:url";
 
 export const templateRoot = fileURLToPath(new URL("../templates/motion-graphics/", import.meta.url));
 const entries = {
-  "ordered-steps": ["sequence", "vertical", ["h3", "p", "h3", "p", "h3", "p", "h3", "p"]],
-  "parallel-points": ["parallel", "vertical", ["p", "p", "p", "p"]],
-  "linear-flow": ["linear", "horizontal", ["h3", "h3", "h3", "h3"]],
-  "relation-map": ["one-to-many", "vertical", ["h3", "h4", "h4", "h4"]],
-  "converge-sources": ["convergence", "vertical", ["h3", "h3", "h3", "h3", "p"]],
-  "map-transform": ["mapping", "vertical", ["h3", "p"]],
-  comparison: ["comparison", "horizontal", ["p", "span", "p", "span", "p"]],
-  "metric-proof": ["emphasis", "vertical", ["p", "span", "span", "p"]],
-  "evidence-focus": ["evidence", "vertical", []],
-  quote: ["emphasis", "vertical", ["p", "p"]],
-  "code-snippet": ["demonstration", "vertical", ["p", "code", "code", "code", "code"]],
-  correction: ["emphasis", "vertical", ["old", "p"]],
-  annotation: ["emphasis", "horizontal", ["p"]],
-  "stage/b-axis-horizon-grid": ["demonstration", "vertical", []],
-  "stage/axis-stage-transition": ["demonstration", "vertical", []]
+  "ordered-steps": ["h3", "p", "h3", "p", "h3", "p", "h3", "p"],
+  "parallel-points": ["p", "p", "p", "p"],
+  "linear-flow": ["h3", "h3", "h3", "h3"],
+  "relation-map": ["h3", "h4", "h4", "h4"],
+  "converge-sources": ["h3", "h3", "h3", "h3", "p"],
+  "map-transform": ["h3", "p"],
+  comparison: ["p", "span", "p", "span", "p"],
+  "metric-proof": ["p", "span", "span", "p"],
+  "evidence-focus": [],
+  quote: ["p", "p"],
+  "code-snippet": ["p", "code", "code", "code", "code"],
+  correction: ["old", "p"],
+  annotation: ["p"],
+  "stage/b-axis-horizon-grid": [],
+  "stage/axis-stage-transition": []
 };
 const aliases = { "list-ordered": "ordered-steps", "ordered-list": "ordered-steps", "list-unordered": "parallel-points", "list-build": "parallel-points", "quote-reveal": "quote", "code-block": "code-snippet", "code-build": "code-snippet", "b-axis-horizon-grid": "stage/b-axis-horizon-grid", "axis-stage-transition": "stage/axis-stage-transition" };
 export const escapeHtml = (value) => String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -27,7 +27,17 @@ export const componentNames = () => Object.keys(entries);
 export function resolveComponent(reference) {
   const name = aliases[reference] ?? reference;
   if (!Object.hasOwn(entries, name ?? "")) return null;
-  const [semanticTopology, primaryFlowAxis, slots] = entries[name];
+  const slots = entries[name];
+  // The shared transition helper has no fragment; every other template owns
+  // its semantic metadata on the rendered root element.
+  let semanticTopology = "demonstration", primaryFlowAxis = "vertical";
+  if (name !== "stage/axis-stage-transition") {
+    const fragment = fs.readFileSync(path.join(templateRoot, name, "fragment.html"), "utf8");
+    const root = fragment.match(/^\s*<div\b[^>]*>/)?.[0] ?? "";
+    semanticTopology = root.match(/\bdata-topology=["']([^"']+)["']/)?.[1];
+    primaryFlowAxis = root.match(/\bdata-primary-flow-axis=["']([^"']+)["']/)?.[1];
+    if (!semanticTopology || !primaryFlowAxis) throw new Error(`${name}: template root needs data-topology and data-primary-flow-axis`);
+  }
   return { meta: { name, semanticTopology, primaryFlowAxis, motionFamily: "editorial", transitionFamily: "template-reveal", summary: `Approved ${name} template`, copySlots: slots.length }, render: ({ beat }) => renderTemplate(name, beat) };
 }
 export const describeComponents = () => componentNames().map((name) => resolveComponent(name).meta);
@@ -45,7 +55,7 @@ export function renderTemplate(name, beat) {
   let fragment = fs.readFileSync(path.join(directory, "fragment.html"), "utf8");
   const data = beat.templateData ?? {};
   const copy = data.copy ?? beat.onScreenCopy ?? [];
-  const slots = entries[name][2];
+  const slots = entries[name];
   if (!Array.isArray(copy) || copy.length !== slots.length || copy.some((value) => typeof value !== "string")) throw new Error(`${beat.id}: ${name} needs ${slots.length} text slots in templateData.copy`);
   let index = 0;
   if (name === "correction") {

@@ -44,6 +44,8 @@ Use `set-caption-mode` and `set-axis-mode` so changes are recorded. A caption or
 
 During `composition`, rebuilt HTML is an in-progress output. In `review`, scoped visual changes may update the Beat Map and its binding at the composition transition; the original plan documents remain the baseline. `verify` also treats these current editing outputs as drafts. In `auto`, plan-authority changes still return through `replan --note ...`; completed jobs use `reopen motion-plan --actor user --note ...`. These are existing routes, not new approvals.
 
+After a successful build, changed Beat IDs, fields and before/after values are recorded automatically as `visual-plan-change` in workflow history. `state/visual-plan-baseline.json` holds the latest comparison snapshot; no manual revision document is needed. Older jobs without a usable snapshot record that prior values are unavailable and establish the current baseline.
+
 ## Modes
 
 `review` is the default: wait at `rough-cut-review`, then follow [Quality Checks](quality-gates.md) for the delivery path.

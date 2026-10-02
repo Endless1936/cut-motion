@@ -191,6 +191,9 @@ console.log(`Job: ${path.relative(process.cwd(), jobRoot) || "."}`);
 console.log(`Timeline: ${artifact.timeline.itemCount} items, ${artifact.timeline.durationSeconds}s @ ${artifact.timeline.fps}fps`);
 console.log(`dB sweep ${sweepApplied ? "applied" : "NOT APPLIED"} (${silenceScanPath.replace(`${jobRoot}/`, "")})`);
 console.log(`Pre-cleanup snapshot: ${preCleanupPresent ? `${artifact.timeline.preCleanupPath} (${artifact.timeline.preCleanupItemCount} items)` : "ABSENT — removed-pause coverage cannot be derived"}`);
+if (baselineKind === "current-timeline") console.log("Baseline starts at the captured current timeline; removals before that capture cannot be verified.");
+const longestRetained = Math.max(0, ...candidates.map((entry) => entry.durationSeconds));
+console.log(`Cleanup summary: ${removedCandidates.length} removed, ${artifact.coverage.preservedCount} preserved, ${artifact.coverage.unexplainedCount} unclassified; longest retained candidate ${longestRetained.toFixed(3)}s.`);
 console.log(`Candidates on the locked timeline (${candidates.length}):`);
 for (const line of report) console.log(`  ${line}`);
 if (removedCandidates.length) {

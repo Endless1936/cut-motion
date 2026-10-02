@@ -11,6 +11,7 @@ import {
   ensureWorkflowDefaults,
   readJson,
   sha256File,
+  visualPlanChanges,
   writeJsonAtomic
 } from "./workflow-utils.mjs";
 
@@ -584,6 +585,13 @@ try {
   }, { scope: "stage" }), [], "composition must not reread prior media on every transition");
   script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
   assert.equal(readJson(bindingWorkflowPath).visualPlanSha256, sha256File(bindingBeatMapPath));
+  const recordedRevision = readJson(bindingWorkflowPath).history.findLast((entry) => entry.action === "visual-plan-change");
+  assert.equal(recordedRevision.baselineAvailable, true);
+  assert.equal(recordedRevision.requestNote, "Change one MG and caption timing");
+  assert.deepEqual(recordedRevision.changes, [{
+    beatId: localBeatMap.beats[0].id, change: "updated",
+    fields: { onScreenCopy: { before: null, after: ["局部修订"] } }
+  }]);
   assert.equal(fs.readFileSync(path.join(bindingJob, "docs", "motion-plan.md"), "utf8"), baselineDocument);
   script("workflow-state.mjs", [bindingWorkflowPath, "verify"]);
 
@@ -596,6 +604,16 @@ try {
   writeJsonAtomic(bindingWorkflowPath, { ...readJson(bindingWorkflowPath), visualPlanSha256: null });
   script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
   script("workflow-state.mjs", [bindingWorkflowPath, "verify"]);
+  const legacyRevision = readJson(bindingWorkflowPath).history.findLast((entry) => entry.action === "visual-plan-change");
+  assert.equal(legacyRevision.baselineAvailable, false);
+  assert.equal(legacyRevision.changes, null, "legacy jobs must not invent previous field values");
+
+  const differences = visualPlanChanges(
+    { fps: 30, beats: [{ id: "a", layout: { x: 1, y: 2 } }, { id: "b", text: "old" }] },
+    { fps: 30, beats: [{ id: "c", text: "new" }, { id: "a", layout: { y: 2, x: 1 } }] }
+  );
+  assert.deepEqual(differences.map((change) => [change.beatId, change.change]), [[null, "updated"], ["b", "removed"], ["c", "added"]]);
+  assert.deepEqual(visualPlanChanges({ beats: [{ id: "a", x: 1 }] }, { beats: [{ x: 1, id: "a" }] }), []);
 
   const transactionJob = scaffold("transaction", "review", "subtitles");
   const prepared = path.join(transactionJob, "state", "workflow.json.bad.prepared");

@@ -31,7 +31,7 @@ const cueText = (beat, cues) => cuesForBeat(beat, cues).map((cue) => cue.text).j
  * lines (which axes are used, how the film ends) remain authored, and an
  * authored line may not restate a derived one.
  */
-const DERIVED_DIRECTION_PREFIXES = ["Caption mode", "Typography", "Palette"];
+const DERIVED_DIRECTION_LABELS = /^(caption\s+mode|字幕模式|typography|字体|排版|palette|配色)\s*[:：]/i;
 
 const derivedGlobalDirection = ({ captionMode, cues, designSystem }) => {
   const typography = designSystem.typography ?? {};
@@ -49,7 +49,9 @@ const derivedGlobalDirection = ({ captionMode, cues, designSystem }) => {
 
 const assertNoDerivedDirectionRestated = (globalDirection = []) => {
   for (const item of globalDirection) {
-    const clash = DERIVED_DIRECTION_PREFIXES.find((prefix) => new RegExp(`^-?\\s*${prefix}\\s*[:：]`).test(item));
+    // Match field labels only; ordinary editorial prose remains unrestricted.
+    const label = item.trim().replace(/^(?:[-+*]\s+|\d+[.)]\s+|#{1,6}\s+|>\s*)/, "").replace(/[*_`]/g, "");
+    const clash = label.match(DERIVED_DIRECTION_LABELS)?.[1];
     if (clash) {
       throw new Error(`documents.globalDirection must not restate the derived "${clash}" line; it is rendered from state/design-system.json`);
     }

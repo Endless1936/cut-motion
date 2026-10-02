@@ -458,9 +458,14 @@ try {
   // The Global direction lines that describe the design system are rendered,
   // not authored, so a job may not restate them.
   const restated = readJson(path.join(planJob, "state", "planning-inputs.json"));
-  restated.documents.globalDirection = ["Palette：沿用设计系统纸面/钴蓝/珊瑚色"];
+  for (const label of ["Palette", "字幕模式", "**字体**", "- **配色：**", "1. `TYPOGRAPHY`", "### caption MODE"]) {
+    restated.documents.globalDirection = [`${label}：沿用设计系统`];
+    writeJson(path.join(planJob, "state", "planning-inputs.json"), restated);
+    script("generate-plan.mjs", [planJob, "--write"], false, /must not restate the derived/);
+  }
+  restated.documents.globalDirection = ["字体随重点变化时，保持同一层级", "强调配色：只用于本拍结论"];
   writeJson(path.join(planJob, "state", "planning-inputs.json"), restated);
-  script("generate-plan.mjs", [planJob, "--write"], false, /must not restate the derived "Palette" line/);
+  script("generate-plan.mjs", [planJob, "--write"]);
 
   // The public example is a complete input for this fixture, not a pseudo-schema.
   fs.copyFileSync(path.join(repositoryRoot, "templates", "planning-inputs.example.json"), path.join(planJob, "state", "planning-inputs.json"));

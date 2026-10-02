@@ -16,6 +16,8 @@ for (const id of componentNames()) {
     focus: [{ x: 1, y: 2, width: 30, height: 20 }, { x: 2, y: 30, width: 40, height: 20 }]
   } };
   const result = component.render({ beat });
+  assert.equal(result.fragment.match(/data-topology="([^"]+)"/)[1], component.meta.semanticTopology);
+  assert.equal(result.fragment.match(/data-primary-flow-axis="([^"]+)"/)[1], component.meta.primaryFlowAxis);
   assert.match(result.fragment, /data-beat-id="test-beat"/);
   assert.equal(result.style, fs.readFileSync(path.join(templateRoot, id, "style.css"), "utf8"));
   assert.equal(result.timeline, fs.readFileSync(path.join(templateRoot, id, "timeline.mjs"), "utf8"));

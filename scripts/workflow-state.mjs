@@ -19,6 +19,7 @@ import {
   saveWorkflow,
   sha256File,
   validateActiveReference,
+  visualPlanChanges,
   writeJsonAtomic
 } from "./workflow-utils.mjs";
 import { buildComposition } from "./build-composition.mjs";
@@ -78,6 +79,8 @@ const actor = String(options.actor ?? (command === "advance" ? "agent" : "user")
 const artifact = options.artifact ? String(options.artifact) : null;
 const note = options.note ? String(options.note) : null;
 const now = new Date().toISOString();
+const visualBaselinePath = path.join(jobRoot, "state", "visual-plan-baseline.json");
+let pendingVisualBaseline = null;
 const fullAuditRequested = workflow.mode === "auto" || workflow.roughCutReviewDecision === "automatic-fallback";
 
 const appendHistory = (action, from, to, entryActor = actor) => {
@@ -308,6 +311,10 @@ const selectAutomaticFallback = (entryActor, decisionNote) => {
 };
 const save = () => {
   saveWorkflow(workflowPath, workflow, now);
+  if (pendingVisualBaseline) {
+    try { writeJsonAtomic(visualBaselinePath, pendingVisualBaseline); }
+    catch { console.warn("Visual revision baseline could not be saved; future revisions will report unavailable prior field values."); }
+  }
   if (workflow.currentState !== initialState) printStageGuideHint(workflow.currentState);
 };
 
@@ -536,6 +543,13 @@ if (command === "reopen") {
   if (!note) throw new Error("Reopen requires --note");
   const previousState = workflow.currentState;
   beginWorkflowRevision(workflow, { invalidateVisualPlan: ["rough-cut", "motion-plan"].includes(scope) });
+  if (scope === "composition") {
+    const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
+    // Older jobs can establish a baseline only while their recorded plan still matches.
+    if (fs.existsSync(beatMapPath) && workflow.visualPlanSha256 === sha256File(beatMapPath)) {
+      pendingVisualBaseline = { sha256: workflow.visualPlanSha256, beatMap: readJson(beatMapPath) };
+    }
+  }
   if (scope === "rough-cut") {
     const project = readJson(path.join(jobRoot, "state", "project.json"));
     workflow.authoritativeMediaPath = project.sourceVideo;
@@ -665,6 +679,7 @@ if (command === "advance") {
       // compares against. Write it last, so the caption-plan approval that
       // validateCreativePackage performs is already on disk when it is digested.
       workflow.visualPlanSha256 = sha256File(beatMapPath);
+      pendingVisualBaseline = { sha256: workflow.visualPlanSha256, beatMap: readJson(beatMapPath) };
     }
     if (workflow.currentState === "composition") {
       const generatedCompositionPath = path.join(jobRoot, "hyperframes", "index.html");
@@ -695,6 +710,29 @@ if (command === "advance") {
         writeJsonAtomic(confirmationPath, confirmation);
         if (workflow.creativeConfirmationSha256) workflow.creativeConfirmationSha256 = sha256File(confirmationPath);
       }
+      const beatMap = readJson(beatMapPath);
+      if (workflow.visualPlanSha256 !== beatMapSha256) {
+        let baseline = null;
+        try { baseline = readJson(visualBaselinePath); } catch { /* Legacy job or missing optional baseline. */ }
+        const baselineAvailable = Boolean(workflow.visualPlanSha256 && baseline?.sha256 === workflow.visualPlanSha256
+          && Array.isArray(baseline?.beatMap?.beats)
+          && baseline.beatMap.beats.every((beat) => beat && typeof beat.id === "string"));
+        const changes = baselineAvailable ? visualPlanChanges(baseline.beatMap, beatMap) : null;
+        if (!baselineAvailable || changes.length) {
+          appendHistory("visual-plan-change", "composition", "composition");
+          Object.assign(workflow.history.at(-1), {
+            beforeSha256: workflow.visualPlanSha256,
+            afterSha256: beatMapSha256,
+            baselineAvailable,
+            changes,
+            requestNote: workflow.history.findLast((entry) => entry.action === "reopen" && entry.revisionId === workflow.revisionId)?.note ?? null
+          });
+          console.log(baselineAvailable
+            ? `Visual revision recorded: ${changes.map((change) => `${change.beatId ?? "plan"} (${change.change}: ${Object.keys(change.fields ?? {}).join(", ")})`).join("; ")}`
+            : "Visual revision recorded: prior field values unavailable for this older job; current baseline saved.");
+        }
+      }
+      pendingVisualBaseline = { sha256: beatMapSha256, beatMap };
       workflow.visualPlanSha256 = beatMapSha256;
     }
     if (workflow.currentState === "render") {

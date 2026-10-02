@@ -3,6 +3,7 @@
 // waveform. This calculator never decides which content to keep or edits a timeline.
 
 import fs from "node:fs";
+import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -335,10 +336,45 @@ function parseArguments(argv) {
   return parsed;
 }
 
+// Informative only: standalone calculations stay silent, and no scan runs here.
+function remindGapCleanup(windowsPath) {
+  const stateRoot = path.dirname(windowsPath);
+  if (path.basename(stateRoot) !== "state" || !fs.existsSync(path.join(stateRoot, "workflow.json"))) return;
+  const artifactPath = path.join(stateRoot, "gap-candidates.json");
+  let message;
+  try {
+    if (!fs.existsSync(artifactPath)) {
+      message = "gap-candidates.json is missing; classify and apply pause cleanup before edge tightening.";
+    } else {
+      const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+      const currentHash = crypto.createHash("sha256").update(fs.readFileSync(windowsPath)).digest("hex");
+      const candidates = Array.isArray(artifact.candidates) ? artifact.candidates : [];
+      const pending = candidates.filter((entry) => entry.classification !== "preserve").length;
+      const issues = [];
+      if (!Array.isArray(artifact.candidates)) issues.push("candidate list is invalid");
+      if (artifact.timeline?.sha256 !== currentHash) issues.push("gap record is stale for these source windows");
+      if (!artifact.timeline?.preCleanupPath) issues.push("cleanup baseline is not recorded");
+      if (artifact.timeline?.preCleanupPath) {
+        const baselinePath = path.resolve(stateRoot, "..", artifact.timeline.preCleanupPath);
+        if (!fs.existsSync(baselinePath)) issues.push("recorded cleanup baseline is missing");
+        else if (crypto.createHash("sha256").update(fs.readFileSync(baselinePath)).digest("hex") !== artifact.timeline.preCleanupSha256) {
+          issues.push("recorded cleanup baseline has changed");
+        }
+      }
+      if (pending) issues.push(`${pending} candidate(s) still need classification or removal`);
+      if (issues.length) message = `${issues.join("; ")}. Refresh the cleanup record before using this edge plan.`;
+    }
+  } catch {
+    message = "gap record could not be read; check the cleanup record before using this edge plan.";
+  }
+  if (message) process.stderr.write(`Cleanup reminder (non-blocking): ${message}\n`);
+}
+
 function runCli() {
   const args = parseArguments(process.argv.slice(2));
   const indexPath = path.resolve(args.index);
   const windowsPath = path.resolve(args.windows);
+  remindGapCleanup(windowsPath);
   const plan = computeSeamTighteningPlan(
     JSON.parse(fs.readFileSync(indexPath, "utf8")),
     JSON.parse(fs.readFileSync(windowsPath, "utf8")),

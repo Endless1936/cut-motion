@@ -153,9 +153,8 @@ for (const entry of removed) {
 }
 
 // --- every pause cleanup excised must be recorded ---------------------------
-// The pre-cleanup snapshot is the only record of what the retained structure
-// looked like before steps 3-5 ran. Re-deriving its word-free internal spans and
-// requiring each excision to be listed is what makes a skipped cleanup fail.
+// Compare removals since the recorded baseline. A current-timeline baseline
+// cannot establish earlier removals or the historical order of editing steps.
 const preCleanupPath = artifact.timeline?.preCleanupPath
   ? path.resolve(jobRoot, artifact.timeline.preCleanupPath)
   : path.join(jobRoot, "state", "timeline-source-windows.pre-cleanup.json");
@@ -232,3 +231,5 @@ if (unexplained !== 0 && coverage.unexplainedCount === 0) errors.push("coverage 
 for (const error of errors) console.error(`Error: ${error}`);
 if (errors.length) process.exit(1);
 console.log(`Gap candidates passed: ${recorded.length} retained candidate(s) classified (${preservedCount} preserved), ${removed.length} removal(s) verified against the locked timeline.`);
+console.log(`Longest retained candidate: ${Math.max(0, ...live.map((entry) => entry.durationSeconds)).toFixed(3)}s.`);
+if (artifact.timeline?.baselineKind === "current-timeline") console.log("Baseline starts at the captured current timeline; removals before that capture cannot be verified.");

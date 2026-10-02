@@ -23,6 +23,8 @@ For steps 3–5, save the silence sweep to `state/source-silence-db-scan.txt`, i
 
 For an older cut without a starting snapshot, the first run records the current timeline as its baseline; it does not claim to verify earlier removals. Continue from that cut instead of restoring deleted footage to recreate paperwork.
 
+When run with a job's source windows, the edge calculator prints a nonblocking reminder if the cleanup record is absent, stale or unfinished. Candidate reports show removed/preserved counts and the longest preserved pause; use these to catch skipped cleanup before presenting the rough cut.
+
 Record elapsed seconds while working in `state/chatcut-roughcut.json` under the schema's existing `elapsedSecondsByStage` keys: project/asset lookup as `projectAndAssetLookup`, transfer as `assetTransfer`, semantic editing as `semanticCut`, the default calculator as `wholeTimelineSweep`, transcription as `transcription`, source-index work as `sourceWaveformIndex`, targeted fallback lookup as `batchSeamLookup`, applied edge changes as `seamAdjustment`, and end-to-end duration as `total`. Omit stages that were not run or not measured; use `0` only for confirmed zero-duration work. Do not estimate timings afterward.
 ## User-feedback seam review
 

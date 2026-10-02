@@ -92,6 +92,7 @@ try {
   assert.match(dryRun, /Candidates on the locked timeline \(2\)/);
   assert.match(dryRun, /Pauses cleanup excised \(1, 2\.6s total\)/);
   assert.match(dryRun, /unclassified/);
+  assert.match(dryRun, /1 removed, 0 preserved, 2 unclassified; longest retained candidate 1\.600s/);
   assert.equal(fs.existsSync(artifactPath), false, "a dry run must not write the artifact");
 
   // --write emits every detected candidate plus the derived excision.
@@ -131,7 +132,7 @@ try {
   filled.coverage.preservedCount = 2;
   filled.coverage.unexplainedCount = 0;
   writeJson(artifactPath, filled);
-  script("check-gap-candidates.mjs", [artifactPath]);
+  assert.match(script("check-gap-candidates.mjs", [artifactPath]), /Longest retained candidate: 1\.600s/);
 
   // A concise reason code is enough; no listening report or minimum prose size.
   const shortReason = readJson(artifactPath);
@@ -219,7 +220,7 @@ try {
   // A legacy cut is baselined as it exists; no undo/re-edit is required.
   fs.rmSync(path.join(job, "state", "timeline-source-windows.pre-cleanup.json"));
   fs.rmSync(artifactPath);
-  script("classify-gaps.mjs", [job, "--write"]);
+  assert.match(script("classify-gaps.mjs", [job, "--write"]), /removals before that capture cannot be verified/);
   const migrated = readJson(artifactPath);
   assert.equal(migrated.timeline.baselineKind, "current-timeline");
   assert.equal(migrated.removedCandidates.length, 0);
