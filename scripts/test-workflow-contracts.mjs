@@ -560,10 +560,18 @@ try {
   writeJsonAtomic(bindingReviewPlanPath, editedReviewPlan);
   script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /creative authorities/);
   fs.writeFileSync(bindingReviewPlanPath, settledReviewPlan);
+
+  // Inside the composition stage, rebuilding index.html is the work itself. The
+  // fingerprint describes the last transition's output and is rewritten by the
+  // advance that leaves the stage, so a rebuild here must not read as drift.
+  const bindingCompositionPath = path.join(bindingJob, "hyperframes", "index.html");
+  fs.appendFileSync(bindingCompositionPath, "\n<!-- rebuild -->\n");
+  script("workflow-state.mjs", [bindingWorkflowPath, "verify"]);
   script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
   assert.equal(readJson(bindingWorkflowPath).currentState, "render");
 
-  const bindingCompositionPath = path.join(bindingJob, "hyperframes", "index.html");
+  // Once the stage is behind us the fingerprint is settled again, so the same
+  // edit is drift now.
   fs.appendFileSync(bindingCompositionPath, "\n<!-- hand edit -->\n");
   script("workflow-state.mjs", [bindingWorkflowPath, "verify"], false, /composition: hyperframes\/index\.html is/);
 
