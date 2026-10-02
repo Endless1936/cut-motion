@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   beginWorkflowRevision,
+  computeCreativeAuthorities,
   ensureWorkflowDefaults,
   readJson,
   sha256File,
@@ -64,6 +65,10 @@ const prepareCaptionPlan = (job, axisMode = "a-axis-overlay") => {
   confirmation.visualAxisModeDecision = { status: "acknowledged", source: workflow.visualAxisModeSource };
   confirmation.storyboard.beatCount = beats.length;
   confirmation.review.status = "ready";
+  // A real job gets these from `generate-plan.mjs --write`. The composition
+  // transition refuses to build from a package whose authorities are absent or
+  // stale, so the fixture has to declare them like any other job.
+  confirmation.authorities = computeCreativeAuthorities(job, workflow.captionMode);
   writeJsonAtomic(confirmationPath, confirmation);
   const reconciliation = readJson(path.join(job, "state", "transcript-reconciliation.json"));
   reconciliation.mediaFingerprint = sha256File(path.join(job, "input", "source.mov"));
@@ -500,6 +505,73 @@ try {
       scope === "rough-cut" ? "pending" : "manual-approved"
     );
   }
+
+  // ------------------------------------------------------- recorded bindings
+  // Every fingerprint the workflow records is written at a transition and was
+  // never re-checked, so a rebuild or a hand edit performed outside the state
+  // machine silently described a job that no longer existed.
+  const bindingJob = scaffold("bindings", "review", "subtitles");
+  const bindingWorkflowPath = path.join(bindingJob, "state", "workflow.json");
+  const bindingState = readJson(bindingWorkflowPath);
+  bindingState.currentState = "motion-plan";
+  bindingState.captionModeAcknowledged = true;
+  bindingState.visualAxisModeAcknowledged = true;
+  bindingState.referenceScriptAcknowledged = true;
+  writeJsonAtomic(bindingWorkflowPath, bindingState);
+  prepareCaptionPlan(bindingJob);
+  script("workflow-state.mjs", [bindingWorkflowPath, "verify"]);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "docs/motion-plan.md"]);
+  const boundState = readJson(bindingWorkflowPath);
+  assert.equal(boundState.currentState, "composition");
+  assert.equal(boundState.approvedPlan.beatMapSha256, boundState.visualPlanSha256);
+  assert.deepEqual(Object.keys(boundState.approvedPlan.fields).sort(), [
+    "axis-mode",
+    "caption-segmentation",
+    "mg-count",
+    "mg-node-set",
+    "on-screen-copy",
+    "primary-flow-axis",
+    "support-role",
+    "visual-reference",
+    "visual-style"
+  ]);
+  script("workflow-state.mjs", [bindingWorkflowPath, "verify"]);
+
+  const bindingTranscriptPath = path.join(bindingJob, "state", "transcript.json");
+  const settledTranscript = fs.readFileSync(bindingTranscriptPath, "utf8");
+  const driftedTranscript = readJson(bindingTranscriptPath);
+  driftedTranscript.segments[0].text += "改";
+  writeJsonAtomic(bindingTranscriptPath, driftedTranscript);
+  script("workflow-state.mjs", [bindingWorkflowPath, "verify"], false, /creative authorities/);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /creative authorities/);
+  fs.writeFileSync(bindingTranscriptPath, settledTranscript);
+
+  const bindingBeatMapPath = path.join(bindingJob, "state", "beat-map.json");
+  const settledBeatMap = fs.readFileSync(bindingBeatMapPath, "utf8");
+  const editedBeatMap = readJson(bindingBeatMapPath);
+  editedBeatMap.beats[0].supportRole = "silent-edit";
+  writeJsonAtomic(bindingBeatMapPath, editedBeatMap);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /Recorded fingerprints no longer match/);
+  fs.writeFileSync(bindingBeatMapPath, settledBeatMap);
+  writeJsonAtomic(bindingWorkflowPath, { ...readJson(bindingWorkflowPath), visualPlanSha256: null });
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /requires the beat-map fingerprint recorded when the motion plan advanced/);
+  writeJsonAtomic(bindingWorkflowPath, boundState);
+
+  // Caption segmentation is change-controlled but is not covered by the beat-map
+  // fingerprint, so this is the case only the reapproval digest can catch.
+  const bindingReviewPlanPath = path.join(bindingJob, "captions", "caption-review-plan.json");
+  const settledReviewPlan = fs.readFileSync(bindingReviewPlanPath, "utf8");
+  const editedReviewPlan = readJson(bindingReviewPlanPath);
+  editedReviewPlan.cues[0].text += "改";
+  writeJsonAtomic(bindingReviewPlanPath, editedReviewPlan);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /Creative reapproval required: caption-segmentation/);
+  fs.writeFileSync(bindingReviewPlanPath, settledReviewPlan);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
+  assert.equal(readJson(bindingWorkflowPath).currentState, "render");
+
+  const bindingCompositionPath = path.join(bindingJob, "hyperframes", "index.html");
+  fs.appendFileSync(bindingCompositionPath, "\n<!-- hand edit -->\n");
+  script("workflow-state.mjs", [bindingWorkflowPath, "verify"], false, /composition: hyperframes\/index\.html is/);
 
   const transactionJob = scaffold("transaction", "review", "subtitles");
   const prepared = path.join(transactionJob, "state", "workflow.json.bad.prepared");

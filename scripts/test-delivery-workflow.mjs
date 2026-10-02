@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readJson, sha256File, writeJsonAtomic } from "./workflow-utils.mjs";
+import { computeCreativeAuthorities, readJson, sha256File, writeJsonAtomic } from "./workflow-utils.mjs";
 
 const [fontPath] = process.argv.slice(2);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -127,6 +127,13 @@ try {
  script("workflow-state.mjs", [workflowPath, "advance", "--artifact", "roughcut/a-roll.mp4"]);
 
   writeJson("state/beat-map.json", { fps: 30, duration: 3.2, captionMode: "subtitles", beats: [] });
+  // The composition transition requires a creative package whose declared
+  // authorities match the job, exactly as `generate-plan.mjs --write` leaves it.
+  writeJson("captions/caption-review-plan.json", { schemaVersion: "1.0.0", status: "proposed", cues: [] });
+  const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
+  const confirmation = readJson(confirmationPath);
+  confirmation.authorities = computeCreativeAuthorities(jobRoot, "subtitles");
+  writeJsonAtomic(confirmationPath, confirmation);
   fs.writeFileSync(
     path.join(jobRoot, "docs", "motion-plan.md"),
     "| Time | Audio phrase | Axis | Main flow | Visual reference | Visual treatment | Transition |\n"

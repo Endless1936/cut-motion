@@ -4,14 +4,19 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   assertCreativeAuthorities,
+  assertNoWorkflowDrift,
   assertRegularContainedFile,
+  assertReapprovalFieldsUnchanged,
   beginWorkflowRevision,
+  collectCreativeAuthorityDrift,
+  collectWorkflowDrift,
   computeCreativeAuthorities,
   computeCreativeDocumentFingerprints,
   ensureWorkflowDefaults,
   invalidateCreativeArtifacts,
   jobRootForWorkflow,
   readJson,
+  recordApprovedPlan,
   recoverTranscriptTransaction,
   saveWorkflow,
   sha256File,
@@ -23,7 +28,7 @@ import { buildComposition } from "./build-composition.mjs";
 const [workflowPath, command, ...rawArguments] = process.argv.slice(2);
 
 if (!workflowPath || !command) {
-  console.error("Usage: node workflow-state.mjs <workflow.json> <status|advance|approve|revise|fallback-auto|replan|reopen|set-mode|set-caption-mode|set-axis-mode> [value] [--actor name] [--artifact path] [--note text]");
+  console.error("Usage: node workflow-state.mjs <workflow.json> <status|verify|advance|approve|revise|fallback-auto|replan|reopen|set-mode|set-caption-mode|set-axis-mode> [value] [--actor name] [--artifact path] [--note text]");
   process.exit(64);
 }
 
@@ -393,6 +398,30 @@ if (command === "status") {
   process.exit(0);
 }
 
+if (command === "verify") {
+  const findings = collectWorkflowDrift(jobRoot, workflow);
+  const settled = ["composition", "render", "complete"].includes(workflow.currentState);
+  if (settled || workflow.approvedPlan || workflow.currentState === "motion-plan") {
+    findings.push(...collectCreativeAuthorityDrift(jobRoot, workflow));
+  }
+  // The reapproval baseline is only expected once the plan has been recorded;
+  // a job still sitting in motion-plan has not written one yet.
+  if (settled || workflow.approvedPlan) {
+    try {
+      assertReapprovalFieldsUnchanged(jobRoot, workflow);
+    } catch (error) {
+      findings.push(`reapproval tracking: ${error.message}`);
+    }
+  }
+  if (findings.length === 0) {
+    console.log(`Workflow fingerprints verified: ${workflow.currentState} (revision ${workflow.revisionId})`);
+    process.exit(0);
+  }
+  for (const finding of findings) console.error(`Error: ${finding}`);
+  console.error(`Workflow fingerprints no longer describe the job: ${findings.length} finding(s).`);
+  process.exit(1);
+}
+
 if (command === "set-mode") {
   const mode = positionals[0];
   if (!["review", "auto"].includes(mode)) throw new Error(`Invalid mode: ${mode}`);
@@ -550,6 +579,10 @@ if (!currentStage) throw new Error(`Unknown current state: ${workflow.currentSta
 if (command === "advance") {
   if (currentStage.terminal) throw new Error("Workflow is already complete");
   if (currentStage.gate) throw new Error(`Gate ${workflow.currentState} requires approve or revise`);
+  // Nothing that was recorded may have moved while the machine was not looking.
+  // A rebuild, a hand edit or a re-render performed outside a transition leaves
+  // a recorded fingerprint describing a job that no longer exists.
+  assertNoWorkflowDrift(jobRoot, workflow);
   if (workflow.currentState === "intake") {
     const projectPath = path.join(jobRoot, "state", "project.json");
     if (!fs.existsSync(projectPath)) throw new Error("Project state is missing");
@@ -637,27 +670,46 @@ if (command === "advance") {
         workflow.visualAxisModeSource = "default";
       }
       if (!fs.existsSync(beatMapPath)) throw new Error("Motion plan requires state/beat-map.json");
-      workflow.visualPlanSha256 = sha256File(beatMapPath);
       if (fullAuditRequested) {
         runCheck("check-visual-plan.mjs", [beatMapPath, path.join(jobRoot, "state", "transcript.json"), path.join(jobRoot, "state", "design-system.json")], "Motion plan requires a valid beat map");
         validateCreativePackage("Automatic full-audit validation", "agent");
       }
+      // Record what the approval covers, last, so the caption plan approval that
+      // validateCreativePackage performs is already on disk when the captions
+      // are digested.
+      recordApprovedPlan(jobRoot, workflow, now);
     }
     if (workflow.currentState === "composition") {
       const generatedCompositionPath = path.join(jobRoot, "hyperframes", "index.html");
       if (artifactPath !== generatedCompositionPath) {
         throw new Error("Composition advance requires hyperframes/index.html");
       }
+      const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
+      if (!fs.existsSync(beatMapPath)) throw new Error("Composition requires state/beat-map.json");
+      // This used to re-record the fingerprint unconditionally, which laundered
+      // any change made after the motion plan advanced: the composition was
+      // built from a plan nobody had accepted and the drift was written away.
+      const beatMapSha256 = sha256File(beatMapPath);
+      if (!workflow.visualPlanSha256) {
+        throw new Error("Composition requires the beat-map fingerprint recorded when the motion plan advanced; reopen motion-plan so the plan is recorded again");
+      }
+      if (workflow.visualPlanSha256 !== beatMapSha256) {
+        throw new Error("The beat map changed after the motion plan advanced; reopen motion-plan and re-approve instead of building around the change");
+      }
+      assertReapprovalFieldsUnchanged(jobRoot, workflow);
+      const authorityDrift = collectCreativeAuthorityDrift(jobRoot, workflow);
+      if (authorityDrift.length > 0) {
+        throw new Error(`Composition requires a creative package whose authorities match the job artifacts (run scripts/generate-plan.mjs <job> --write): ${authorityDrift.join("; ")}`);
+      }
       buildComposition(path.join(jobRoot, "hyperframes"));
       assertRegularContainedFile(path.join(jobRoot, "hyperframes"), generatedCompositionPath, "Built composition");
-      const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
-      if (fs.existsSync(beatMapPath)) workflow.visualPlanSha256 = sha256File(beatMapPath);
       if (fullAuditRequested) {
         assertCreativeAuthorities(jobRoot, workflow);
       }
     }
     if (workflow.currentState === "render") {
       const canonicalDeliveryPath = path.join(jobRoot, "output", "final.mp4");
+      assertReapprovalFieldsUnchanged(jobRoot, workflow);
       const delivery = probeReviewVideo(artifactPath, "Final delivery");
       const receiptPath = `${artifactPath}.render.json`;
       if (fullAuditRequested && !fs.existsSync(receiptPath)) {

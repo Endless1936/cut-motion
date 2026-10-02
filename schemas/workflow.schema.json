@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "cut-motion Workflow State",
   "type": "object",
-  "required": ["schemaVersion", "jobId", "mode", "roughCutReviewDecision", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "reconciliationReturnState", "creativeConfirmationSha256", "creativeDocumentFingerprints", "authoritativeMediaPath", "authoritativeMediaSha256", "sourceTranscriptSha256", "trimPlanSha256", "visualPlanSha256", "compositionArtifactPath", "compositionArtifactSha256", "revisionId", "currentState", "pendingGate", "completed", "gates", "history"],
+  "required": ["schemaVersion", "jobId", "mode", "roughCutReviewDecision", "captionMode", "captionModeSource", "captionModeAcknowledged", "visualAxisMode", "visualAxisModeSource", "visualAxisModeAcknowledged", "referenceScriptStatus", "referenceScriptAcknowledged", "referenceScriptPath", "referenceScriptSha256", "reconciliationReturnState", "creativeConfirmationSha256", "creativeDocumentFingerprints", "authoritativeMediaPath", "authoritativeMediaSha256", "sourceTranscriptSha256", "trimPlanSha256", "visualPlanSha256", "approvedPlan", "compositionArtifactPath", "compositionArtifactSha256", "revisionId", "currentState", "pendingGate", "completed", "gates", "history"],
   "properties": {
     "$schema": { "type": "string" },
     "schemaVersion": { "const": "1.0.0" },
@@ -27,6 +27,17 @@
     "sourceTranscriptSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
     "trimPlanSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
     "visualPlanSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
+    "approvedPlan": {
+      "type": ["object", "null"],
+      "properties": {
+        "recordedAt": { "type": "string", "minLength": 1 },
+        "revisionId": { "type": "integer", "minimum": 1 },
+        "beatMapSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "fields": { "type": "object" }
+      },
+      "required": ["recordedAt", "revisionId", "beatMapSha256", "fields"],
+      "additionalProperties": false
+    },
     "compositionArtifactPath": { "type": ["string", "null"] },
     "compositionArtifactSha256": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" },
     "lastKnownGoodDelivery": {

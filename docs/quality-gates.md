@@ -8,6 +8,7 @@ The default path is human-reviewed and intentionally light. Machine checks estab
 - Follow [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) during the rough-cut phase. It is the edit procedure rather than an approval gate, but the `rough-cut → rough-cut-review` transition does validate its gap-candidate record (`state/timeline-source-windows.pre-cleanup.json` plus a passing `state/gap-candidates.json`); an unclassified retained pause blocks the transition.
 - After approval, export once and run only the basic rough-cut/media lock.
 - Build the HyperFrames composition, render once, and verify that the delivery has readable video/audio, dimensions, frame rate, duration, and a non-empty file.
+- Every `advance` re-checks the fingerprints the workflow recorded, so the transition itself is the drift check. Run `node scripts/workflow-state.mjs <workflow.json> verify` when you need that comparison without moving the job — after a manual rebuild, or before handing the state machine to someone else.
 - Let the user judge the final captions, MG, timing, semantics, and visual quality.
 
 Run an optional audit, preview, or standalone validator only for a specific question. Caption promotion includes its release checks. The legacy trim-plan audit applies only to an explicit `ffmpeg-fallback` job.

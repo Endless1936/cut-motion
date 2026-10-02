@@ -39,6 +39,14 @@ Ask once for caption, reference-script, and visual-axis preferences. If omitted,
 
 Use `set-caption-mode` and `set-axis-mode` so changes are recorded. A caption or axis change at or after planning returns to `motion-plan`.
 
+## Recorded fingerprints
+
+Each transition records a SHA-256 for the artifact it accepted: the source transcript, the trim plan, the authoritative media, the beat map, the creative confirmation, its documents, the composition, and the last known-good delivery. Nothing outside a transition writes them, so a rebuild, a hand edit or a re-render performed between transitions leaves a recorded value describing a job that no longer exists.
+
+- `advance` re-checks every one of them before it does anything else and refuses to proceed on a mismatch. Recorded values are never silently rewritten; the composition transition used to re-record the beat-map fingerprint unconditionally, which laundered a plan changed after approval instead of reporting it.
+- `node scripts/workflow-state.mjs <workflow.json> verify` runs the same comparison without changing anything, and adds the creative-package authorities and the reapproval check. Use it to decide whether the state machine and the files on disk still agree — after a manual rebuild, before a handoff, or when a transition fails unexpectedly.
+- `motion-plan` records `approvedPlan`: the beat-map fingerprint plus the values behind `creative-confirmation.json`'s `changeControl.reapprovalFields`. That list used to be checked for completeness only, so it declared a contract nothing enforced. Now `composition` and `render` compare the recorded values and name the fields that moved, and any revision that invalidates the visual plan clears the baseline.
+
 ## Modes
 
 `review` is the default: wait at `rough-cut-review`, then follow [Quality Checks](quality-gates.md) for the delivery path.
