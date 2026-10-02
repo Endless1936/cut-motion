@@ -38,6 +38,7 @@ When `revise` or `reopen rough-cut` returns the job here, reread this section an
 
 - ChatCut owns the editable talking-head timeline. Use the [Talking-Head Trim Standard](talking-head-trim-standard.md) as the sole detailed policy for semantic editing, candidate cleanup, speech coverage, and clip-edge closure. Keep valid recorded speech or record its editorial disposition.
 - Build or reuse the job-local waveform index once per source. After candidate cleanup, run the clip-edge calculator across the retained timeline and apply its frame plan. Use the existing targeted seam lookup only when the user reports a rough seam. Record ChatCut project/timeline identifiers and measured stage timings in `state/chatcut-roughcut.json`; calculation and lookup files are evidence artifacts, not workflow states or approval gates.
+- Follow the standard's numbered sequence. If an operation cannot be completed, report it as skipped or blocked instead of saying it ran.
 - If ChatCut is unavailable, record `roughCutEngine: "ffmpeg-fallback"` and use the conservative FFmpeg fallback. `state/trim-plan.json` and its legacy audit apply only to that explicit fallback.
 
 ## Rough-cut review and export

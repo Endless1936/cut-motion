@@ -26,6 +26,10 @@ If ChatCut is required but unavailable, explain the reason and wait for approval
 
 Start a new Agent session after setup because integrations may load only when a session starts, then confirm ChatCut tools are available before continuing. The ChatGPT guide covers the desktop app's Work and Codex tabs; do not assume it also covers the ChatGPT website or remote workspaces.
 
+### WorkBuddy token renewal
+
+The current [ChatCut WorkBuddy guide](https://chatcut.io/workbuddy) configures a static bearer token that expires after about an hour; do not assume WorkBuddy's OAuth refresh manager applies to this manual MCP entry. If ChatCut returns `401`, follow the guide's [Verify refresh flow](https://chatcut.io/workbuddy#verify) and replace only `mcpServers.chatcut.headers.Authorization` in `~/.workbuddy/mcp.json`. Retry in the current conversation; if it still returns `401`, reconnect the ChatCut MCP server so it reloads the header. Start a new conversation only when ChatCut tools are missing after initial setup. Keep both tokens out of chat, logs, and Git.
+
 ## Local requirements
 
 - Bash on macOS or Linux; Windows users need WSL2 or an equivalent Unix shell.
@@ -86,3 +90,7 @@ CUT_MOTION_FONT=/absolute/path/to/smiley-sans-oblique.woff2 ./scripts/verify-rep
 ```
 
 Static verification is the CI-safe default. Runtime verification resolves the job-local HyperFrames runtime and executes real CLI, browser, and media checks.
+
+## GitHub pull requests
+
+Before opening a PR, verify the active `gh` account with `gh auth status` and `gh api user --jq .login`. SSH push identity does not determine the PR author. If `gh` needs authentication, follow the approval rule in `AGENTS.md`, then use `gh auth login --web --skip-ssh-key` in an interactive terminal. Do not pipe guessed input into an OAuth prompt; if the current Agent has no TTY, report the prompt and use its supported local authentication flow. After creating the PR, confirm the author with `gh pr view <number> --json author --jq .author.login`.

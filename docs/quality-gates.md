@@ -5,7 +5,7 @@ The default path is human-reviewed and intentionally light. Machine checks estab
 ## Default `review` path
 
 - Keep the original source unchanged.
-- Complete [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) before the existing ChatCut review gate.
+- Follow [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) during the rough-cut phase; it is the edit procedure, not an additional approval gate.
 - After approval, export once and run only the basic rough-cut/media lock.
 - Build the HyperFrames composition, render once, and verify that the delivery has readable video/audio, dimensions, frame rate, duration, and a non-empty file.
 - Let the user judge the final captions, MG, timing, semantics, and visual quality.
@@ -16,7 +16,7 @@ Run an optional audit, preview, or standalone validator only for a specific ques
 
 These machine checks run only when the user selects the automatic path or explicitly asks for the relevant audit:
 
-- rough-cut: media probe, source-transcript lock, and wording reconciliation; the Agent still follows the Golden Standard procedure before advancing. Only an explicit `roughCutEngine: "ffmpeg-fallback"` trim-plan export runs the legacy trim-plan audit;
+- rough-cut: media probe, source-transcript lock, and wording reconciliation; the Agent performs the Golden Standard sequence, which scripts do not enforce. Only an explicit `roughCutEngine: "ffmpeg-fallback"` trim-plan export runs the legacy trim-plan audit;
 - transcript/captions: reconciliation, semantic one-line caption plan, caption installation, and timing checks;
 - motion: beat-map/visual-plan and creative-confirmation checks at the existing state transitions. Font, layout, information-value, and standalone HyperFrames diagnostics remain explicit, on-demand commands;
 - delivery: detailed render/media receipt when the renderer produces one, plus FFprobe integrity.
