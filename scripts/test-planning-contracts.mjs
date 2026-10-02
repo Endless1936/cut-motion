@@ -227,6 +227,123 @@ try {
   writeJson(legacyPath, legacyCaptions);
   script("check-captions.mjs", [legacyPath, pages, design], false, /approved semantic plan/);
 
+  const planJob = path.join(temporaryRoot, "generate-plan-job");
+  fs.mkdirSync(path.join(planJob, "state"), { recursive: true });
+  fs.mkdirSync(path.join(planJob, "roughcut"), { recursive: true });
+  fs.copyFileSync(design, path.join(planJob, "state", "design-system.json"));
+  fs.writeFileSync(path.join(planJob, "roughcut", "a-roll.mp4"), "not-a-real-file");
+  writeJson(path.join(planJob, "state", "source-transcript.json"), {
+    revision: 1,
+    language: "zh-CN",
+    duration: 6,
+    source: "chatcut",
+    segments: [
+      { id: "s1", text: "今天我要演示", start: 0.5, end: 2.4, confidence: null, words: [
+        { text: "今天", start: 0.5, end: 1.1, confidence: null },
+        { text: "我要", start: 1.1, end: 1.7, confidence: null },
+        { text: "演示", start: 1.7, end: 2.4, confidence: null }
+      ] },
+      { id: "s2", text: "这个新工具很好用", start: 3.0, end: 5.4, confidence: null, words: [
+        { text: "这个", start: 3.0, end: 3.6, confidence: null },
+        { text: "新工具", start: 3.6, end: 4.4, confidence: null },
+        { text: "很好用", start: 4.4, end: 5.4, confidence: null }
+      ] }
+    ]
+  });
+  writeJson(path.join(planJob, "state", "timeline-source-windows.json"), {
+    schemaVersion: 1,
+    sourceDurationUs: 6000000,
+    timelineFps: { numerator: 30, denominator: 1 },
+    clips: [{ itemId: "item-1", assetId: "asset-1", timelineStartFrame: 0, durationFrames: 180, srcStartUs: 0, srcEndUs: 6000000, playbackRateNumerator: 1, playbackRateDenominator: 1 }]
+  });
+  writeJson(path.join(planJob, "state", "project.json"), {
+    schemaVersion: "1.0.0",
+    id: "generate-plan-fixture",
+    language: "zh-CN",
+    fps: 30,
+    designSystem: "state/design-system.json",
+    mediaArtifacts: { roughcut: { path: "roughcut/a-roll.mp4" } }
+  });
+  writeJson(path.join(planJob, "state", "workflow.json"), {
+    schemaVersion: "1.0.0",
+    currentState: "transcription",
+    captionMode: "subtitles",
+    captionModeSource: "user",
+    captionModeAcknowledged: true,
+    visualAxisMode: "a-axis-overlay",
+    visualAxisModeSource: "user",
+    visualAxisModeAcknowledged: true,
+    referenceScriptStatus: "none",
+    referenceScriptPath: null,
+    referenceScriptSha256: null
+  });
+  writeJson(path.join(planJob, "state", "reference-script-annotations.json"), {
+    schemaVersion: "1.0.0",
+    source: { status: "none", path: null, sha256: null },
+    speechText: "",
+    annotations: [],
+    verification: { parsed: true, annotationCount: 0 }
+  });
+  const planInputs = {
+    schemaVersion: "1.0.0",
+    fps: 30,
+    captionMode: "subtitles",
+    timelineId: "fixture-timeline",
+    corrections: {},
+    lexicon: { protectedTerms: ["新工具"], forbiddenStandaloneCues: [] },
+    cueLines: [
+      { segmentId: "s1", fromWord: 1, toWord: 3 },
+      { segmentId: "s2", fromWord: 1, toWord: 3 }
+    ],
+    beats: [
+      { id: "b01-claim", sceneId: "hook", sourceSegmentIds: ["s1"], text: "今天我要演示", start: 0.5, end: 2.4, intent: "给出主张" },
+      {
+        id: "b02-tool", sceneId: "proof", sourceSegmentIds: ["s2"], text: "这个新工具很好用", start: 3.0, end: 5.4,
+        recipe: "tool-strikeout", intent: "点名工具", onScreenCopy: ["新工具"],
+        visualStyle: "标签入场后被划掉", primaryFlowAxis: "horizontal", visualReference: "recipes/tool-strikeout.json",
+        semanticTopology: "emphasis", entryAnchorWordId: "s2:word-001", exitAnchorWordId: "s2:word-003",
+        exitAnchorOffsetFrames: 0, exitFrames: 6, viewerQuestion: "这个工具还需要吗", supportRole: "consequence",
+        removalLoss: "看不出被取消的是哪一个依赖", visualEncoding: "划痕编码已取消", stillFrameValue: "暂停仍可读",
+        attentionCost: "low", motionFamily: "editorial", transitionFamily: "strike-reveal",
+        components: ["工具标签", "划除线"], entranceFrames: 6,
+        layout: { faceSafetyNote: "面板压在下唇与下巴上，不遮眼睛" }
+      }
+    ],
+    reconciliation: { defaultEvidenceNote: "Fixture evidence at {start}-{end}s." },
+    documents: { globalDirection: ["Fixture only"], rhythmNotes: [], openQuestions: [] }
+  };
+  writeJson(path.join(planJob, "state", "planning-inputs.json"), planInputs);
+
+  const dryRun = script("generate-plan.mjs", [planJob]);
+  assert.match(dryRun.stdout, /\(dry run/);
+  assert.equal(fs.existsSync(path.join(planJob, "state", "beat-map.json")), false, "dry run must not write artifacts");
+
+  script("generate-plan.mjs", [planJob, "--write"]);
+  const derived = readJson(path.join(planJob, "state", "transcript.json"));
+  assert.equal(derived.revision, 2);
+  assert.equal(derived.duration, 6);
+  assert.deepEqual(derived.segments.map((segment) => segment.text), ["今天我要演示", "这个新工具很好用"]);
+  const derivedPlan = readJson(path.join(planJob, "captions", "caption-review-plan.json"));
+  assert.deepEqual(derivedPlan.cues.map((cue) => cue.text), ["今天我要演示", "这个新工具很好用"]);
+  assert.equal(derivedPlan.transcriptSha256, sha256File(path.join(planJob, "state", "transcript.json")));
+  const derivedBeats = readJson(path.join(planJob, "state", "beat-map.json"));
+  assert.deepEqual(derivedBeats.beats.map((beat) => beat.mgScope), ["none", "local"]);
+  assert.equal(derivedBeats.beats[0].recipe, "caption-only");
+  assert.equal(derivedBeats.beats[0].audioAnchorTime, 0.5);
+  assert.equal(derivedBeats.beats[1].typography.fontFamily, "Smiley Sans");
+  assert.deepEqual(derivedBeats.beats[1].captionCueIds, ["caption-0002"]);
+  script("check-caption-review-plan.mjs", [path.join(planJob, "captions", "caption-review-plan.json")]);
+  script("check-transcript-reconciliation.mjs", [path.join(planJob, "state", "transcript-reconciliation.json")]);
+
+  const firstPass = fs.readFileSync(path.join(planJob, "state", "beat-map.json"), "utf8");
+  script("generate-plan.mjs", [planJob, "--write"]);
+  assert.equal(fs.readFileSync(path.join(planJob, "state", "beat-map.json"), "utf8"), firstPass, "generate-plan must be idempotent");
+
+  const unsafe = readJson(path.join(planJob, "state", "planning-inputs.json"));
+  delete unsafe.beats[1].layout;
+  writeJson(path.join(planJob, "state", "planning-inputs.json"), unsafe);
+  script("generate-plan.mjs", [planJob, "--write"], false, /faceSafetyNote/);
+
   console.log("Planning contract tests passed.");
 } finally {
   fs.rmSync(temporaryRoot, { recursive: true, force: true });
