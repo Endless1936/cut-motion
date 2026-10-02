@@ -320,19 +320,24 @@ export function computeSeamTighteningPlan(indexJson, manifest) {
 function parseArguments(argv) {
   const parsed = {};
   const allowed = new Set(["index", "windows", "out"]);
+  const booleanOptions = new Set(["force"]);
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
-    if (!token.startsWith("--") || !allowed.has(token.slice(2))) {
-      fail("Unknown argument " + token + ". Use --index, --windows, and optional --out.");
+    if (!token.startsWith("--") || (!allowed.has(token.slice(2)) && !booleanOptions.has(token.slice(2)))) {
+      fail("Unknown argument " + token + ". Use --index, --windows, and optional --out and --force.");
     }
     const key = token.slice(2);
     if (parsed[key] !== undefined) fail("Duplicate argument --" + key + ".");
+    if (booleanOptions.has(key)) {
+      parsed[key] = true;
+      continue;
+    }
     const value = argv[i + 1];
     if (!value || value.startsWith("--")) fail("Missing value for --" + key + ".");
     parsed[key] = value;
     i += 1;
   }
-  if (!parsed.index || !parsed.windows) fail("Usage: node scripts/compute-seam-tightening.mjs --index <index.json> --windows <timeline-windows.json> [--out <plan.json>]");
+  if (!parsed.index || !parsed.windows) fail("Usage: node scripts/compute-seam-tightening.mjs --index <index.json> --windows <timeline-windows.json> [--out <plan.json>] [--force]");
   return parsed;
 }
 
@@ -388,7 +393,14 @@ function runCli() {
   if (outputPath === indexPath || outputPath === windowsPath) {
     fail("--out must not overwrite an input file.");
   }
-  fs.writeFileSync(outputPath, output, { flag: "wx" });
+  // An occupied output is refused by default so an earlier candidate plan is never
+  // silently lost. The standard still recomputes after the cleanup record is
+  // refreshed — that is exactly when the first plan no longer describes the
+  // timeline — so --force makes replacing it an explicit act.
+  if (!args.force && fs.existsSync(outputPath)) {
+    fail("Refusing to overwrite " + outputPath + ". Refresh the cleanup record first, then pass --force to replace this candidate plan.");
+  }
+  fs.writeFileSync(outputPath, output, { flag: "w" });
   process.stdout.write("Wrote candidate plan: " + outputPath + "\n");
 }
 

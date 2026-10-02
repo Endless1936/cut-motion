@@ -5,7 +5,7 @@ The default path is human-reviewed and intentionally light. Machine checks estab
 ## Default `review` path
 
 - Keep the original source unchanged.
-- Follow [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) during the rough-cut phase. It is the edit procedure rather than an approval gate, but the `rough-cut → rough-cut-review` transition does validate its gap-candidate record (`state/timeline-source-windows.pre-cleanup.json` plus a passing `state/gap-candidates.json`); an unclassified retained pause blocks the transition.
+- Follow [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) during the rough-cut phase. It is the edit procedure rather than an approval gate, but the `rough-cut → rough-cut-review` transition does validate its gap-candidate record (`state/timeline-source-windows.pre-cleanup.json` plus a passing `state/gap-candidates.json`); an unclassified retained pause blocks the transition. That check covers pauses; spoken coverage is the part a tightened clip edge can still break, so run `scripts/check-spoken-coverage.mjs` after edge tightening and before opening the review.
 - After approval, export once and run only the basic rough-cut/media lock.
 - Build the HyperFrames composition, render once, and verify that the delivery has readable video/audio, dimensions, frame rate, duration, and a non-empty file.
 - Each transition checks its consumed dependencies; composition permits scoped review-mode visual edits and records the rebuilt result. `node scripts/workflow-state.mjs <workflow.json> verify` is the optional full fingerprint audit, including media and prior delivery.

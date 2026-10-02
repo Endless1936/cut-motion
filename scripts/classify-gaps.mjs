@@ -3,6 +3,7 @@
 //
 // Usage:
 //   node scripts/classify-gaps.mjs <job-directory> [--write] [--rebuild]
+//     [--pre-cleanup-windows <path>] [--removal-reason-code <code>] [--removal-reason <text>]
 //
 // Without --write the command prints the detected candidates and the path it
 // would write. With --write it emits the artifact with every detected candidate
@@ -11,6 +12,13 @@
 // classification is the audio-led editorial decision described by step 4 of
 // docs/talking-head-trim-standard.md; detecting and covering the candidates is
 // what this command and check-gap-candidates.mjs automate.
+//
+// Removals derived from the pre-cleanup structure are the pauses a cleanup step
+// already excised. `--removal-reason-code`/`--removal-reason` label the ones this
+// run derives for the first time; a removal already recorded keeps its authored
+// reason. Writing is refused while any derived removal is still unexplained,
+// because check-gap-candidates.mjs rejects such an artifact and emitting one
+// would only move the failure to the next command.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -28,14 +36,29 @@ import {
 } from "./gap-detection.mjs";
 
 const rawArguments = process.argv.slice(2);
-const jobArgument = rawArguments.find((argument) => !argument.startsWith("--"));
+// Options that consume the following token, so their values never read as positional.
+const valuedOptions = ["--pre-cleanup-windows", "--removal-reason-code", "--removal-reason"];
+const positionalArguments = [];
+const optionValues = new Map();
+for (let index = 0; index < rawArguments.length; index += 1) {
+  const token = rawArguments[index];
+  if (valuedOptions.includes(token)) {
+    optionValues.set(token, rawArguments[index + 1] ?? null);
+    index += 1;
+    continue;
+  }
+  if (token.startsWith("--")) continue;
+  positionalArguments.push(token);
+}
+const jobArgument = positionalArguments[0];
 const write = rawArguments.includes("--write");
 const rebuild = rawArguments.includes("--rebuild");
-const preCleanupFlagIndex = rawArguments.indexOf("--pre-cleanup-windows");
-const preCleanupArgument = preCleanupFlagIndex >= 0 ? rawArguments[preCleanupFlagIndex + 1] : null;
+const preCleanupArgument = optionValues.get("--pre-cleanup-windows") ?? null;
+const removalReasonFlag = (optionValues.get("--removal-reason-code") ?? "").trim();
+const removalReasonText = (optionValues.get("--removal-reason") ?? "").trim();
 
 if (!jobArgument) {
-  console.error("Usage: node scripts/classify-gaps.mjs <job-directory> [--write] [--rebuild] [--pre-cleanup-windows <path>]");
+  console.error("Usage: node scripts/classify-gaps.mjs <job-directory> [--write] [--rebuild] [--pre-cleanup-windows <path>] [--removal-reason-code <code>] [--removal-reason <text>]");
   process.exit(64);
 }
 
@@ -120,11 +143,17 @@ const removedCandidates = derivedRemoved.map((entry) => {
     ?? previous?.candidates?.find((candidate) => candidate.classification === "remove"
       && candidate.itemId === entry.itemId && candidate.sourceStart <= entry.sourceStart + 0.02
       && candidate.sourceEnd >= entry.sourceEnd - 0.02);
+  // An unchanged removal keeps the reason already authored for it. A removal seen
+  // for the first time on this run can only be labelled by the operator, because
+  // the decision is editorial rather than acoustic: the same excised span looks
+  // identical whether a retake was cut or dead air was compressed.
+  const inheritedCode = typeof prior?.reasonCode === "string" && prior.reasonCode.trim() ? prior.reasonCode : null;
+  const inheritedReason = typeof prior?.reason === "string" && prior.reason.trim() ? prior.reason : null;
   return {
     ...entry,
     classification: "remove",
-    reasonCode: prior?.reasonCode ?? null,
-    reason: prior?.reason ?? "",
+    reasonCode: inheritedCode ?? (removalReasonFlag || null),
+    reason: inheritedReason ?? removalReasonText,
     evidence: prior?.evidence
       ? { ...prior.evidence }
       : { audioChecked: false, note: null }
@@ -218,6 +247,18 @@ if (unexplained.length) {
 if (!write) {
   console.log("\nDry run. Re-run with --write to emit state/gap-candidates.json.");
   process.exit(0);
+}
+const unlabelledRemovals = removedCandidates.filter((entry) =>
+  !(typeof entry.reasonCode === "string" && entry.reasonCode.trim())
+  && !(typeof entry.reason === "string" && entry.reason.trim()));
+if (unlabelledRemovals.length) {
+  console.error(`\nError: ${unlabelledRemovals.length} removal(s) derived on this run have no reason, and check-gap-candidates.mjs rejects an unexplained removal.`);
+  for (const entry of unlabelledRemovals) {
+    console.error(`  ${entry.id}  src ${entry.sourceStart}-${entry.sourceEnd}s  cut ${entry.durationSeconds}s of a ${entry.originalPauseSeconds}s pause, retained ${entry.retainedSeconds}s`);
+  }
+  console.error("Label them with --removal-reason-code <code> and, optionally, --removal-reason <text>.");
+  console.error("An already recorded removal keeps its authored reason, so only entries first derived by this run need labelling. Nothing was written.");
+  process.exit(1);
 }
 writeJsonAtomic(artifactPath, artifact);
 console.log(`\nWrote ${path.relative(process.cwd(), artifactPath)}`);

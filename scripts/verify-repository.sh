@@ -48,6 +48,7 @@ required_files=(
   scripts/check-chatcut.mjs
   scripts/check-composition.sh
   scripts/check-gap-candidates.mjs
+  scripts/check-spoken-coverage.mjs
   scripts/classify-gaps.mjs
   scripts/gap-detection.mjs
   scripts/install-font.sh
@@ -80,6 +81,7 @@ node "$repository_root/scripts/test-render-core.mjs"
 node "$repository_root/scripts/test-validation-receipts.mjs"
 node "$repository_root/scripts/test-planning-contracts.mjs"
 node "$repository_root/scripts/test-gap-candidates.mjs"
+node "$repository_root/scripts/test-spoken-coverage.mjs"
 node "$repository_root/scripts/test-mg-components.mjs"
 node "$repository_root/scripts/test-workflow-contracts.mjs"
 bash "$repository_root/scripts/test-media-pipeline.sh" --static
