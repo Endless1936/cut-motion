@@ -10,8 +10,8 @@
     "exactlyOneLine": true,
     "minimumDurationSeconds": 0.5,
     "targetDurationSeconds": [0.8, 2.5],
-    "targetDisplayUnits": [4, 10.5],
-    "maximumDisplayUnits": 11.8,
+    "targetDisplayUnits": [4, 10],
+    "maximumDisplayUnits": 10,
     "fitFontSizePx": [88, 96],
     "protectedTerms": [],
     "forbiddenStandaloneCues": ["的", "了"]

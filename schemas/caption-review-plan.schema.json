@@ -9,8 +9,8 @@
     "wordingAuthority": { "const": "state/transcript.json" },
     "transcriptRevision": { "type": "integer", "minimum": 1 },
     "transcriptSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "timingAuthority": { "enum": ["state/transcript.json word ranges", "approved ChatCut main timeline item ranges"] },
-    "segmentationAuthority": { "enum": ["ChatCut source segment boundaries", "agent-authored word ranges", "ChatCut main timeline transcript entries"] },
+    "timingAuthority": { "enum": ["state/transcript.json word ranges", "approved ChatCut main timeline item ranges", "agent-authored cue ranges within transcript segment ranges", "agent-authored cue ranges within approved ChatCut main timeline item ranges"] },
+    "segmentationAuthority": { "enum": ["ChatCut source segment boundaries", "agent-authored word ranges", "ChatCut main timeline transcript entries", "agent-authored phrase cues within transcript segments", "agent-authored phrase cues within ChatCut main timeline entries"] },
     "rules": { "type": "object" },
     "exceptions": { "type": "object" },
     "cues": {
@@ -18,14 +18,27 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "text", "startWordId", "endWordId"],
+        "required": ["id", "text"],
         "properties": {
           "id": { "type": "string", "pattern": "^caption-[0-9]{4}$" },
           "text": { "type": "string", "minLength": 1 },
+          "segmentId": { "type": "string", "minLength": 1 },
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "exclusiveMinimum": 0 },
           "startWordId": { "type": "string", "pattern": "^.+:word-[0-9]{3}$" },
           "endWordId": { "type": "string", "pattern": "^.+:word-[0-9]{3}$" },
           "fitFontSizePx": { "type": "number", "minimum": 1 }
         },
+        "oneOf": [
+          {
+            "required": ["startWordId", "endWordId"],
+            "not": { "anyOf": [{ "required": ["segmentId"] }, { "required": ["start"] }, { "required": ["end"] }] }
+          },
+          {
+            "required": ["segmentId", "start", "end"],
+            "not": { "anyOf": [{ "required": ["startWordId"] }, { "required": ["endWordId"] }] }
+          }
+        ],
         "additionalProperties": false
       }
     }

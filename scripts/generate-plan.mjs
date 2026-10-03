@@ -90,6 +90,9 @@ if (!useMainTimeline && !useLegacySourceTiming) {
 const firstMainPage = (Array.isArray(mainTimelineSnapshot) ? mainTimelineSnapshot[0] : mainTimelineSnapshot)?.structuredContent
   ?? (Array.isArray(mainTimelineSnapshot) ? mainTimelineSnapshot[0] : mainTimelineSnapshot);
 const mainTimelineState = firstMainPage?.state ?? {};
+const timelineId = useMainTimeline
+  ? (mainTimelineState.timelineId ?? mainTimelineState.id ?? inputs.timelineId)
+  : (inputs.timelineId ?? mainTimelineState.timelineId ?? mainTimelineState.id);
 const sourceTranscript = useMainTimeline ? null : read("state/source-transcript.json");
 if (!useMainTimeline && workflow.sourceTranscriptSha256 && workflow.sourceTranscriptSha256 !== sha256File(rel("state/source-transcript.json"))) {
   throw new Error("Source transcript changed after its workflow lock; restore the locked source transcript before generating plans.");
@@ -112,8 +115,16 @@ const released = !useMainTimeline && inputs.releasedTranscript ? { ...baseReleas
 const captionPlan = buildCaptionPlan({
   transcript: released,
   transcriptSha256: sha256Text(serializeJson(released)),
+  captionCues: inputs.captionCues,
   cueLines: inputs.cueLines,
-  ...(useMainTimeline ? {
+  ...(inputs.captionCues !== undefined ? {
+    timingAuthority: useMainTimeline
+      ? "agent-authored cue ranges within approved ChatCut main timeline item ranges"
+      : "agent-authored cue ranges within transcript segment ranges",
+    segmentationAuthority: useMainTimeline
+      ? "agent-authored phrase cues within ChatCut main timeline entries"
+      : "agent-authored phrase cues within transcript segments"
+  } : useMainTimeline ? {
     timingAuthority: "approved ChatCut main timeline item ranges",
     segmentationAuthority: "ChatCut main timeline transcript entries"
   } : {}),
@@ -280,7 +291,7 @@ json("captions/chatcut-pages.json", {
   source: useMainTimeline ? "chatcut-viewer-pages" : "ChatCut inspect_asset original source word rows",
   fps,
   cleanExport: cleanExportPath,
-  timelineVersion: `chatcut-timeline-${inputs.timelineId ?? mainTimelineState.timelineId ?? mainTimelineState.id ?? "unknown"}`,
+  timelineVersion: `chatcut-timeline-${timelineId ?? "unknown"}`,
   roughCutLocked,
   ...(typeof inputs.cleanExport?.captionRenderDisabled === "boolean"
     ? { captionRenderDisabled: inputs.cleanExport.captionRenderDisabled }

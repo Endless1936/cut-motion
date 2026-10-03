@@ -57,7 +57,7 @@
           "start": { "type": "number", "minimum": 0 },
           "end": { "type": "number", "minimum": 0 },
           "viewerText": { "type": "string", "pattern": "\\S" },
-          "lines": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "string", "pattern": "^(?![\\s\\S]*[\\r\\n])(?=[\\s\\S]*\\S)[\\s\\S]+$", "maxLength": 32 } }
+          "lines": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "type": "string", "pattern": "^(?![\\s\\S]*[\\r\\n])(?=[\\s\\S]*\\S)[\\s\\S]+$" } }
         }
       }
     }

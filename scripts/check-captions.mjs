@@ -256,14 +256,29 @@ if (!reviewPlanPath || path.isAbsolute(reviewPlanRelativePath) || !isPathInside(
       }
     }
     const resolvedCues = transcript ? resolveCaptionCues(reviewPlan, transcript) : [];
-    const totalWordCount = (transcript?.segments ?? []).reduce((sum, segment) => sum + (segment.words?.length ?? 0), 0);
-    if (totalWordCount > 0) {
-      const startsAtFirstWord = resolvedCues[0]?.startWordIndex === 0;
-      const endsAtLastWord = resolvedCues.at(-1)?.endWordIndex === totalWordCount - 1;
-      const contiguous = resolvedCues.every((cue, index) => index === 0
-        || cue.startWordIndex === resolvedCues[index - 1].endWordIndex + 1);
-      if (!startsAtFirstWord || !endsAtLastWord || !contiguous) {
-        errors.push("approved semantic captions do not cover the complete transcript");
+    const manualSegmentRanges = Array.isArray(reviewPlan.cues) && reviewPlan.cues.some((cue) => cue.segmentId !== undefined);
+    if (manualSegmentRanges) {
+      const actualSegmentIds = [...new Set(resolvedCues.map((cue) => cue.segmentId))];
+      const expectedSegmentIds = (transcript?.segments ?? []).map((segment) => segment.id);
+      if (actualSegmentIds.length !== expectedSegmentIds.length || actualSegmentIds.some((id, index) => id !== expectedSegmentIds[index])) {
+        errors.push("approved semantic captions do not cover each transcript segment in order");
+      }
+      for (const segment of transcript?.segments ?? []) {
+        const text = resolvedCues.filter((cue) => cue.segmentId === segment.id).map((cue) => cue.text).join("");
+        if (normalizeCaptionText(text) !== normalizeCaptionText(segment.text)) {
+          errors.push(`${segment.id}: approved semantic captions do not preserve the full transcript text`);
+        }
+      }
+    } else {
+      const totalWordCount = (transcript?.segments ?? []).reduce((sum, segment) => sum + (segment.words?.length ?? 0), 0);
+      if (totalWordCount > 0) {
+        const startsAtFirstWord = resolvedCues[0]?.startWordIndex === 0;
+        const endsAtLastWord = resolvedCues.at(-1)?.endWordIndex === totalWordCount - 1;
+        const contiguous = resolvedCues.every((cue, index) => index === 0
+          || cue.startWordIndex === resolvedCues[index - 1].endWordIndex + 1);
+        if (!startsAtFirstWord || !endsAtLastWord || !contiguous) {
+          errors.push("approved semantic captions do not cover the complete transcript");
+        }
       }
     }
     for (let index = 0; index < Math.min(resolvedCues.length, captions.cues.length); index += 1) {

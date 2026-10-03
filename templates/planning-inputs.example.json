@@ -1,7 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "timelineId": "replace-with-locked-timeline-id",
   "lexicon": { "protectedTerms": ["新工具"], "forbiddenStandaloneCues": [] },
+  "captionCues": [
+    { "segmentId": "main-001", "text": "今天我要", "start": 0.5, "end": 1.3 },
+    { "segmentId": "main-001", "text": "演示", "start": 1.3, "end": 2.4 },
+    { "segmentId": "main-002", "text": "这个新工具", "start": 3, "end": 4.2 },
+    { "segmentId": "main-002", "text": "很好用", "start": 4.2, "end": 5.4 }
+  ],
   "beats": [
     {
       "id": "b01-claim", "sceneId": "hook", "sourceSegmentIds": ["main-001"],

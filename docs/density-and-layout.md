@@ -14,6 +14,10 @@ The layers prevent both failure modes: a static scene with too little happening 
 
 Use one focal group and one to four supporting elements. The focal group should occupy 28–65% of the vertical canvas after padding. Support elements should carry meaning: icon, label, live status, track, diagram, progress, or particle response.
 
+## MG cadence target
+
+For plans with discrete MG nodes, target an average of about one node per 20 seconds of finished runtime, spread across meaningful sections (about six nodes in a two-minute video). Treat this as a planning target, not a fixed interval or validation threshold. Motion Copy remains one continuous treatment rather than a reason to add separate MG nodes.
+
 If the frame feels empty, enrich the focal idea before adding decoration. If it feels crowded, remove low-priority support before shrinking copy.
 
 ## Vertical composition

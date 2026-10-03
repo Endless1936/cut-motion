@@ -15,7 +15,7 @@
     "color": "#FFFFFF",
     "fontSizePx": 96,
     "lineHeight": 1.15,
-    "maximumDisplayUnits": 11.8,
+    "maximumDisplayUnits": 10,
     "minimumFontSizePx": 88,
     "maximumLines": 1,
     "bottomOffsetRatio": 0.2,

@@ -17,7 +17,7 @@ Default 1080×1920 caption treatment:
 - centered;
 - 330 px above the bottom edge;
 - soft black shadow offset downward;
-- exactly one rendered line; target 4–10.5 measured display units and allow up to 11.8 only with the approved 88–96px cue-level fit range;
+- exactly one rendered line; keep each line to at most 10 display units, counting one Chinese character as 1 and about 3 English characters as 1;
 - lexical units and fixed phrases are protected; particles and conjunctions may not stand alone;
 - target one short clause or breath per cue, normally 0.8–2.5 seconds and never below 0.5 seconds;
 - no opaque subtitle bar.

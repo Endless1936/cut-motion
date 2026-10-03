@@ -47,6 +47,28 @@ try {
   assert.equal(defaultCaptionPlan.segmentationAuthority, "ChatCut source segment boundaries");
   assert.deepEqual(defaultCaptionPlan.cues.map((cue) => cue.text), ["再见", "你好", "你好"]);
   assert.throws(() => buildCaptionPlan({ transcript: reordered, cueLines: [lines[0], lines[0], lines[2]], lexicon: {} }), /exactly once/);
+  const phraseTranscript = {
+    revision: 2,
+    segments: [
+      { id: "main-001", text: "今天我要演示", start: 0.5, end: 2.4, words: [{ text: "今天我要演示", start: 0.5, end: 2.4 }] },
+      { id: "main-002", text: "这个新工具很好用", start: 3, end: 5.4, words: [{ text: "这个新工具很好用", start: 3, end: 5.4 }] }
+    ]
+  };
+  const phraseCues = [
+    { segmentId: "main-001", text: "今天我要", start: 0.5, end: 1.3 },
+    { segmentId: "main-001", text: "演示", start: 1.3, end: 2.4 },
+    { segmentId: "main-002", text: "这个新工具", start: 3, end: 4.2 },
+    { segmentId: "main-002", text: "很好用", start: 4.2, end: 5.4 }
+  ];
+  const phrasePlan = buildCaptionPlan({ transcript: phraseTranscript, captionCues: phraseCues, lexicon: {} });
+  assert.equal(phrasePlan.segmentationAuthority, "agent-authored phrase cues within ChatCut main timeline entries");
+  assert.deepEqual(phrasePlan.cues.map(({ text, segmentId, start, end }) => ({ text, segmentId, start, end })), phraseCues);
+  assert.throws(() => buildCaptionPlan({ transcript: phraseTranscript, captionCues: [
+    { ...phraseCues[0], end: 2.5 }, ...phraseCues.slice(1)
+  ], lexicon: {} }), /stay within main-001/);
+  assert.throws(() => buildCaptionPlan({ transcript: phraseTranscript, captionCues: [
+    { ...phraseCues[0], text: "今天" }, ...phraseCues.slice(1)
+  ], lexicon: {} }), /do not preserve the full text/);
   const priorConflict = { id: "existing-conflict", segmentId: "split", type: "ambiguous", resolution: "unresolved", releaseImpact: true, heardText: "你好", evidence: { audioChecked: false, note: "ASR only" }, decision: { actor: "agent", at: "fixture", note: "unresolved" } };
   const preserved = buildReconciliationItems({ transcript: split, existingItems: [priorConflict] })[0];
   assert.equal(preserved.id, priorConflict.id);
@@ -392,32 +414,33 @@ try {
   ]);
   writeJson(path.join(planJob, "state/planning-inputs.json"), planInputs);
 
-  const dryRun = script("generate-plan.mjs", [planJob]);
+  const dryRun = script("generate-plan.mjs", [planJob, "--legacy-source-timing"]);
   assert.match(dryRun.stdout, /\(dry run/);
   assert.equal(fs.existsSync(path.join(planJob, "state", "beat-map.json")), false, "dry run must not write artifacts");
 
-  script("generate-plan.mjs", [planJob, "--write"]);
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
   const initialPages = readJson(path.join(planJob, "captions/chatcut-pages.json"));
   assert.equal(initialPages.roughCutLocked, false, "a media file alone does not prove approval or a workflow lock");
   assert.equal(initialPages.captionRenderDisabled, undefined, "the generator must leave unconfirmed caption status unknown");
   const lockedWorkflow = readJson(path.join(planJob, "state/workflow.json"));
   Object.assign(lockedWorkflow, { roughCutReviewDecision: "manual-approved", authoritativeMediaPath: "roughcut/a-roll.mp4", authoritativeMediaSha256: sha256File(path.join(planJob, "roughcut/a-roll.mp4")) });
   writeJson(path.join(planJob, "state/workflow.json"), lockedWorkflow);
-  script("generate-plan.mjs", [planJob, "--write"]);
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
   const approvedPages = readJson(path.join(planJob, "captions/chatcut-pages.json"));
   assert.equal(approvedPages.roughCutLocked, true);
+  assert.equal(approvedPages.timelineVersion, "chatcut-timeline-fixture-timeline");
   assert.equal(approvedPages.captionRenderDisabled, undefined, "approval alone must not claim that ChatCut captions were disabled");
   const cleanInputs = readJson(path.join(planJob, "state/planning-inputs.json"));
   cleanInputs.cleanExport = { captionRenderDisabled: true };
   writeJson(path.join(planJob, "state/planning-inputs.json"), cleanInputs);
-  script("generate-plan.mjs", [planJob, "--write"]);
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
   assert.equal(readJson(path.join(planJob, "captions/chatcut-pages.json")).roughCutLocked, true);
   assert.equal(readJson(path.join(planJob, "captions/chatcut-pages.json")).captionRenderDisabled, true);
   fs.appendFileSync(path.join(planJob, "roughcut/a-roll.mp4"), "changed");
-  script("generate-plan.mjs", [planJob, "--write"]);
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
   fs.writeFileSync(path.join(planJob, "roughcut/a-roll.mp4"), "not-a-real-file");
   fs.appendFileSync(path.join(planJob, "state/source-transcript.json"), " ");
-  script("generate-plan.mjs", [planJob, "--write"], false, /Source transcript changed/);
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"], false, /Source transcript changed/);
   fs.writeFileSync(path.join(planJob, "state/source-transcript.json"), fs.readFileSync(path.join(planJob, "state/source-transcript.json"), "utf8").slice(0, -1));
   const derived = readJson(path.join(planJob, "state", "transcript.json"));
   assert.equal(derived.revision, 2);
@@ -434,6 +457,44 @@ try {
   assert.deepEqual(derivedBeats.beats[1].captionCueIds, ["caption-0002"]);
   script("check-caption-review-plan.mjs", [path.join(planJob, "captions", "caption-review-plan.json")]);
   script("check-transcript-reconciliation.mjs", [path.join(planJob, "state", "transcript-reconciliation.json"), "--expected-media", "input/source.mp4"]);
+
+  const manualMainJob = path.join(temporaryRoot, "manual-main-caption-job");
+  fs.cpSync(planJob, manualMainJob, { recursive: true });
+  writeJson(path.join(manualMainJob, "state", "chatcut-main-timeline.json"), {
+    state: { id: "main-caption-fixture", fps: 30, durationFrames: 180 },
+    transcript: {
+      coverage: { status: "complete", candidateItemCount: 2, coveredItemCount: 2, missingItemIds: [] },
+      entries: [
+        { itemId: "item-1", text: "今天我要演示", timelineRange: { fromFrame: 15, toFrame: 72 } },
+        { itemId: "item-2", text: "这个新工具很好用", timelineRange: { fromFrame: 90, toFrame: 162 } }
+      ]
+    }
+  });
+  const manualMainInputs = readJson(path.join(manualMainJob, "state", "planning-inputs.json"));
+  delete manualMainInputs.cueLines;
+  manualMainInputs.captionCues = [
+    { segmentId: "main-001", text: "今天我要", start: 0.5, end: 1.3 },
+    { segmentId: "main-001", text: "演示", start: 1.3, end: 2.4 },
+    { segmentId: "main-002", text: "这个新工具", start: 3, end: 4.2 },
+    { segmentId: "main-002", text: "很好用", start: 4.2, end: 5.4 }
+  ];
+  writeJson(path.join(manualMainJob, "state", "planning-inputs.json"), manualMainInputs);
+  script("generate-plan.mjs", [manualMainJob, "--write", "--replace-existing"]);
+  const manualPlanPath = path.join(manualMainJob, "captions", "caption-review-plan.json");
+  const manualPlan = readJson(manualPlanPath);
+  assert.equal(readJson(path.join(manualMainJob, "captions", "chatcut-pages.json")).timelineVersion, "chatcut-timeline-main-caption-fixture");
+  assert.deepEqual(manualPlan.cues.map((cue) => cue.text), ["今天我要", "演示", "这个新工具", "很好用"]);
+  assert.equal(manualPlan.cues[0].segmentId, "main-001");
+  script("check-caption-review-plan.mjs", [manualPlanPath]);
+  script("promote-caption-review-plan.mjs", [manualMainJob]);
+  const promotedManualCaptions = readJson(path.join(manualMainJob, "captions", "captions.json"));
+  assert.deepEqual(promotedManualCaptions.cues.map((cue) => cue.viewerText), ["今天我要", "演示", "这个新工具", "很好用"]);
+  assert.deepEqual(promotedManualCaptions.cues.map(({ start, end }) => [start, end]), [[0.5, 1.3], [1.3, 2.4], [3, 4.2], [4.2, 5.4]]);
+  const manualCaptionDoc = fs.readFileSync(path.join(manualMainJob, "docs", "caption-plan.md"), "utf8");
+  assert.match(manualCaptionDoc, /按中文自然短语切分/);
+  assert.match(manualCaptionDoc, /每行不超过 10 个显示单位/);
+  assert.doesNotMatch(manualCaptionDoc, /4–10\.5 个显示单位/);
+  assert.doesNotMatch(manualCaptionDoc, /每个条目一条/);
 
   const heuristicJob = path.join(temporaryRoot, "caption-heuristic-job");
   fs.mkdirSync(path.join(heuristicJob, "captions"), { recursive: true });
@@ -506,7 +567,7 @@ try {
   script("check-caption-review-plan.mjs", [heuristicPlanPath], false, /cues overlap/);
 
   const firstPass = fs.readFileSync(path.join(planJob, "state", "beat-map.json"), "utf8");
-  script("generate-plan.mjs", [planJob, "--write"]);
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
   assert.equal(fs.readFileSync(path.join(planJob, "state", "beat-map.json"), "utf8"), firstPass, "generate-plan must be idempotent");
   const reconciliationPath = path.join(planJob, "state", "transcript-reconciliation.json");
   const conflict = readJson(reconciliationPath);
@@ -514,13 +575,13 @@ try {
   conflict.items[0].resolution = "unresolved";
   conflict.items[0].releaseImpact = true;
   writeJson(reconciliationPath, conflict);
-  script("generate-plan.mjs", [planJob, "--write"]);
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
   assert.equal(readJson(reconciliationPath).items[0].resolution, "unresolved", "rerun preserves unresolved conflicts");
   const motionDocPath = path.join(planJob, "docs", "motion-plan.md");
   const generatedDoc = fs.readFileSync(motionDocPath, "utf8");
   fs.writeFileSync(motionDocPath, "manual edit\n");
   const beforeFailure = sha256File(path.join(planJob, "state", "transcript.json"));
-  script("generate-plan.mjs", [planJob, "--write"], false, /existing manual content/);
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"], false, /existing manual content/);
   assert.equal(fs.readFileSync(motionDocPath, "utf8"), "manual edit\n");
   assert.equal(sha256File(path.join(planJob, "state", "transcript.json")), beforeFailure);
   fs.writeFileSync(motionDocPath, generatedDoc);
@@ -529,7 +590,7 @@ try {
   const unsafe = readJson(path.join(planJob, "state", "planning-inputs.json"));
   delete unsafe.beats[1].layout;
   writeJson(path.join(planJob, "state", "planning-inputs.json"), unsafe);
-  script("generate-plan.mjs", [planJob, "--write"]);
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
   fs.writeFileSync(path.join(planJob, "state", "planning-inputs.json"), settledInputs);
 
   // A beat only names what it decides; the fields it shares with its MG
@@ -564,19 +625,30 @@ try {
   for (const label of ["Palette", "字幕模式", "**字体**", "- **配色：**", "1. `TYPOGRAPHY`", "### caption MODE"]) {
     restated.documents.globalDirection = [`${label}：沿用设计系统`];
     writeJson(path.join(planJob, "state", "planning-inputs.json"), restated);
-    script("generate-plan.mjs", [planJob, "--write"]);
+    script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
   }
   restated.documents.globalDirection = ["字体随重点变化时，保持同一层级", "强调配色：只用于本拍结论"];
   writeJson(path.join(planJob, "state", "planning-inputs.json"), restated);
-  script("generate-plan.mjs", [planJob, "--write"]);
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
 
   // The public example is a complete input for this fixture, not a pseudo-schema.
+  writeJson(path.join(planJob, "state", "chatcut-main-timeline.json"), {
+    state: { id: "fixture-timeline", fps: 30, durationFrames: 180 },
+    transcript: {
+      coverage: { status: "complete", candidateItemCount: 2, coveredItemCount: 2, missingItemIds: [] },
+      entries: [
+        { itemId: "item-1", text: "今天我要演示", timelineRange: { fromFrame: 15, toFrame: 72 } },
+        { itemId: "item-2", text: "这个新工具很好用", timelineRange: { fromFrame: 90, toFrame: 162 } }
+      ]
+    }
+  });
   fs.copyFileSync(path.join(repositoryRoot, "templates", "planning-inputs.example.json"), path.join(planJob, "state", "planning-inputs.json"));
   script("generate-plan.mjs", [planJob, "--write"]);
   const exampleBeats = readJson(path.join(planJob, "state", "beat-map.json"));
   const generatedCaptionPlan = readJson(path.join(planJob, "captions", "caption-review-plan.json"));
-  assert.equal(generatedCaptionPlan.segmentationAuthority, "ChatCut source segment boundaries");
-  assert.deepEqual(generatedCaptionPlan.cues.map((cue) => cue.text), ["今天我要演示", "这个新工具很好用"]);
+  assert.equal(readJson(path.join(planJob, "captions", "chatcut-pages.json")).timelineVersion, "chatcut-timeline-fixture-timeline");
+  assert.equal(generatedCaptionPlan.segmentationAuthority, "agent-authored phrase cues within ChatCut main timeline entries");
+  assert.deepEqual(generatedCaptionPlan.cues.map((cue) => cue.text), ["今天我要", "演示", "这个新工具", "很好用"]);
   assert.equal(exampleBeats.beats[1].templateId, "annotation");
   assert.deepEqual(exampleBeats.beats[1].templateData.copy, ["演示见片尾"]);
   script("check-visual-plan.mjs", [path.join(planJob, "state/beat-map.json"), path.join(planJob, "state/transcript.json"), path.join(planJob, "state/design-system.json")]);
@@ -600,13 +672,15 @@ try {
   writeJson(reconciliationPath, originalReconciliation);
   writeJson(path.join(planJob, "state/timeline-source-windows.json"), { clips: [clip(3, 6, 0), clip(0, 3, 3)] });
   const reorderInputs = readJson(path.join(planJob, "state/planning-inputs.json"));
+  fs.rmSync(path.join(planJob, "state", "chatcut-main-timeline.json"), { force: true });
+  delete reorderInputs.captionCues;
   reorderInputs.cueLines = [
     { segmentId: "s2", fromWord: 1, toWord: 3 },
     { segmentId: "s1", fromWord: 1, toWord: 3 }
   ];
   reorderInputs.beats = [{ id: "reordered", sceneId: "one", sourceSegmentIds: ["s2", "s1"], text: "这个新工具很好用今天我要演示", start: 0, end: 6, intent: "重排" }];
   writeJson(path.join(planJob, "state/planning-inputs.json"), reorderInputs);
-  script("generate-plan.mjs", [planJob, "--write"]);
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
   const reorderedReconciliation = readJson(reconciliationPath);
   assert.deepEqual(reorderedReconciliation.items.map((item) => item.segmentId), ["s2", "s1"]);
   assert.deepEqual(reorderedReconciliation.referenceScript.itemOrder, ["r-s1", "r-s2"]);

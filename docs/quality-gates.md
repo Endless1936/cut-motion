@@ -8,7 +8,7 @@ Keep only checks that prevent an unusable or materially incorrect file:
 
 - The source and ChatCut project/timeline exist; explicit reference-script conflicts are handled against the recording.
 - The A-roll and final MP4 are readable, contain audio and video, and their stream start offsets differ by no more than `max(0.1s, 2/fps)`. Different stream end durations alone do not establish desynchronization.
-- Caption cues cover the locked transcript, preserve protected terms, use valid ordered timing, and install successfully. Caption width and natural Chinese phrase breaks are editorial guidance, not machine gates.
+- Caption cues cover the locked transcript, preserve protected terms, use valid ordered timing, and install successfully. Keep each caption line within 10 display units (Chinese 1, English about 3:1); this is a writing requirement, while natural phrase breaks remain editorial guidance. Neither is machine-gated.
 - The selected MG modules assemble and the HyperFrames composition builds successfully.
 - An explicit FFmpeg fallback keeps its trim-plan/media audit. Normal ChatCut edits do not run it.
 

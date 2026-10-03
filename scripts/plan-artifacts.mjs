@@ -9,6 +9,7 @@
  */
 import { sha256File } from "./workflow-utils.mjs";
 import { resolveComponent } from "./motion-template-library.mjs";
+import { normalizeCaptionText } from "./caption-review-utils.mjs";
 
 export const decimal = (value, places = 6) => Number(Number(value).toFixed(places));
 const pad3 = (value) => String(value).padStart(3, "0");
@@ -21,7 +22,6 @@ const stripPunctuation = (text) => {
   const closing = /[?？]$/u.test(text) ? text.slice(-1) : "";
   return `${text.replace(PUNCTUATION, "").replace(/\s+/gu, "")}${closing}`;
 };
-
 /** Ordered, non-overlapping source->timeline placement pairs for the locked cut. */
 const placementPairs = (sourceTranscript, timelineWindows, fps, corrections) => {
   const clips = [...timelineWindows.clips].sort((a, b) => a.timelineStartFrame - b.timelineStartFrame).map((clip) => ({
@@ -174,9 +174,17 @@ export const buildMainTimelineTranscript = ({ snapshot, fps, revision = 2, langu
       throw new Error(`ChatCut transcript preview page ${index + 1} has no recognized coverage result; save the complete preview response and retry plan generation`);
     }
   }
-  const itemIds = entries.map((entry) => entry.itemId).filter(Boolean);
-  if (itemIds.length === entries.length && new Set(itemIds).size !== itemIds.length) {
-    throw new Error("ChatCut preview repeats timeline item IDs; remove duplicate pages and save each page once in order");
+  const seenItemRanges = new Set();
+  for (const entry of entries) {
+    if (!entry.itemId) continue;
+    const range = entry.timelineRange ?? entry.range ?? {};
+    const fromFrame = range.fromFrame ?? range.startFrame;
+    const toFrame = range.toFrame ?? range.endFrame;
+    const key = `${entry.itemId}:${fromFrame}:${toFrame}`;
+    if (seenItemRanges.has(key)) {
+      throw new Error("ChatCut preview repeats the same timeline item range; remove duplicate pages and save each page once in order");
+    }
+    seenItemRanges.add(key);
   }
   const lastPage = pages.at(-1);
   const nextOffset = lastPage?.nextOffset ?? lastPage?.transcript?.nextOffset ?? lastPage?.transcript?.pagination?.nextOffset;
@@ -264,21 +272,22 @@ const DEFAULT_RULES = {
   exactlyOneLine: true,
   minimumDurationSeconds: 0.5,
   targetDurationSeconds: [0.8, 2.5],
-  targetDisplayUnits: [4, 10.5],
-  maximumDisplayUnits: 11.8,
+  targetDisplayUnits: [4, 10],
+  maximumDisplayUnits: 10,
   fitFontSizePx: [88, 96],
   noPunctuation: true
 };
 
 
 /**
- * Caption review plan. ChatCut segment boundaries are the default; explicit
- * agent-authored ranges override them for actual phrasing exceptions.
+ * Caption review plan. Existing word ranges remain supported; the approved
+ * main-timeline route can supply agent-authored phrase cues inside each item.
  */
 export const buildCaptionPlan = ({
   transcript,
   transcriptSha256,
   cueLines,
+  captionCues,
   timingAuthority = "state/transcript.json word ranges",
   segmentationAuthority: requestedSegmentationAuthority,
   lexicon = {},
@@ -286,6 +295,60 @@ export const buildCaptionPlan = ({
   exceptions = {},
   status = "proposed"
 }) => {
+  if (captionCues !== undefined) {
+    const segmentById = new Map(transcript.segments.map((segment) => [segment.id, segment]));
+    const segmentIndex = new Map(transcript.segments.map((segment, index) => [segment.id, index]));
+    const cues = captionCues.map((line, index) => {
+      const segment = segmentById.get(line.segmentId);
+      if (!segment) throw new Error(`caption cue ${index + 1} references an unknown segment ${line.segmentId}`);
+      if (typeof line.text !== "string" || !line.text.trim()) throw new Error(`caption cue ${index + 1} needs text`);
+      if (!Number.isFinite(line.start) || !Number.isFinite(line.end) || line.start < segment.start || line.end > segment.end || line.end <= line.start) {
+        throw new Error(`caption cue ${index + 1} time range must stay within ${line.segmentId}`);
+      }
+      return {
+        id: `caption-${String(index + 1).padStart(4, "0")}`,
+        text: stripPunctuation(line.text),
+        segmentId: line.segmentId,
+        start: decimal(line.start),
+        end: decimal(line.end),
+        ...(line.fitFontSizePx === undefined ? {} : { fitFontSizePx: line.fitFontSizePx })
+      };
+    });
+    if (cues.length === 0) throw new Error("caption plan requires at least one caption cue");
+    let previousSegment = -1;
+    let previousEnd = -Infinity;
+    for (const cue of cues) {
+      const currentSegment = segmentIndex.get(cue.segmentId);
+      if (currentSegment < previousSegment || cue.start < previousEnd) {
+        throw new Error("caption cues must follow the transcript and timeline order");
+      }
+      previousSegment = currentSegment;
+      previousEnd = cue.end;
+    }
+    for (const segment of transcript.segments) {
+      const segmentText = cues.filter((cue) => cue.segmentId === segment.id).map((cue) => cue.text).join("");
+      if (normalizeCaptionText(segmentText) !== normalizeCaptionText(segment.text)) {
+        throw new Error(`caption cues do not preserve the full text of ${segment.id}`);
+      }
+    }
+    return {
+      schemaVersion: "1.0.0",
+      status,
+      wordingAuthority: "state/transcript.json",
+      transcriptRevision: transcript.revision ?? 1,
+      transcriptSha256,
+      timingAuthority,
+      segmentationAuthority: requestedSegmentationAuthority ?? "agent-authored phrase cues within ChatCut main timeline entries",
+      rules: {
+        ...DEFAULT_RULES,
+        ...rules,
+        protectedTerms: lexicon.protectedTerms ?? [],
+        forbiddenStandaloneCues: lexicon.forbiddenStandaloneCues ?? []
+      },
+      exceptions,
+      cues
+    };
+  }
   const segmentationIsDefault = cueLines === undefined;
   const effectiveCueLines = segmentationIsDefault
     ? transcript.segments.filter((segment) => segment.words?.length).map((segment) => ({

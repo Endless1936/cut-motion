@@ -1,6 +1,6 @@
 # Subtitle Segmentation Standard
 
-Use the approved ChatCut main-timeline transcript entries and their frame ranges for the routine caption plan. Keep those item boundaries as cues; do not run a character-count or automatic Chinese sentence splitter, and do not fetch source-word timestamps to reconstruct the Script. Exact within-phrase timing changes belong to revisions requested after the user reviews the final video. This guide adds no review or approval gate.
+Use the approved ChatCut main-timeline transcript entries as the source for caption wording. Manually split long entries into natural Chinese phrases and write `captionCues` in `state/planning-inputs.json`; each item has `segmentId`, `text`, `start` and `end` in seconds, with its time range inside the parent entry. Keep each rendered line to at most 10 display units: count each Chinese character as 1 and each 3 English characters as about 1. This is a writing rule, not an automated splitter or a new review gate.
 
 ## Authority
 
@@ -35,11 +35,11 @@ Never cut raw text at a character limit before the language pass.
 
 - Prefer not to isolate a particle, conjunction, or other function word; avoid one-character cues where a natural phrase can be kept together.
 - Prefer cues around 0.8–2.5 seconds. Use shorter or longer cues when the spoken phrase and timing read naturally.
-- Target 4–10.5 measured display units. Fit a longer phrase to one line when needed; do not shrink the whole track to solve one cue.
+- Keep every line at or below 10 display units. Split a longer entry at natural phrase boundaries; do not shrink the whole track to solve one cue.
 - A short closing phrase may stand alone when it reads naturally; no exception record is required.
 
-For user-edited segmentation, rebind word anchors to the new text before filling blank timestamps; missing/null/blank means align, not zero. Keep counting, punctuation, version notation, and official-name exceptions in the job rather than silently normalizing them away. See [Editorial revisions](revision-standard.md#captions-and-small-text-revisions) for size changes and targeted checks.
+Keep the cue wording complete and in the approved transcript order. Keep manually authored cue times inside their parent main-timeline entry. Preserve counting, punctuation, version notation, and official-name exceptions in the job rather than silently normalizing them away. See [Editorial revisions](revision-standard.md#captions-and-small-text-revisions) for requested caption revisions.
 
 ## Workflow
 
-Use the approved main-timeline preview as wording and timing authority for a standard ChatCut plan. Keep names, product configurations, number-unit pairs and fixed phrases in the caption lexicon. The generator creates one cue per returned timeline-item transcript entry; this count is not expected to equal the ChatCut Script row count. Do not run `--outline`, fetch per-word timestamps, or repeat a full cue-by-cue audit during routine delivery. `compose-job.mjs` installs the generated plan without a separate user approval.
+Use the approved main-timeline preview as the wording and parent timing authority for a standard ChatCut plan. Keep names, product configurations, number-unit pairs and fixed phrases in the caption lexicon. Author the phrase-level cues once through the existing plan input, then generate the three plans together. Use additional word-level timing only when final-video feedback requests a specific within-phrase adjustment. `compose-job.mjs` installs the generated plan after the existing plan-package approval.
