@@ -1,13 +1,7 @@
 {
   "schemaVersion": "1.0.0",
-  "captionMode": "subtitles",
   "timelineId": "replace-with-locked-timeline-id",
-  "cleanExport": { "captionRenderDisabled": false },
   "lexicon": { "protectedTerms": ["新工具"], "forbiddenStandaloneCues": [] },
-  "cueLines": [
-    { "segmentId": "s1", "fromWord": 1, "toWord": 3 },
-    { "segmentId": "s2", "fromWord": 1, "toWord": 3 }
-  ],
   "beats": [
     {
       "id": "b01-claim", "sceneId": "hook", "sourceSegmentIds": ["s1"],

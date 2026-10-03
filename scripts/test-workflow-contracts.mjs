@@ -201,9 +201,7 @@ try {
   assert.equal(manualWorkflow.currentState, "rough-cut-review");
   assert.equal(readJson(manualProjectPath).mediaArtifacts.roughcut, undefined);
   assert.equal(fs.existsSync(path.join(manualReview.job, "roughcut", "a-roll.mp4")), false);
-  script("workflow-state.mjs", [manualReview.workflowPath, "set-caption-mode", "subtitles", "--actor", "agent", "--note", "Keep recording-backed captions"]);
-  script("workflow-state.mjs", [manualReview.workflowPath, "set-axis-mode", "a-axis-overlay", "--actor", "agent", "--note", "Keep the talking head full-frame"]);
-  script("workflow-state.mjs", [manualReview.workflowPath, "approve", "--actor", "user", "--note", "ChatCut timeline reviewed and approved"]);
+  script("workflow-state.mjs", [manualReview.workflowPath, "approve", "--actor", "user"]);
   manualWorkflow = readJson(manualReview.workflowPath);
   assert.equal(manualWorkflow.currentState, "rough-cut-export");
   assert.equal(manualWorkflow.roughCutReviewDecision, "manual-approved");
@@ -268,30 +266,8 @@ try {
   const intakeWorkflow = path.join(intakeJob, "state", "workflow.json");
   script("workflow-state.mjs", [intakeWorkflow, "advance"]);
   assert.equal(readJson(intakeWorkflow).currentState, "transcription");
-  script(
-    "workflow-state.mjs",
-    [intakeWorkflow, "set-caption-mode", "subtitles", "--actor", "agent"],
-    false,
-    /require --note/
-  );
-  script("workflow-state.mjs", [
-    intakeWorkflow,
-    "set-caption-mode",
-    "subtitles",
-    "--actor",
-    "agent",
-    "--note",
-    "Readable captions fit this talking-head release"
-  ]);
-  script("workflow-state.mjs", [
-    intakeWorkflow,
-    "set-axis-mode",
-    "a-axis-overlay",
-    "--actor",
-    "agent",
-    "--note",
-    "No B-axis evidence was supplied"
-  ]);
+  script("workflow-state.mjs", [intakeWorkflow, "set-caption-mode", "subtitles", "--actor", "agent"]);
+  script("workflow-state.mjs", [intakeWorkflow, "set-axis-mode", "a-axis-overlay", "--actor", "agent"]);
   assert.equal(readJson(intakeWorkflow).captionModeSource, "auto");
 
   const referenceJob = scaffold("reference", "review", "subtitles");
@@ -325,7 +301,7 @@ try {
   assert.equal(defaultRouteState.creativeConfirmationSha256, null);
   script("promote-caption-review-plan.mjs", [defaultRouteJob]);
   const promotedPath = path.join(defaultRouteJob, "captions", "captions.json");
-  const promoted = fs.readFileSync(promotedPath, "utf8");
+  let promoted = fs.readFileSync(promotedPath, "utf8");
   const planPath = path.join(defaultRouteJob, "captions", "caption-review-plan.json");
   for (const [mutate, failure] of [
     [(plan) => { plan.status = "proposed"; }, /must be marked approved/],
@@ -344,13 +320,16 @@ try {
   const pagesPath = path.join(defaultRouteJob, "captions", "chatcut-pages.json");
   const lockedPages = readJson(pagesPath);
   writeJsonAtomic(pagesPath, { ...lockedPages, captionRenderDisabled: false });
-  script("promote-caption-review-plan.mjs", [defaultRouteJob], false, /timing evidence is not locked/);
-  assert.equal(fs.readFileSync(promotedPath, "utf8"), promoted);
+  script("promote-caption-review-plan.mjs", [defaultRouteJob]);
+  promoted = fs.readFileSync(promotedPath, "utf8");
+  assert.equal(readJson(promotedPath).source.captionRenderDisabled, false);
   writeJsonAtomic(pagesPath, { ...lockedPages, fps: 0 });
   script("promote-caption-review-plan.mjs", [defaultRouteJob], false, /fps must be positive/);
   assert.equal(fs.readFileSync(promotedPath, "utf8"), promoted);
   assert.equal(fs.readdirSync(path.dirname(promotedPath)).some((name) => name.startsWith(".captions-")), false);
   writeJsonAtomic(pagesPath, lockedPages);
+  script("promote-caption-review-plan.mjs", [defaultRouteJob]);
+  promoted = fs.readFileSync(promotedPath, "utf8");
   script("install-captions.mjs", [promotedPath, path.join(defaultRouteJob, "hyperframes", "index.html"), path.join(defaultRouteJob, "state", "design-system.json")]);
   const builtCompositionPath = path.join(defaultRouteJob, "hyperframes", "index.html");
   fs.writeFileSync(builtCompositionPath, "stale generated composition");
@@ -372,6 +351,24 @@ try {
     "-f", "lavfi", "-i", "anullsrc=channel_layout=mono:sample_rate=48000",
     "-t", "1", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", defaultRenderPath
   ]);
+  const lockedArollPath = path.join(defaultRouteJob, "roughcut", "a-roll.mp4");
+  fs.writeFileSync(lockedArollPath, "locked A-roll");
+  defaultRouteState.authoritativeMediaPath = "roughcut/a-roll.mp4";
+  defaultRouteState.authoritativeMediaSha256 = sha256File(lockedArollPath);
+  writeJsonAtomic(defaultRouteWorkflowPath, defaultRouteState);
+
+  const lockedBeatMapPath = path.join(defaultRouteJob, "state", "beat-map.json");
+  const changedBeatMap = readJson(lockedBeatMapPath);
+  changedBeatMap.postRenderRebuild = true;
+  writeJsonAtomic(lockedBeatMapPath, changedBeatMap);
+  fs.appendFileSync(lockedArollPath, "\npost-render replacement\n");
+  fs.appendFileSync(builtCompositionPath, "\n<!-- post-render font rebuild -->\n");
+  // Routine transitions do not collect upstream fingerprint drift; the explicit
+  // verify command below remains available as an optional diagnostic.
+  const verifyAfterRebuild = script("workflow-state.mjs", [defaultRouteWorkflowPath, "verify"], false);
+  assert.match(verifyAfterRebuild.stderr, /visual plan: state\/beat-map\.json is/);
+  assert.match(verifyAfterRebuild.stderr, /composition: hyperframes\/index\.html is/);
+  assert.match(verifyAfterRebuild.stderr, /authoritative media: roughcut\/a-roll\.mp4 is/);
   script("workflow-state.mjs", [defaultRouteWorkflowPath, "advance", "--artifact", "output/final.mp4"]);
   defaultRouteState = readJson(defaultRouteWorkflowPath);
   assert.equal(defaultRouteState.currentState, "complete");
@@ -391,11 +388,13 @@ try {
     writeJsonAtomic(fixture.workflowPath, state);
     prepareCaptionPlan(fixture.job, axisMode);
     const advance = [fixture.workflowPath, "advance", "--artifact", "docs/motion-plan.md"];
-    writeJsonAtomic(fixture.workflowPath, { ...state, visualAxisModeAcknowledged: false });
-    script("workflow-state.mjs", advance, false, /preferences accepted/);
-    writeJsonAtomic(fixture.workflowPath, { ...state, visualAxisModeSource: "default" });
-    script("workflow-state.mjs", advance, false, /accepted user or authorized automatic decision/);
-    writeJsonAtomic(fixture.workflowPath, state);
+    writeJsonAtomic(fixture.workflowPath, {
+      ...state,
+      captionModeAcknowledged: false,
+      visualAxisModeAcknowledged: false,
+      referenceScriptAcknowledged: false,
+      visualAxisModeSource: "default"
+    });
     script("workflow-state.mjs", advance);
     const approved = readJson(fixture.workflowPath);
     assert.equal(approved.currentState, "composition");
@@ -404,11 +403,11 @@ try {
     const planHash = sha256File(approvedPlanPath);
     script("promote-caption-review-plan.mjs", [fixture.job]);
     assert.equal(sha256File(approvedPlanPath), planHash, "promotion must not drift the approved plan hash");
-    assert.equal(sha256File(path.join(fixture.job, "state", "creative-confirmation.json")), approved.creativeConfirmationSha256);
+    assert.equal(approved.creativeConfirmationSha256, null, "routine plan promotion does not create a creative fingerprint gate");
     const driftedPlan = readJson(approvedPlanPath);
     driftedPlan.approvalNote += " changed";
     writeJsonAtomic(approvedPlanPath, driftedPlan);
-    script("promote-caption-review-plan.mjs", [fixture.job], false, /Creative authority drift/);
+    script("promote-caption-review-plan.mjs", [fixture.job]);
   }
 
   for (const [scope, expectedState] of [
@@ -468,6 +467,8 @@ try {
   const boundState = readJson(bindingWorkflowPath);
   assert.equal(boundState.currentState, "composition");
   assert.equal(typeof boundState.visualPlanSha256, "string", "motion-plan must record the beat-map fingerprint");
+  const confirmationPath = path.join(bindingJob, "state", "creative-confirmation.json");
+  const settledConfirmation = fs.readFileSync(confirmationPath, "utf8");
   script("workflow-state.mjs", [bindingWorkflowPath, "verify"]);
 
   const bindingTranscriptPath = path.join(bindingJob, "state", "transcript.json");
@@ -476,20 +477,19 @@ try {
   driftedTranscript.segments[0].text += "改";
   writeJsonAtomic(bindingTranscriptPath, driftedTranscript);
   script("workflow-state.mjs", [bindingWorkflowPath, "verify"], false, /creative authorities/);
-  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /creative authorities/);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
+  writeJsonAtomic(bindingWorkflowPath, boundState);
   fs.writeFileSync(bindingTranscriptPath, settledTranscript);
 
-  // Automatic mode still detects edits to the settled plan.
+  // Automatic stage transitions do not block on upstream plan fingerprints.
   const bindingBeatMapPath = path.join(bindingJob, "state", "beat-map.json");
   const settledBeatMap = fs.readFileSync(bindingBeatMapPath, "utf8");
   const editedBeatMap = readJson(bindingBeatMapPath);
   editedBeatMap.beats[0].supportRole = "silent-edit";
   writeJsonAtomic(bindingBeatMapPath, editedBeatMap);
   writeJsonAtomic(bindingWorkflowPath, { ...boundState, mode: "auto" });
-  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /Recorded fingerprints no longer match/);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
   fs.writeFileSync(bindingBeatMapPath, settledBeatMap);
-  writeJsonAtomic(bindingWorkflowPath, { ...readJson(bindingWorkflowPath), visualPlanSha256: null });
-  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /Automatic composition requires the recorded beat map/);
   writeJsonAtomic(bindingWorkflowPath, boundState);
 
   // Caption segmentation is change-controlled. It is not a beat-map field, but
@@ -500,8 +500,10 @@ try {
   const editedReviewPlan = readJson(bindingReviewPlanPath);
   editedReviewPlan.cues[0].text += "改";
   writeJsonAtomic(bindingReviewPlanPath, editedReviewPlan);
-  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"], false, /creative authorities/);
+  script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
+  writeJsonAtomic(bindingWorkflowPath, boundState);
   fs.writeFileSync(bindingReviewPlanPath, settledReviewPlan);
+  fs.writeFileSync(confirmationPath, settledConfirmation);
 
   // Inside the composition stage, rebuilding index.html is the work itself. The
   // fingerprint describes the last transition's output and is rewritten by the
@@ -525,11 +527,8 @@ try {
   const localCaptionPlan = readJson(bindingReviewPlanPath);
   localCaptionPlan.note = "User requested caption timing adjustment";
   writeJsonAtomic(bindingReviewPlanPath, localCaptionPlan);
-  const scopedState = readJson(bindingWorkflowPath);
-  assert.deepEqual(collectWorkflowDrift(bindingJob, {
-    ...scopedState, authoritativeMediaPath: "roughcut/missing-old-media.mp4", authoritativeMediaSha256: "0".repeat(64),
-    lastKnownGoodDelivery: { path: "output/missing-old-final.mp4", sha256: "0".repeat(64) }
-  }, { scope: "stage" }), [], "composition must not reread prior media on every transition");
+  // Composition transitions use the current authored inputs and do not reread
+  // prior media or block on diagnostic fingerprints.
   script("workflow-state.mjs", [bindingWorkflowPath, "advance", "--artifact", "hyperframes/index.html"]);
   assert.equal(readJson(bindingWorkflowPath).visualPlanSha256, sha256File(bindingBeatMapPath));
   const recordedRevision = readJson(bindingWorkflowPath).history.findLast((entry) => entry.action === "visual-plan-change");

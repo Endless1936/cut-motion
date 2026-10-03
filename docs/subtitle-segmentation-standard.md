@@ -1,6 +1,6 @@
 # Subtitle Segmentation Standard
 
-This standard is binding for `captionMode: subtitles`. Its purpose is natural one-line reading, not maximum cue count or fixed character packing.
+Use the generator's default caption segmentation. This standard is for correcting a specific visibly awkward cue, not for manually resegmenting the whole track. Structural and timing checks remain enforced; reading-quality targets are guidance, not extra workflow gates.
 
 ## Authority
 
@@ -23,27 +23,23 @@ Apply these decisions in order:
 
 Never cut raw text at a character limit before the language pass.
 
-## Blocking rules
+## Structural invariants
 
 - Exactly one rendered line per cue.
 - Cues are mutually exclusive half-open integer frame windows; touching endpoints are valid, crossfades between cues are not. Installation/build must enforce this even when an optional audit is skipped.
 - A protected term, product name, number-plus-unit, or fixed phrase cannot cross cues.
-- A particle, conjunction, or other function word cannot stand alone. One-character cues are forbidden.
-- Do not leave `的`, `了`, `着`, `过`, `啊`, `吧`, `吗`, `呢`, `与`, `和`, `但`, `所以`, `因为`, or `而` as an isolated cue.
-- Cue duration is at least 0.5 seconds; normally target 0.8–2.5 seconds.
-- Target 4–10.5 measured display units. Allow at most 11.8 units with a documented 88–96px cue-level fit; do not shrink the whole track to solve one phrase.
-- A meaningful short closing phrase may be accepted only with an explicit exception reason.
 - The concatenated cue text must reproduce the approved transcript after punctuation and spacing normalization.
 - Approved cue boundaries cannot change during composition.
 
+## Reading-quality guidance
+
+- Prefer not to isolate a particle, conjunction, or other function word; avoid one-character cues where a natural phrase can be kept together.
+- Prefer cues around 0.8–2.5 seconds. Use shorter or longer cues when the spoken phrase and timing read naturally.
+- Target 4–10.5 measured display units. Fit a longer phrase to one line when needed; do not shrink the whole track to solve one cue.
+- A short closing phrase may stand alone when it reads naturally; no exception record is required.
+
 For user-edited segmentation, rebind word anchors to the new text before filling blank timestamps; missing/null/blank means align, not zero. Keep counting, punctuation, version notation, and official-name exceptions in the job rather than silently normalizing them away. See [Editorial revisions](revision-standard.md#captions-and-small-text-revisions) for size changes and targeted checks.
 
-## Review workflow
+## Workflow
 
-1. Use `state/transcript.json` as authority; `captions/reference-transcript.txt` may exist only as a derived human-readable snapshot.
-2. Record names, product configurations, number-unit pairs, and fixed phrases in `captions/caption-lexicon.json`.
-3. Author each semantic cue once in `state/planning-inputs.json` as a `cueLines` range (`segmentId`, `fromWord`, `toWord`) using the generated planning outline. `generate-plan.mjs` derives the text and anchored caption review plan. Code must not choose or optimize cue boundaries.
-4. Use `scripts/check-caption-review-plan.mjs` for early feedback when useful; the caption promotion step performs the release check itself.
-5. Present every cue in `docs/caption-plan.md` when creative review is triggered.
-6. The generator marks settled cues `approved` by default; use `captionStatus: proposed` only for an unfinished draft. This is Agent readiness, not another user approval.
-7. Run `node scripts/compose-job.mjs <job>` to promote and install that exact plan with the planned MG templates. Promotion checks the semantic plan and generated cues. Do not repaginate during composition.
+Use `state/transcript.json` as wording authority. Keep names, product configurations, number-unit pairs and fixed phrases in the caption lexicon. Let generated segmentation stand by default; add a `cueLines` override only for a specific cue that is clearly awkward or a user-requested change. Do not inspect or rewrite every cue, run `--outline`, or run standalone validators during routine delivery. `compose-job.mjs` checks transcript coverage, protected terms, timing and installation. It promotes the generated plan without a separate user approval.

@@ -1,9 +1,6 @@
-# Motion Plan
+# 分镜与 MG 方案
 
-> The user-facing review artifact is `docs/creative-confirmation.md`. This document remains the complete beat-by-beat source of truth.
-
-| Time / spoken anchors | Audio phrase | Axis | Main flow | Visual reference | Visual treatment / MG Template ID (`custom` + reason when needed) | Beat ID | Transition |
-| --- | --- | --- | --- | --- | --- | --- | --- |
+> 本文只列需要制作的 MG 节点；字幕全文见 `docs/caption-plan.md`。
 
 ## Global direction
 
@@ -13,8 +10,12 @@
 - A/B-axis strategy:
 - Finale strategy:
 
-## Review decision
+## MG 节点
 
-- Recommended option:
-- User decision:
-- Revision notes:
+### [Beat ID] · [节点]
+
+- 模板：
+- 上屏原文：
+- 对应字幕与口播锚点：
+- 用途与动画样式：
+- 布局与遮脸判断：

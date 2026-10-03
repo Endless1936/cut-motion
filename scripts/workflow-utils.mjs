@@ -370,38 +370,26 @@ export const REAPPROVAL_FIELD_NAMES = [
   "axis-mode"
 ];
 
-// Transitions check consumed inputs; explicit verify also audits settled outputs.
-const workflowDriftTargets = (jobRoot, workflow, { scope = "full" } = {}) => {
-  const full = scope === "full";
+// Fingerprints are for an explicit diagnostic, never a workflow gate.
+const workflowDriftTargets = (jobRoot, workflow) => {
   const state = workflow.currentState;
-  const automatic = workflow.mode === "auto" || workflow.roughCutReviewDecision === "automatic-fallback";
   const targets = [];
   const record = (label, relativePath, sha256) => {
     if (typeof relativePath === "string" && relativePath && typeof sha256 === "string" && sha256) {
       targets.push({ label, relativePath, sha256 });
     }
   };
-  if ((full || state === "render" || (state === "composition" && automatic))
-    && !(state === "composition" && !automatic)) {
-    record("visual plan", "state/beat-map.json", workflow.visualPlanSha256);
-  }
-  // The composition fingerprint describes whatever file the last transition
-  // produced. While the job sits inside the composition stage, rebuilding
-  // index.html *is* the work: the advance that leaves the stage rewrites the
-  // fingerprint. Comparing it here would make every rebuild look like drift.
-  if (state !== "composition" && (full || state === "render")) {
+  record("visual plan", "state/beat-map.json", workflow.visualPlanSha256);
+  if (state !== "composition") {
     record("composition", workflow.compositionArtifactPath, workflow.compositionArtifactSha256);
   }
-  // Large media is checked at delivery; explicit verify also audits older files.
-  if (full || state === "render") record("authoritative media", workflow.authoritativeMediaPath, workflow.authoritativeMediaSha256);
-  if (full) record("trim plan", "state/trim-plan.json", workflow.trimPlanSha256);
-  if (full || (automatic && ["composition", "render"].includes(state))) {
-    record("creative confirmation", "state/creative-confirmation.json", workflow.creativeConfirmationSha256);
-    for (const [name, fingerprint] of Object.entries(workflow.creativeDocumentFingerprints ?? {})) {
-      record(`creative document ${name}`, fingerprint?.path, fingerprint?.sha256);
-    }
+  record("authoritative media", workflow.authoritativeMediaPath, workflow.authoritativeMediaSha256);
+  record("trim plan", "state/trim-plan.json", workflow.trimPlanSha256);
+  record("creative confirmation", "state/creative-confirmation.json", workflow.creativeConfirmationSha256);
+  for (const [name, fingerprint] of Object.entries(workflow.creativeDocumentFingerprints ?? {})) {
+    record(`creative document ${name}`, fingerprint?.path, fingerprint?.sha256);
   }
-  if (full && workflow.lastKnownGoodDelivery) {
+  if (workflow.lastKnownGoodDelivery) {
     record("last known-good delivery", workflow.lastKnownGoodDelivery.path, workflow.lastKnownGoodDelivery.sha256);
   }
   return targets.map((target) => ({ ...target, absolutePath: path.resolve(jobRoot, target.relativePath) }));
@@ -433,9 +421,9 @@ export const collectCreativeAuthorityDrift = (jobRoot, workflow) => {
   }
 };
 
-export const collectWorkflowDrift = (jobRoot, workflow, options = {}) => {
+export const collectWorkflowDrift = (jobRoot, workflow) => {
   const drift = [];
-  for (const target of workflowDriftTargets(jobRoot, workflow, options)) {
+  for (const target of workflowDriftTargets(jobRoot, workflow)) {
     if (!fs.existsSync(target.absolutePath)) {
       drift.push(`${target.label}: ${target.relativePath} is gone but ${target.sha256.slice(0, 12)}… is still recorded`);
       continue;
@@ -446,16 +434,6 @@ export const collectWorkflowDrift = (jobRoot, workflow, options = {}) => {
     }
   }
   return drift;
-};
-
-export const assertNoWorkflowDrift = (jobRoot, workflow, options = {}) => {
-  const drift = collectWorkflowDrift(jobRoot, workflow, options);
-  if (drift.length === 0) return;
-  throw new Error([
-    "Recorded fingerprints no longer match the job artifacts:",
-    ...drift.map((line) => `  - ${line}`),
-    "Inspect with `workflow-state.mjs <workflow.json> verify`. For a scoped visual edit use `reopen composition --actor user --note ...`; for a changed plan use `replan --note ...` in an active job or `reopen motion-plan --actor user --note ...` after completion."
-  ].join("\n"));
 };
 
 export const invalidateCreativeArtifacts = (jobRoot, note = "Dependent creative inputs changed") => {

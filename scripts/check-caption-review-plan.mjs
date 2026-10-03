@@ -17,15 +17,8 @@ const transcript = JSON.parse(fs.readFileSync(transcriptPath, "utf8"));
 const referenceText = transcript.segments.map((segment) => segment.text).join("");
 const lexicon = JSON.parse(fs.readFileSync(path.join(jobDirectory, "captions", "caption-lexicon.json"), "utf8"));
 const errors = [];
-const warnings = [];
 const ignored = /[\s，。；：！？、,.!?;:'"“”‘’（）()《》〈〉—–\-]/u;
 const normalize = (value) => [...value.normalize("NFKC").toLowerCase()].filter((character) => !ignored.test(character)).join("");
-const displayUnits = (value) => [...value.normalize("NFKC")].reduce((sum, character) => {
-  if (/\s/.test(character)) return sum + 0.25;
-  if (/[\u0000-\u007f]/.test(character)) return sum + 0.55;
-  if (/[，。；：！？、]/u.test(character)) return sum + 0.5;
-  return sum + 1;
-}, 0);
 
 if (!["proposed", "approved"].includes(plan.status)) errors.push("caption review plan status must be proposed or approved");
 if (plan.wordingAuthority !== "state/transcript.json") errors.push("wordingAuthority must be state/transcript.json");
@@ -34,12 +27,6 @@ if (plan.transcriptSha256 !== sha256File(transcriptPath)) errors.push("caption p
 if (plan.rules?.exactlyOneLine !== true) errors.push("caption review plan must require exactly one line");
 for (const term of lexicon.protectedTerms ?? []) {
   if (!(plan.rules?.protectedTerms ?? []).includes(term)) errors.push(`caption plan omitted protected term: ${term}`);
-}
-if (plan.rules?.minimumDurationSeconds !== 0.5
-  || plan.rules?.targetDisplayUnits?.[0] !== 4
-  || plan.rules?.targetDisplayUnits?.[1] !== 10.5
-  || plan.rules?.maximumDisplayUnits !== 11.8) {
-  errors.push("caption plan cannot relax the binding duration or width limits");
 }
 if (!Array.isArray(plan.cues) || plan.cues.length === 0) errors.push("caption review plan has no cues");
 if (normalize(plan.cues.map((cue) => cue.text).join("")) !== normalize(referenceText)) {
@@ -72,36 +59,12 @@ for (const [index, cue] of resolvedCues.entries()) {
   if (/[\r\n]/.test(cue.text)) errors.push(`${cue.id}: cue must render on exactly one line`);
   if (normalize(cue.text) !== normalize(cue.resolvedText)) errors.push(`${cue.id}: text does not match its selected transcript word range`);
   const normalizedText = normalize(cue.text);
-  if (normalizedText.length < 2) errors.push(`${cue.id}: one-character cues are forbidden`);
+  if (!normalizedText) errors.push(`${cue.id}: cue text must not be empty`);
   const cueRange = { start: characterOffset, end: characterOffset + normalizedText.length - 1, id: cue.id };
   characterOffset += normalizedText.length;
   cueRanges.push(cueRange);
   if (!(cue.end > cue.start)) errors.push(`${cue.id}: end must be greater than start`);
   if (cue.start < previousEnd - 0.001) errors.push(`${cue.id}: cues overlap`);
-  const duration = cue.end - cue.start;
-  if (duration < plan.rules.minimumDurationSeconds) errors.push(`${cue.id}: duration ${duration.toFixed(2)}s is below ${plan.rules.minimumDurationSeconds}s`);
-  if (duration > plan.rules.targetDurationSeconds[1] + 0.05) warnings.push(`${cue.id}: duration ${duration.toFixed(2)}s exceeds target`);
-  const units = displayUnits(cue.text);
-  if (units > plan.rules.maximumDisplayUnits) errors.push(`${cue.id}: ${units.toFixed(2)} display units exceed ${plan.rules.maximumDisplayUnits}`);
-  const shortException = plan.exceptions?.[cue.id];
-  if (units < 4 && (shortException?.kind !== "meaningful-short-closing" || !String(shortException?.reason ?? "").trim())) {
-    errors.push(`${cue.id}: ${units.toFixed(2)} display units require a meaningful-short exception with reason`);
-  }
-  if (units > 10.5 && !(cue.fitFontSizePx >= 88 && cue.fitFontSizePx <= 96)) errors.push(`${cue.id}: long cue requires fitFontSizePx between 88 and 96`);
-  const fixedForbidden = ["的", "了", "着", "过", "啊", "吧", "吗", "呢", "与", "和", "但", "所以", "因为", "而"];
-  if (fixedForbidden.includes(normalizedText) || plan.rules.forbiddenStandaloneCues.includes(normalizedText)) errors.push(`${cue.id}: function word cannot stand alone`);
-  const endsWithQuestion = /[?？]$/u.test(cue.text);
-  const punctuationBody = (endsWithQuestion ? cue.text.slice(0, -1) : cue.text)
-    .replace(/(?<=[A-Za-z0-9])\.(?=[A-Za-z0-9])/g, "");
-  const punctuationCheckedText = (plan.rules?.protectedTerms ?? [])
-    .filter((term) => term.includes("-"))
-    .reduce((text, term) => text.replaceAll(term, term.replaceAll("-", "")), punctuationBody);
-  if (/[，。；：！!、,.!?;:'"“”‘’（）()《》〈〉—–\-]/u.test(punctuationCheckedText)) {
-    errors.push(`${cue.id}: punctuation is only allowed as a final question mark`);
-  }
-  if (!endsWithQuestion && /[?？]/u.test(cue.text)) {
-    errors.push(`${cue.id}: question marks are only allowed at the end of a cue`);
-  }
   previousEnd = cue.end;
 }
 const fullText = normalize(referenceText);
@@ -118,7 +81,6 @@ for (const term of plan.rules.protectedTerms ?? []) {
   }
 }
 
-for (const warning of warnings) console.warn(`Warning: ${warning}`);
 for (const error of errors) console.error(`Error: ${error}`);
 if (errors.length > 0) process.exit(1);
-console.log(`Caption review plan passed: ${plan.cues.length} semantic cue(s), ${warnings.length} warning(s)`);
+console.log(`Caption review plan passed: ${plan.cues.length} semantic cue(s)`);

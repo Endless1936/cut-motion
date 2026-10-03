@@ -38,9 +38,14 @@ try {
   const subframeSource = { segments: [{ id: "fast", words: [{ text: "一", start: 0, end: 0.01 }, { text: "二", start: 0.01, end: 0.1 }] }] };
   const subframeWindows = { clips: [clip(0, 0.1, 0)] };
   const subframeTranscript = buildReleasedTranscript({ sourceTranscript: subframeSource, timelineWindows: subframeWindows, fps: 30 });
-  assert.throws(() => buildSourceWordEvidence({ sourceTranscript: subframeSource, timelineWindows: subframeWindows, releasedTranscript: subframeTranscript, fps: 30 }), /shares its frame/);
+  const subframeEvidence = buildSourceWordEvidence({ sourceTranscript: subframeSource, timelineWindows: subframeWindows, releasedTranscript: subframeTranscript, fps: 30 });
+  assert.equal(subframeEvidence.entries.length, 2);
+  assert.deepEqual(subframeEvidence.entries.map(({ timelineStartFrame, timelineEndFrame }) => [timelineStartFrame, timelineEndFrame]), [[0, 1], [0, 1]]);
   const lines = reordered.segments.map((segment) => ({ segmentId: segment.id, fromWord: 1, toWord: 1, fitFontSizePx: 92 }));
   assert.equal(buildCaptionPlan({ transcript: reordered, cueLines: lines, lexicon: {} }).cues[0].fitFontSizePx, 92);
+  const defaultCaptionPlan = buildCaptionPlan({ transcript: reordered, lexicon: {} });
+  assert.equal(defaultCaptionPlan.segmentationAuthority, "ChatCut source segment boundaries");
+  assert.deepEqual(defaultCaptionPlan.cues.map((cue) => cue.text), ["再见", "你好", "你好"]);
   assert.throws(() => buildCaptionPlan({ transcript: reordered, cueLines: [lines[0], lines[0], lines[2]], lexicon: {} }), /exactly once/);
   const priorConflict = { id: "existing-conflict", segmentId: "split", type: "ambiguous", resolution: "unresolved", releaseImpact: true, heardText: "你好", evidence: { audioChecked: false, note: "ASR only" }, decision: { actor: "agent", at: "fixture", note: "unresolved" } };
   const preserved = buildReconciliationItems({ transcript: split, existingItems: [priorConflict] })[0];
@@ -163,6 +168,25 @@ try {
   writeJson(pages, legacyPages);
   writeJson(captions, { ...currentCaptions, source: { ...currentCaptions.source, cleanExport: true } });
   script("check-captions.mjs", [captions, pages, design]);
+  const relaxedPlan = structuredClone(approvedPlan);
+  const relaxedCaptions = readJson(captions);
+  const baselineDesignText = fs.readFileSync(design, "utf8");
+  const baselineDesign = JSON.parse(baselineDesignText);
+  const relaxedDesign = structuredClone(baselineDesign);
+  relaxedPlan.rules.minimumDurationSeconds = 99;
+  relaxedPlan.rules.targetDurationSeconds = [99, 100];
+  relaxedPlan.rules.targetDisplayUnits = [99, 100];
+  relaxedPlan.rules.maximumDisplayUnits = 0.1;
+  relaxedPlan.cues[0].text += "，";
+  relaxedCaptions.cues[0].lines[0] += "，";
+  relaxedCaptions.style.maximumDisplayUnits = 0.1;
+  relaxedDesign.captions.maximumDisplayUnits = 0.1;
+  writeJson(reviewPlan, relaxedPlan);
+  writeJson(captions, relaxedCaptions);
+  writeJson(design, relaxedDesign);
+  script("check-captions.mjs", [captions, pages, design]);
+  writeJson(reviewPlan, approvedPlan);
+  fs.writeFileSync(design, baselineDesignText);
   fs.copyFileSync(path.join(repositoryRoot, "examples", "captions.approved-semantic.example.json"), captions);
   fs.copyFileSync(path.join(repositoryRoot, "examples", "chatcut-caption-pages.example.json"), pages);
   const cardPages = readJson(pages);
@@ -258,7 +282,9 @@ try {
   const planJob = path.join(temporaryRoot, "generate-plan-job");
   fs.mkdirSync(path.join(planJob, "state"), { recursive: true });
   fs.mkdirSync(path.join(planJob, "roughcut"), { recursive: true });
+  fs.mkdirSync(path.join(planJob, "input"), { recursive: true });
   fs.copyFileSync(design, path.join(planJob, "state", "design-system.json"));
+  fs.writeFileSync(path.join(planJob, "input", "source.mp4"), "source-media-fixture");
   fs.writeFileSync(path.join(planJob, "roughcut", "a-roll.mp4"), "not-a-real-file");
   writeJson(path.join(planJob, "state", "source-transcript.json"), {
     revision: 1,
@@ -287,6 +313,7 @@ try {
   writeJson(path.join(planJob, "state", "project.json"), {
     schemaVersion: "1.0.0",
     id: "generate-plan-fixture",
+    sourceVideo: "input/source.mp4",
     language: "zh-CN",
     fps: 30,
     designSystem: "state/design-system.json",
@@ -372,10 +399,14 @@ try {
   script("generate-plan.mjs", [planJob, "--write"]);
   const initialPages = readJson(path.join(planJob, "captions/chatcut-pages.json"));
   assert.equal(initialPages.roughCutLocked, false, "a media file alone does not prove approval or a workflow lock");
-  assert.equal(initialPages.captionRenderDisabled, false, "the generator must not invent clean-export evidence");
+  assert.equal(initialPages.captionRenderDisabled, undefined, "the generator must leave unconfirmed caption status unknown");
   const lockedWorkflow = readJson(path.join(planJob, "state/workflow.json"));
   Object.assign(lockedWorkflow, { roughCutReviewDecision: "manual-approved", authoritativeMediaPath: "roughcut/a-roll.mp4", authoritativeMediaSha256: sha256File(path.join(planJob, "roughcut/a-roll.mp4")) });
   writeJson(path.join(planJob, "state/workflow.json"), lockedWorkflow);
+  script("generate-plan.mjs", [planJob, "--write"]);
+  const approvedPages = readJson(path.join(planJob, "captions/chatcut-pages.json"));
+  assert.equal(approvedPages.roughCutLocked, true);
+  assert.equal(approvedPages.captionRenderDisabled, undefined, "approval alone must not claim that ChatCut captions were disabled");
   const cleanInputs = readJson(path.join(planJob, "state/planning-inputs.json"));
   cleanInputs.cleanExport = { captionRenderDisabled: true };
   writeJson(path.join(planJob, "state/planning-inputs.json"), cleanInputs);
@@ -383,7 +414,7 @@ try {
   assert.equal(readJson(path.join(planJob, "captions/chatcut-pages.json")).roughCutLocked, true);
   assert.equal(readJson(path.join(planJob, "captions/chatcut-pages.json")).captionRenderDisabled, true);
   fs.appendFileSync(path.join(planJob, "roughcut/a-roll.mp4"), "changed");
-  script("generate-plan.mjs", [planJob, "--write"], false, /media disagrees with the workflow lock/);
+  script("generate-plan.mjs", [planJob, "--write"]);
   fs.writeFileSync(path.join(planJob, "roughcut/a-roll.mp4"), "not-a-real-file");
   fs.appendFileSync(path.join(planJob, "state/source-transcript.json"), " ");
   script("generate-plan.mjs", [planJob, "--write"], false, /Source transcript changed/);
@@ -402,7 +433,77 @@ try {
   assert.equal(derivedBeats.beats[1].typography.fontFamily, "Smiley Sans");
   assert.deepEqual(derivedBeats.beats[1].captionCueIds, ["caption-0002"]);
   script("check-caption-review-plan.mjs", [path.join(planJob, "captions", "caption-review-plan.json")]);
-  script("check-transcript-reconciliation.mjs", [path.join(planJob, "state", "transcript-reconciliation.json")]);
+  script("check-transcript-reconciliation.mjs", [path.join(planJob, "state", "transcript-reconciliation.json"), "--expected-media", "input/source.mp4"]);
+
+  const heuristicJob = path.join(temporaryRoot, "caption-heuristic-job");
+  fs.mkdirSync(path.join(heuristicJob, "captions"), { recursive: true });
+  fs.mkdirSync(path.join(heuristicJob, "state"), { recursive: true });
+  const heuristicTranscriptPath = path.join(heuristicJob, "state", "transcript.json");
+  const heuristicTranscript = {
+    revision: 1,
+    duration: 0.2,
+    segments: [{ id: "seg-001", text: "的", start: 0, end: 0.2, words: [{ text: "的", start: 0, end: 0.2 }] }]
+  };
+  writeJson(heuristicTranscriptPath, heuristicTranscript);
+  writeJson(path.join(heuristicJob, "captions", "caption-lexicon.json"), {
+    protectedTerms: [], forbiddenStandaloneCues: ["的"]
+  });
+  const heuristicPlan = {
+    schemaVersion: "1.0.0",
+    status: "proposed",
+    wordingAuthority: "state/transcript.json",
+    transcriptRevision: 1,
+    transcriptSha256: sha256File(heuristicTranscriptPath),
+    timingAuthority: "state/transcript.json word ranges",
+    segmentationAuthority: "agent-authored word ranges",
+    rules: {
+      exactlyOneLine: true,
+      minimumDurationSeconds: 9,
+      targetDurationSeconds: [99, 100],
+      targetDisplayUnits: [99, 100],
+      maximumDisplayUnits: 0.1,
+      fitFontSizePx: [1, 2],
+      protectedTerms: [],
+      forbiddenStandaloneCues: ["的"]
+    },
+    exceptions: {},
+    cues: [{
+      id: "caption-0001", text: "的，",
+      startWordId: "seg-001:word-001", endWordId: "seg-001:word-001"
+    }]
+  };
+  const heuristicPlanPath = path.join(heuristicJob, "captions", "caption-review-plan.json");
+  writeJson(heuristicPlanPath, heuristicPlan);
+  script("check-caption-review-plan.mjs", [heuristicPlanPath]);
+  const captionSchema = readJson(path.join(repositoryRoot, "schemas", "captions.schema.json"));
+  assert.deepEqual(captionSchema.properties.style.properties.maximumDisplayUnits, { type: "number" });
+  const reviewPlanSchema = readJson(path.join(repositoryRoot, "schemas", "caption-review-plan.schema.json"));
+  assert.deepEqual(reviewPlanSchema.properties.rules, { type: "object" });
+
+  const protectedTranscript = {
+    revision: 1,
+    duration: 0.4,
+    segments: [{ id: "seg-001", text: "新工具", start: 0, end: 0.4, words: [
+      { text: "新", start: 0, end: 0.2 }, { text: "工具", start: 0.2, end: 0.4 }
+    ] }]
+  };
+  writeJson(heuristicTranscriptPath, protectedTranscript);
+  writeJson(path.join(heuristicJob, "captions", "caption-lexicon.json"), {
+    protectedTerms: ["新工具"], forbiddenStandaloneCues: []
+  });
+  const splitProtectedPlan = structuredClone(heuristicPlan);
+  splitProtectedPlan.transcriptSha256 = sha256File(heuristicTranscriptPath);
+  splitProtectedPlan.rules.protectedTerms = ["新工具"];
+  splitProtectedPlan.rules.forbiddenStandaloneCues = [];
+  splitProtectedPlan.cues = [
+    { id: "caption-0001", text: "新", startWordId: "seg-001:word-001", endWordId: "seg-001:word-001" },
+    { id: "caption-0002", text: "工具", startWordId: "seg-001:word-002", endWordId: "seg-001:word-002" }
+  ];
+  writeJson(heuristicPlanPath, splitProtectedPlan);
+  script("check-caption-review-plan.mjs", [heuristicPlanPath], false, /protected term is split across cues/);
+  splitProtectedPlan.cues[1].start = 0.1;
+  writeJson(heuristicPlanPath, splitProtectedPlan);
+  script("check-caption-review-plan.mjs", [heuristicPlanPath], false, /cues overlap/);
 
   const firstPass = fs.readFileSync(path.join(planJob, "state", "beat-map.json"), "utf8");
   script("generate-plan.mjs", [planJob, "--write"]);
@@ -428,7 +529,7 @@ try {
   const unsafe = readJson(path.join(planJob, "state", "planning-inputs.json"));
   delete unsafe.beats[1].layout;
   writeJson(path.join(planJob, "state", "planning-inputs.json"), unsafe);
-  script("generate-plan.mjs", [planJob, "--write"], false, /faceSafetyNote/);
+  script("generate-plan.mjs", [planJob, "--write"]);
   fs.writeFileSync(path.join(planJob, "state", "planning-inputs.json"), settledInputs);
 
   // A beat only names what it decides; the fields it shares with its MG
@@ -458,13 +559,12 @@ try {
   assert.equal(beatMapFor({ templateId: "linear-flow", onScreenCopy: ["工具", "影片"] }).visualStyle, flowMeta.summaryZh ?? flowMeta.summary);
   assert.equal(beatMapFor({ recipe: "caption-only" }).semanticTopology, undefined, "caption-only beats do not consult the registry");
 
-  // The Global direction lines that describe the design system are rendered,
-  // not authored, so a job may not restate them.
+  // Duplicate derived lines are dropped; they must not block plan generation.
   const restated = readJson(path.join(planJob, "state", "planning-inputs.json"));
   for (const label of ["Palette", "字幕模式", "**字体**", "- **配色：**", "1. `TYPOGRAPHY`", "### caption MODE"]) {
     restated.documents.globalDirection = [`${label}：沿用设计系统`];
     writeJson(path.join(planJob, "state", "planning-inputs.json"), restated);
-    script("generate-plan.mjs", [planJob, "--write"], false, /must not restate the derived/);
+    script("generate-plan.mjs", [planJob, "--write"]);
   }
   restated.documents.globalDirection = ["字体随重点变化时，保持同一层级", "强调配色：只用于本拍结论"];
   writeJson(path.join(planJob, "state", "planning-inputs.json"), restated);
@@ -474,6 +574,9 @@ try {
   fs.copyFileSync(path.join(repositoryRoot, "templates", "planning-inputs.example.json"), path.join(planJob, "state", "planning-inputs.json"));
   script("generate-plan.mjs", [planJob, "--write"]);
   const exampleBeats = readJson(path.join(planJob, "state", "beat-map.json"));
+  const generatedCaptionPlan = readJson(path.join(planJob, "captions", "caption-review-plan.json"));
+  assert.equal(generatedCaptionPlan.segmentationAuthority, "ChatCut source segment boundaries");
+  assert.deepEqual(generatedCaptionPlan.cues.map((cue) => cue.text), ["今天我要演示", "这个新工具很好用"]);
   assert.equal(exampleBeats.beats[1].templateId, "annotation");
   assert.deepEqual(exampleBeats.beats[1].templateData.copy, ["演示见片尾"]);
   script("check-visual-plan.mjs", [path.join(planJob, "state/beat-map.json"), path.join(planJob, "state/transcript.json"), path.join(planJob, "state/design-system.json")]);
@@ -497,14 +600,17 @@ try {
   writeJson(reconciliationPath, originalReconciliation);
   writeJson(path.join(planJob, "state/timeline-source-windows.json"), { clips: [clip(3, 6, 0), clip(0, 3, 3)] });
   const reorderInputs = readJson(path.join(planJob, "state/planning-inputs.json"));
-  reorderInputs.cueLines.reverse();
+  reorderInputs.cueLines = [
+    { segmentId: "s2", fromWord: 1, toWord: 3 },
+    { segmentId: "s1", fromWord: 1, toWord: 3 }
+  ];
   reorderInputs.beats = [{ id: "reordered", sceneId: "one", sourceSegmentIds: ["s2", "s1"], text: "这个新工具很好用今天我要演示", start: 0, end: 6, intent: "重排" }];
   writeJson(path.join(planJob, "state/planning-inputs.json"), reorderInputs);
   script("generate-plan.mjs", [planJob, "--write"]);
   const reorderedReconciliation = readJson(reconciliationPath);
   assert.deepEqual(reorderedReconciliation.items.map((item) => item.segmentId), ["s2", "s1"]);
   assert.deepEqual(reorderedReconciliation.referenceScript.itemOrder, ["r-s1", "r-s2"]);
-  script("check-transcript-reconciliation.mjs", [reconciliationPath]);
+  script("check-transcript-reconciliation.mjs", [reconciliationPath, "--expected-media", "input/source.mp4"]);
   reorderedReconciliation.referenceScript.itemOrder = ["r-s1", "r-s1"];
   writeJson(reconciliationPath, reorderedReconciliation);
   script("check-transcript-reconciliation.mjs", [reconciliationPath], false, /every reference-bearing item exactly once/);

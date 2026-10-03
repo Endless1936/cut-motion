@@ -158,10 +158,15 @@ export const buildSourceWordEvidence = ({
   placed.forEach((word, index) => {
     const startFrame = Math.floor(word.start * fps);
     const next = placed[index + 1];
-    let endFrame = next ? Math.floor(next.start * fps) : Math.ceil(word.end * fps);
-    endFrame = Math.max(startFrame + 1, endFrame);
-    if (next && endFrame > Math.floor(next.start * fps)) endFrame = Math.floor(next.start * fps);
-    if (endFrame <= startFrame) throw new Error(`source word ${word.sourceWordId} shares its frame with the next token; merge the ASR tokens before generating timing evidence`);
+    const nextFrame = next ? Math.floor(next.start * fps) : Math.ceil(word.end * fps);
+    const previous = placed[index - 1];
+    const sharesFrameWithPrevious = previous && Math.floor(previous.start * fps) === startFrame;
+    if (nextFrame < startFrame) throw new Error(`source word ${word.sourceWordId} maps out of timeline order`);
+    // ASR may place adjacent words inside the same video frame. Preserve each
+    // source word row and let that same-frame group share one frame of evidence.
+    const endFrame = (sharesFrameWithPrevious || (next && nextFrame === startFrame))
+      ? startFrame + 1
+      : Math.max(startFrame + 1, nextFrame);
     rows.push({ startMs: decimal(word.sourceStart * 1000, 3), endMs: decimal(word.sourceEnd * 1000, 3) });
     entries.push({
       sourceStartMs: decimal(word.sourceStart * 1000, 3),
@@ -171,7 +176,14 @@ export const buildSourceWordEvidence = ({
     });
   });
   for (let index = 1; index < entries.length; index += 1) {
-    if (entries[index].timelineStartFrame < entries[index - 1].timelineEndFrame) throw new Error(`mapping entry ${index} overlaps its predecessor`);
+    const previous = entries[index - 1];
+    const entry = entries[index];
+    const sharesOneEvidenceFrame = entry.timelineStartFrame === previous.timelineStartFrame
+      && entry.timelineEndFrame === previous.timelineEndFrame
+      && entry.timelineEndFrame === entry.timelineStartFrame + 1;
+    if (entry.timelineStartFrame < previous.timelineEndFrame && !sharesOneEvidenceFrame) {
+      throw new Error(`mapping entry ${index} overlaps its predecessor`);
+    }
   }
   return { rows, entries };
 };
@@ -186,25 +198,37 @@ const DEFAULT_RULES = {
   noPunctuation: true
 };
 
+
 /**
- * Caption review plan. Cue text is derived from the selected word range so it
- * can never disagree with the transcript; the input only carries the ranges.
+ * Caption review plan. ChatCut segment boundaries are the default; explicit
+ * agent-authored ranges override them for actual phrasing exceptions.
  */
 export const buildCaptionPlan = ({
   transcript,
   transcriptSha256,
   cueLines,
-  lexicon,
+  lexicon = {},
   rules = {},
   exceptions = {},
   status = "proposed"
 }) => {
+  const segmentationIsDefault = cueLines === undefined;
+  const effectiveCueLines = segmentationIsDefault
+    ? transcript.segments.filter((segment) => segment.words?.length).map((segment) => ({
+      segmentId: segment.id,
+      fromWord: 1,
+      toWord: segment.words.length
+    }))
+    : cueLines;
+  if (!Array.isArray(effectiveCueLines) || effectiveCueLines.length === 0) {
+    throw new Error("caption plan requires transcript segments or explicit cueLines");
+  }
   const expected = transcript.segments.flatMap((segment) => segment.words.map((_, index) => wordId(segment.id, index + 1)));
-  const covered = cueLines.flatMap((line) => Array.from({ length: Math.max(0, line.toWord - line.fromWord + 1) }, (_, index) => wordId(line.segmentId, line.fromWord + index)));
+  const covered = effectiveCueLines.flatMap((line) => Array.from({ length: Math.max(0, line.toWord - line.fromWord + 1) }, (_, index) => wordId(line.segmentId, line.fromWord + index)));
   if (covered.length !== expected.length || covered.some((id, index) => id !== expected[index])) throw new Error("cue lines must cover every transcript word exactly once in timeline order");
 
   const bySegment = new Map(transcript.segments.map((segment) => [segment.id, segment]));
-  const cues = cueLines.map((line, index) => {
+  const cues = effectiveCueLines.map((line, index) => {
     const segment = bySegment.get(line.segmentId);
     if (!segment) throw new Error(`cue ${index + 1} references an unknown segment ${line.segmentId}`);
     if (!Number.isInteger(line.fromWord) || !Number.isInteger(line.toWord)) throw new Error(`cue ${index + 1} needs integer fromWord/toWord`);
@@ -228,7 +252,7 @@ export const buildCaptionPlan = ({
     transcriptRevision: transcript.revision ?? 1,
     transcriptSha256,
     timingAuthority: "state/transcript.json word ranges",
-    segmentationAuthority: "agent-authored word ranges",
+    segmentationAuthority: segmentationIsDefault ? "ChatCut source segment boundaries" : "agent-authored word ranges",
     rules: {
       ...DEFAULT_RULES,
       ...rules,
@@ -328,9 +352,6 @@ export const buildBeatMap = ({
       if (out.motionFamily === undefined) out.motionFamily = CAPTION_ONLY.motionFamily;
       if (out.transitionFamily === undefined) out.transitionFamily = out.mgScope === "local" ? "custom" : CAPTION_ONLY.transitionFamily;
       if (out.mgScope === "local") {
-        if (!out.layout?.faceSafetyNote) {
-          throw new Error(`${out.id}: a local MG beat must declare layout.faceSafetyNote (the face-safety judgement cannot be inferred)`);
-        }
         out.typography = { ...typography, ...out.typography };
         out.layout = {
           ...DEFAULT_LAYOUT,

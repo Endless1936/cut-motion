@@ -13,43 +13,29 @@ intake → transcription → rough-cut → rough-cut-review → rough-cut-export
 
 `rough-cut` keeps the editable ChatCut timeline as its artifact and completes [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) before `rough-cut-review`. `chatcut-roughcut.json` records project and timeline evidence; captions, MG, and B-axis composition are authored in HyperFrames. After manual approval or explicit automatic fallback, export once to `roughcut/a-roll.mp4` and run the basic media lock.
 
-For ChatCut, local transcription records are optional before listening. From intake, transcription or rough-cut, record the editable cut and enter the existing review gate directly:
+For ChatCut, local transcription records are optional before listening. While the user reviews the stable cut, prepare only key MG beats and real exceptions; use generated caption segmentation. After explicit approval, retrieve missing source words once, start A-roll export and generate the three plans concurrently. No separate plan approval is required. From intake, transcription or rough-cut, record the editable cut and enter the existing review gate directly:
 
 ```bash
 node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json review-cut --project-id <id> --timeline-id <id>
 ```
 
-This writes the project/timeline record, preserves existing source-transcript locks and requests the user's decision. It does not claim to validate listening quality or require cleanup history. After approval, import source words for planning and bind them with `lock-transcript`; subsequent changes to that snapshot are still rejected. The `ffmpeg-fallback` path keeps its existing trim-plan audit.
+This writes the project/timeline record, preserves existing source-transcript locks and requests the user's decision. It does not claim to validate listening quality or require cleanup history. If source words are missing, retrieve them once after approval for plan generation. The `ffmpeg-fallback` path keeps its existing trim-plan audit.
 
 At `composition`, `workflow-state.mjs` rebuilds `hyperframes/index.html` from `index.template.html`, the Beat Map, transcript, and MG modules, then records that build's hash. Those authored files are the editing source; generated HTML is disposable and the render entrypoint rebuilds from the same source before rendering.
 
-To abandon the manual review explicitly:
+Only when the user explicitly selects automatic fallback, record that choice with `fallback-auto --actor user --note ...`; otherwise pause at `rough-cut-review` for the user's decision.
 
-```bash
-node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json fallback-auto --actor user --note "Skip manual ChatCut review"
-```
+## Preferences and recorded artifacts
 
-The command records the fallback decision and skips the manual review state. The post-export media and wording checks do not rewrite ChatCut's actual clip in/out points.
+Honor supplied caption, reference-script, and visual-axis preferences. If omitted, keep the job defaults without asking a separate question round. The recording is authoritative for spoken wording; ChatCut/ASR supplies timing, while HyperFrames owns released captions and motion graphics.
 
-## Preferences and transcript
-
-Ask once for caption, reference-script, and visual-axis preferences. If omitted, record an Agent recommendation before rough-cut approval. A reference script is immutable wording evidence; reconcile it with the recording. ChatCut/ASR supplies timing, while HyperFrames owns released captions and all motion graphics.
-
-Use `set-caption-mode` and `set-axis-mode` so changes are recorded. A caption or axis change at or after planning returns to `motion-plan`.
-
-## Recorded fingerprints
-
-`advance` checks the dependencies consumed by its phase. Source transcript locking and media identity remain enforced; large media is not rehashed at every intermediate transition. Delivery checks the media and settled composition. `node scripts/workflow-state.mjs <workflow.json> verify` additionally audits recorded documents and the previous delivery when diagnosing drift.
-
-During `composition`, rebuilt HTML is an in-progress output. In `review`, scoped visual changes may update the Beat Map and its binding at the composition transition; the original plan documents remain the baseline. `verify` also treats these current editing outputs as drafts. In `auto`, plan-authority changes still return through `replan --note ...`; completed jobs use `reopen motion-plan --actor user --note ...`. These are existing routes, not new approvals.
-
-After a successful build, changed Beat IDs, fields and before/after values are recorded automatically as `visual-plan-change` in workflow history. `state/visual-plan-baseline.json` holds the latest comparison snapshot; no manual revision document is needed. Older jobs without a usable snapshot record that prior values are unavailable and establish the current baseline.
+Transitions check only the artifacts needed for the next operation. They do not block on plan/document or upstream build fingerprints; `verify` is an optional diagnostic. Composition is built from `index.template.html`, the Beat Map, transcript and MG modules.
 
 ## Modes
 
-`review` is the default: wait at `rough-cut-review`, then follow [Quality Checks](quality-gates.md) for the delivery path.
+`review` is the default: wait at `rough-cut-review`; the normal phase checks are stated in [`workflow.md`](workflow.md).
 
-`auto` resolves the existing `rough-cut-review` state with `automatic-fallback` and runs the checks listed in [Quality Checks](quality-gates.md). Passing checks do not replace the user's aesthetic decision.
+`auto` resolves the existing `rough-cut-review` state with `automatic-fallback` and uses the same minimal checks stated in [`workflow.md`](workflow.md). Passing checks do not replace the user's aesthetic decision.
 
 ## Revisions
 

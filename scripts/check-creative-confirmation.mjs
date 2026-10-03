@@ -143,19 +143,19 @@ if (!fs.existsSync(reconciliationPath)) {
 
 const motionPlanPath = path.resolve(jobRoot, confirmation.storyboard?.motionPlan ?? "");
 const captionPlanPath = path.resolve(jobRoot, confirmation.storyboard?.captionPlan ?? "");
-if (!fs.existsSync(motionPlanPath)) {
+const motionPlanText = fs.existsSync(motionPlanPath) ? fs.readFileSync(motionPlanPath, "utf8") : "";
+if (!motionPlanText) {
   errors.push("motion plan referenced by creative confirmation does not exist");
 } else {
-  const motionPlan = fs.readFileSync(motionPlanPath, "utf8");
-  for (const beat of beatMap.beats) {
-    if (!motionPlan.includes(beat.text) && !motionPlan.includes(normalize(beat.text))) errors.push(`${beat.id}: motion plan is missing its displayed phrase`);
+  for (const beat of beatMap.beats.filter((candidate) => candidate.mgScope === "local")) {
+    if (!motionPlanText.includes(beat.text) && !motionPlanText.includes(normalize(beat.text))) errors.push(`${beat.id}: motion plan is missing its displayed phrase`);
   }
 }
 if (confirmation.captionMode === "subtitles" && !fs.existsSync(captionPlanPath)) {
   errors.push("caption plan referenced by creative confirmation does not exist");
 } else if (confirmation.captionMode === "subtitles") {
   const captionPlan = fs.readFileSync(captionPlanPath, "utf8");
-  for (const heading of ["# 字幕与 MG 审核方案", "## 完整字幕切分", "## MG 节点", "## 明确不加 MG 的段落"]) {
+  for (const heading of ["# 字幕方案", "## 完整字幕切分"]) {
     if (!captionPlan.includes(heading)) errors.push(`caption plan is missing ${heading}`);
   }
   const reviewPlanPath = path.join(jobRoot, "captions", "caption-review-plan.json");
@@ -185,7 +185,7 @@ if (confirmation.captionMode === "subtitles" && !fs.existsSync(captionPlanPath))
       if (typeof beat.visualStyle !== "string" || beat.visualStyle.trim().length === 0) {
         errors.push(`${beat.id}: local MG must declare its reviewed visual style`);
       }
-      const reviewedText = `${document}\n${captionPlan}`;
+      const reviewedText = `${motionPlanText}\n${captionPlan}`;
       for (const [field, value] of [
         ["id", beat.id],
         ["support role", beat.supportRole],

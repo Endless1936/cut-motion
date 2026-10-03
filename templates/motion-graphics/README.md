@@ -24,14 +24,17 @@ Reusable HyperFrames implementations for a 1080×1920 talking-head composition. 
 
 The paired choices serve different meanings: ordered versus independent lists, sequential versus branching relationships, comparison versus a single result. Use `evidence-focus` when the original interface or document is the evidence.
 
-## Plan → instantiate
+## Normal workflow
 
-1. In the existing Motion Plan and creative confirmation, identify the template ID, BeatID, final copy/assets, position and spoken anchors. A custom implementation remains appropriate when these templates cannot express the content; record the reason briefly.
-2. For a content template or grid, copy its `fragment.html`, `style.css`, and `timeline.mjs` to `jobs/<job>/hyperframes/mg/<BeatID>/`. Set the fragment's `data-beat-id` to that BeatID. Replace sample content, set `data-axis` to the intended axis and bind the beat in the existing Beat Map. The builder fills motion-group start and duration from that beat.
-3. Set each `data-at` in **seconds relative to the beat start**, using the approved spoken timing. Keep the last reveal before the beat's exit. The builder supplies `root`, scoped `select`, `beat` and the shared paused `timeline`; `select` returns an array. The builder controls the final fade through the Beat Map's exit anchor and `exitFrames`.
-4. Rebuild through `scripts/build-composition.mjs` before rendering. This copies source changes into `index.html`; exporting an older build will show older MGs.
+Choose the template ID, BeatID, copy/assets, position and spoken anchor in the Motion Plan and planning inputs. Then run `scripts/compose-job.mjs`; it assembles the selected template and builds the composition. Do not manually copy template files or edit generated `index.html` for a library template.
 
-For the A/B transition, merge the helper into the composition's existing video and shared timeline instead of creating an MG clip. Each B-axis interval must be at least twice the transition duration (1.6 seconds with the 0.8-second default); intervals on the same speaker track must not overlap. See [stage integration](../../examples/book-video-reference/REPRODUCTION.md#a-axis--b-axis-stage-transition) for the exact call and markup.
+## Custom MG only
+
+Use a custom module only when the library cannot express the content, and state the reason briefly in the Motion Plan. The builder binds its start and duration to the Beat Map. Custom `data-at` values are seconds relative to the beat start; the builder supplies `root`, scoped `select`, `beat` and the shared paused `timeline`, and controls the final fade from the exit anchor.
+
+## A/B stage transition
+
+Use the transition helper in the composition's existing video and shared timeline instead of creating an MG clip. Each B-axis interval must be at least twice the transition duration (1.6 seconds with the 0.8-second default); intervals on the same speaker track must not overlap. See [stage integration](../../examples/book-video-reference/REPRODUCTION.md#a-axis--b-axis-stage-transition) for the exact call and markup.
 
 ## Adapt the content
 

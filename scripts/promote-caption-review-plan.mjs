@@ -3,7 +3,6 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { assertCreativeAuthorities, ensureWorkflowDefaults, readJson } from "./workflow-utils.mjs";
 import { resolveCaptionCues } from "./caption-review-utils.mjs";
 
 const [jobDirectoryArgument] = process.argv.slice(2);
@@ -13,10 +12,6 @@ if (!jobDirectoryArgument) {
 }
 
 const jobDirectory = path.resolve(jobDirectoryArgument);
-const workflow = ensureWorkflowDefaults(readJson(path.join(jobDirectory, "state", "workflow.json")));
-if (workflow.mode === "auto" || workflow.roughCutReviewDecision === "automatic-fallback") {
-  assertCreativeAuthorities(jobDirectory, workflow);
-}
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const check = (name, args) => {
   const result = spawnSync(process.execPath, [path.join(scriptDirectory, name), ...args], { encoding: "utf8" });
@@ -54,7 +49,7 @@ const captions = {
     cleanExport: pages.cleanExport,
     timelineVersion: pages.timelineVersion ?? null,
     roughCutLocked: true,
-    captionRenderDisabled: true
+    ...(typeof pages.captionRenderDisabled === "boolean" ? { captionRenderDisabled: pages.captionRenderDisabled } : {})
   },
   style: designSystem.captions,
   cues

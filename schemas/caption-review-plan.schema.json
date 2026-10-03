@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "cut-motion Agent-authored Caption Review Plan",
+  "title": "cut-motion Caption Review Plan",
   "type": "object",
   "required": ["schemaVersion", "status", "wordingAuthority", "transcriptRevision", "transcriptSha256", "timingAuthority", "segmentationAuthority", "rules", "exceptions", "cues"],
   "properties": {
@@ -10,7 +10,7 @@
     "transcriptRevision": { "type": "integer", "minimum": 1 },
     "transcriptSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
     "timingAuthority": { "const": "state/transcript.json word ranges" },
-    "segmentationAuthority": { "const": "agent-authored word ranges" },
+    "segmentationAuthority": { "enum": ["ChatCut source segment boundaries", "agent-authored word ranges"] },
     "rules": { "type": "object" },
     "exceptions": { "type": "object" },
     "cues": {

@@ -22,7 +22,9 @@
   font-synthesis: none;
   line-height: var(--caption-line-height, 1.15);
   text-align: center;
-  white-space: nowrap;
+  white-space: normal;
   width: max-content;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   text-shadow: var(--caption-shadow, 0 8px 18px rgb(0 0 0 / 72%));
 }

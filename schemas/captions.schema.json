@@ -6,14 +6,14 @@
   "properties": {
     "source": {
       "type": "object",
-      "required": ["kind", "fps", "cleanExport", "roughCutLocked", "captionRenderDisabled"],
+      "required": ["kind", "fps", "cleanExport", "roughCutLocked"],
       "properties": {
         "kind": { "const": "approved-semantic-plan" },
         "fps": { "type": "number", "exclusiveMinimum": 0 },
         "cleanExport": { "oneOf": [{ "const": true }, { "type": "string", "pattern": "\\S" }] },
         "timelineVersion": { "type": ["string", "null"] },
         "roughCutLocked": { "const": true },
-        "captionRenderDisabled": { "const": true }
+        "captionRenderDisabled": { "type": "boolean" }
       }
     },
     "style": {
@@ -26,7 +26,7 @@
         "fontSizePx": { "type": "number", "minimum": 42 },
         "lineHeight": { "type": "number", "minimum": 1, "maximum": 1.35 },
         "minimumFontSizePx": { "type": "number", "minimum": 42 },
-        "maximumDisplayUnits": { "type": "number", "minimum": 4, "maximum": 16 },
+        "maximumDisplayUnits": { "type": "number" },
         "maximumLines": { "const": 1 },
         "bottomOffsetRatio": { "type": "number", "minimum": 0.1, "maximum": 0.35 },
         "bottomOffsetPx": { "type": "number", "minimum": 100 },

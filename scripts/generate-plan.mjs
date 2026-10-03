@@ -17,8 +17,8 @@
  *         docs/caption-plan.md              (via render-caption-review-doc.mjs)
  *         docs/creative-confirmation.md
  *
- * Without --write it prints the plan and touches nothing; --outline writes only
- * the released word outline needed to author the input.
+ * Without --write it prints the plan and touches nothing; --outline writes
+ * word IDs for agent-authored natural-phrase caption ranges.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -51,8 +51,7 @@ const require_ = (relative) => {
   return absolute;
 };
 
-// Expose release-time word IDs before authoring cue ranges. This uses the same
-// mapper as generation, so Agents do not need a temporary conversion script.
+// Expose transcript word IDs so the Agent can hand-segment captions by phrase.
 if (flags.includes("--outline")) {
   const workflow = read("state/workflow.json");
   const project = read("state/project.json");
@@ -71,7 +70,7 @@ if (flags.includes("--outline")) {
       words: s.words.map((w, i) => ({ ...w, index: i + 1, id: `${s.id}:word-${String(i + 1).padStart(3, "0")}` }))
     }))
   });
-  console.log("Wrote state/planning-outline.json: use its segment IDs and 1-based word indices in planning-inputs.json. Set corrections before authoring cue ranges; changed corrections require a refreshed outline and cue ranges.");
+  console.log("Wrote state/planning-outline.json. Use segment IDs and 1-based word indices to enter Chinese phrase boundaries in cueLines.");
   process.exit(0);
 }
 
@@ -88,10 +87,9 @@ const timelineWindows = read("state/timeline-source-windows.json");
 const annotationState = read("state/reference-script-annotations.json");
 
 const fps = project.fps ?? inputs.fps ?? 30;
-const captionMode = inputs.captionMode ?? workflow.captionMode;
-if (captionMode !== workflow.captionMode) {
-  throw new Error(`planning inputs captionMode (${captionMode}) disagrees with the workflow (${workflow.captionMode})`);
-}
+// The workflow is the single source of truth; do not block plan generation on
+// a stale duplicate copied into planning-inputs.json.
+const captionMode = workflow.captionMode;
 const corrections = inputs.corrections ?? {};
 
 // ---------------------------------------------------------------- artifacts
@@ -132,14 +130,12 @@ const referenceItemIds = reconciliationItems.filter((item) => item.referenceText
 const previousReferenceOrder = existingReconciliation.referenceScript?.itemOrder
   ?? (existingReconciliation.items ?? []).filter((item) => item.referenceText).map((item) => item.id);
 const referenceItemOrder = [...previousReferenceOrder.filter((id) => referenceItemIds.includes(id)), ...referenceItemIds.filter((id) => !previousReferenceOrder.includes(id))];
-const mediaPath = project.mediaArtifacts?.roughcut?.path ?? "roughcut/a-roll.mp4";
-require_(mediaPath);
-const mediaFingerprint = sha256File(rel(mediaPath));
-if (workflow.authoritativeMediaSha256 && (workflow.authoritativeMediaPath !== mediaPath || workflow.authoritativeMediaSha256 !== mediaFingerprint)) {
-  throw new Error("Rough-cut media disagrees with the workflow lock; use the approved, promoted export before generating plans.");
-}
-const roughCutLocked = ["manual-approved", "automatic-fallback"].includes(workflow.roughCutReviewDecision)
-  && workflow.authoritativeMediaPath === mediaPath && workflow.authoritativeMediaSha256 === mediaFingerprint;
+const cleanExportPath = project.mediaArtifacts?.roughcut?.path ?? "roughcut/a-roll.mp4";
+const sourceMediaPath = project.sourceVideo ?? "input/source.mp4";
+const fingerprintPath = fs.existsSync(rel(sourceMediaPath)) ? sourceMediaPath : cleanExportPath;
+require_(fingerprintPath);
+const mediaFingerprint = sha256File(rel(fingerprintPath));
+const roughCutLocked = ["manual-approved", "automatic-fallback"].includes(workflow.roughCutReviewDecision);
 const reconciliation = {
   $schema: "../../../schemas/transcript-reconciliation.schema.json",
   schemaVersion: "1.0.0",
@@ -154,14 +150,14 @@ const reconciliation = {
   items: reconciliationItems,
   verification: {
     audioChecked: reconciliationItems.every((item) => item.evidence.audioChecked === true),
-    mediaPath,
+    mediaPath: fingerprintPath,
     mediaFingerprintMatches: true,
     transcriptRevisionMatches: true,
     unresolvedReleaseImpactCount: reconciliationItems.filter((item) => item.resolution === "unresolved" && item.releaseImpact === true).length
   }
 };
 
-const documents = { ...inputs.documents, annotationDecisions: inputs.annotationDecisions ?? [], mediaPath };
+const documents = { ...inputs.documents, annotationDecisions: inputs.annotationDecisions ?? [], mediaPath: cleanExportPath };
 const motionPlanDoc = renderMotionPlanDoc({
   jobId: project.id ?? path.basename(jobRoot),
   captionMode,
@@ -265,10 +261,12 @@ json("state/timeline-source-words.json", { schemaVersion: "1.0.0", fps, entries:
 json("captions/chatcut-pages.json", {
   source: "ChatCut inspect_asset original source word rows",
   fps,
-  cleanExport: mediaPath,
+  cleanExport: cleanExportPath,
   timelineVersion: `chatcut-timeline-${inputs.timelineId ?? "unknown"}`,
   roughCutLocked,
-  captionRenderDisabled: inputs.cleanExport?.captionRenderDisabled === true,
+  ...(typeof inputs.cleanExport?.captionRenderDisabled === "boolean"
+    ? { captionRenderDisabled: inputs.cleanExport.captionRenderDisabled }
+    : {}),
   rows: evidence.rows,
   timelineMapping: "state/timeline-source-words.json",
   timelineMappingSha256: sha256Text(outputs.get("state/timeline-source-words.json"))
@@ -299,7 +297,7 @@ const scaffoldFile = {
 const unchangedScaffold = (name, old) => {
   const template = scaffoldFile[name];
   if (template) return old === fs.readFileSync(path.join(scriptDirectory, "../templates/job", template), "utf8");
-  if (name === "state/transcript.json") return ["motion-plan", "composition"].includes(workflow.currentState)
+  if (name === "state/transcript.json") return ["rough-cut-export", "motion-plan", "composition"].includes(workflow.currentState)
     && workflow.sourceTranscriptSha256 === sha256Text(old) && workflow.sourceTranscriptSha256 === sha256File(rel("state/source-transcript.json"));
   if (name === "state/creative-confirmation.json") {
     const original = readJson(path.join(scriptDirectory, "../templates/job/creative-confirmation.json"));

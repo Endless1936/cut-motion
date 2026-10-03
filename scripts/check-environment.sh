@@ -11,8 +11,9 @@ Usage:
   scripts/check-environment.sh chatcut [probe arguments]
   scripts/check-environment.sh install-job <job-directory> --yes
 
-check verifies local cut-motion runtime dependencies. Inspect the active Agent's
-loaded ChatCut tools first; use `chatcut` only for endpoint diagnosis when needed.
+check verifies local cut-motion runtime dependencies. Use ChatCut tools already
+loaded in the active Agent session; if unavailable, report it and stop. Run the
+endpoint probe only to diagnose a specific connection failure.
 
 install-job first reuses exact-version modules already available to the local
 machine through job-local links or copies. It downloads only dependencies that
@@ -73,14 +74,14 @@ check_environment() {
 
   printf '%s\n' 'optional Licensed WOFF2 font — add it to a job when available; otherwise composition uses sans-serif'
 
-  printf '%s\n' 'manual  ChatCut — inspect the active Agent tools; use check-environment.sh chatcut only to diagnose an unavailable connection'
+  printf '%s\n' 'manual  ChatCut — use currently loaded Agent tools; report immediately if unavailable'
 
   if (( missing_count > 0 )); then
     printf '\nLocal preflight failed: %d required item(s) missing. Ask for user approval before installing anything.\n' "$missing_count" >&2
     return 1
   fi
 
-  printf '\nLocal preflight passed. Confirm ChatCut is trusted when the job uses it; a local display font is optional.\n'
+  printf '\nLocal dependencies passed; a local display font is optional.\n'
 }
 
 install_job() {

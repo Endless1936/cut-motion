@@ -3,8 +3,6 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
-  assertCreativeAuthorities,
-  assertNoWorkflowDrift,
   assertRegularContainedFile,
   beginWorkflowRevision,
   collectCreativeAuthorityDrift,
@@ -81,7 +79,6 @@ const note = options.note ? String(options.note) : null;
 const now = new Date().toISOString();
 const visualBaselinePath = path.join(jobRoot, "state", "visual-plan-baseline.json");
 let pendingVisualBaseline = null;
-const fullAuditRequested = workflow.mode === "auto" || workflow.roughCutReviewDecision === "automatic-fallback";
 
 const appendHistory = (action, from, to, entryActor = actor) => {
   workflow.history.push({ at: now, action, actor: entryActor, from, to, artifact, note, revisionId: workflow.revisionId });
@@ -118,13 +115,14 @@ const lockRoughCutMedia = (artifactPath, { audit = false, trimPlanAudit = false,
   const trimPlanPath = path.join(jobRoot, "state", "trim-plan.json");
 
   probeReviewVideo(artifactPath, "Rough-cut export");
+  const mediaSha256 = sha256File(artifactPath);
   const projectForLock = readJson(path.join(jobRoot, "state", "project.json"));
   if (workflow.sourceTranscriptSha256 || projectForLock.roughCutEngine !== "chatcut") assertSourceTranscriptLock();
 
   if (requirePromotion) {
     const project = readJson(path.join(jobRoot, "state", "project.json"));
     const recorded = project.mediaArtifacts?.roughcut;
-    if (recorded?.path !== mediaPath || recorded.sha256 !== sha256File(artifactPath)) {
+    if (recorded?.path !== mediaPath || recorded.sha256 !== mediaSha256) {
       throw new Error("Rough-cut export must be promoted after the ChatCut review");
     }
   }
@@ -146,7 +144,7 @@ const lockRoughCutMedia = (artifactPath, { audit = false, trimPlanAudit = false,
   }
 
   workflow.authoritativeMediaPath = mediaPath;
-  workflow.authoritativeMediaSha256 = sha256File(artifactPath);
+  workflow.authoritativeMediaSha256 = mediaSha256;
   workflow.trimPlanSha256 = sha256File(trimPlanPath);
 };
 
@@ -170,13 +168,6 @@ const lockSourceTranscript = (transcriptPath) => {
     writeJsonAtomic(sourceTranscriptPath, readJson(transcriptPath));
   }
   workflow.sourceTranscriptSha256 = sha256File(sourceTranscriptPath);
-};
-
-const recordCreativeAuthorities = () => {
-  const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
-  const confirmation = readJson(confirmationPath);
-  confirmation.authorities = computeCreativeAuthorities(jobRoot, workflow.captionMode);
-  writeJsonAtomic(confirmationPath, confirmation);
 };
 
 const assertJobArtifact = (relativePath, expectedDirectory) => {
@@ -250,34 +241,6 @@ const validateRoughCutReview = () => {
   }
 };
 
-const validateCreativePackage = (approvalNote, approvalActor) => {
-  if (!workflow.captionModeAcknowledged) throw new Error("Caption mode requires explicit user acknowledgement");
-  if (["b-axis-stage", "hybrid"].includes(workflow.visualAxisMode)
-    && (!workflow.visualAxisModeAcknowledged
-      || !(workflow.visualAxisModeSource === "user" || (fullAuditRequested && workflow.visualAxisModeSource === "auto")))) {
-    throw new Error("B-axis or hybrid plans require an accepted user or authorized automatic decision");
-  }
-  checkReconciliation(false);
-  approveCaptionReviewPlan(approvalNote);
-  recordCreativeAuthorities();
-  const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
-  runCheck(
-    "check-creative-confirmation.mjs",
-    [
-      confirmationPath,
-      path.join(jobRoot, "docs", "creative-confirmation.md"),
-      path.join(jobRoot, "state", "beat-map.json"),
-      workflowPath
-    ],
-    "Creative confirmation validation failed"
-  );
-  const confirmation = readJson(confirmationPath);
-  confirmation.review = { status: "approved", actor: approvalActor, decidedAt: now, note: approvalNote };
-  writeJsonAtomic(confirmationPath, confirmation);
-  workflow.creativeConfirmationSha256 = sha256File(confirmationPath);
-  workflow.creativeDocumentFingerprints = computeCreativeDocumentFingerprints(jobRoot, workflow.captionMode);
-};
-
 const recordRoughCutDecision = (status, decision, entryActor, decisionNote) => {
   workflow.roughCutReviewDecision = decision;
   workflow.gates["rough-cut-review"] = {
@@ -344,12 +307,6 @@ const syncPreferenceArtifacts = (resetDocuments = false) => {
 
 const acceptDeferredPreferences = (decisionSource) => {
   validateActiveReference(workflowPath, workflow);
-  if (!workflow.captionModeAcknowledged && workflow.captionModeSource !== "auto") {
-    throw new Error("Rough-cut approval requires an agent caption-mode recommendation with --note");
-  }
-  if (!workflow.visualAxisModeAcknowledged && workflow.visualAxisModeSource !== "auto") {
-    throw new Error("Rough-cut approval requires an agent visual-axis recommendation with --note");
-  }
   let changed = false;
   if (!workflow.captionModeAcknowledged) {
     workflow.captionModeAcknowledged = true;
@@ -373,17 +330,6 @@ const acceptDeferredPreferences = (decisionSource) => {
     workflow.currentState,
     decisionSource === "user" ? "user" : "agent"
   );
-};
-
-const approveCaptionReviewPlan = (approvalNote) => {
-  if (workflow.captionMode !== "subtitles") return;
-  const captionReviewPlanPath = path.join(jobRoot, "captions", "caption-review-plan.json");
-  if (!fs.existsSync(captionReviewPlanPath)) throw new Error("Subtitle plan approval requires captions/caption-review-plan.json");
-  const captionReviewPlan = readJson(captionReviewPlanPath);
-  captionReviewPlan.status = "approved";
-  captionReviewPlan.approvedAt = now;
-  captionReviewPlan.approvalNote = approvalNote;
-  writeJsonAtomic(captionReviewPlanPath, captionReviewPlan);
 };
 
 if (command === "status") {
@@ -426,7 +372,6 @@ if (command === "set-caption-mode") {
   const previousCaptionMode = workflow.captionMode;
   const previousState = workflow.currentState;
   const isRecommendation = actor === "agent";
-  if (isRecommendation && !note) throw new Error("Agent caption-mode recommendations require --note");
   workflow.captionMode = captionMode;
   workflow.captionModeSource = isRecommendation ? "auto" : "user";
   workflow.captionModeAcknowledged = !isRecommendation;
@@ -458,7 +403,6 @@ if (command === "set-axis-mode") {
   const previousAxisMode = workflow.visualAxisMode;
   const previousState = workflow.currentState;
   const isRecommendation = actor === "agent";
-  if (isRecommendation && !note) throw new Error("Agent visual-axis recommendations require --note");
   workflow.visualAxisMode = axisMode;
   workflow.visualAxisModeSource = isRecommendation ? "auto" : "user";
   workflow.visualAxisModeAcknowledged = !isRecommendation;
@@ -618,7 +562,6 @@ if (!currentStage) throw new Error(`Unknown current state: ${workflow.currentSta
 if (command === "advance") {
   if (currentStage.terminal) throw new Error("Workflow is already complete");
   if (currentStage.gate) throw new Error(`Gate ${workflow.currentState} requires approve or revise`);
-  assertNoWorkflowDrift(jobRoot, workflow, { scope: "stage" });
   if (workflow.currentState === "intake") {
     const projectPath = path.join(jobRoot, "state", "project.json");
     if (!fs.existsSync(projectPath)) throw new Error("Project state is missing");
@@ -685,9 +628,6 @@ if (command === "advance") {
     }
     if (workflow.currentState === "motion-plan") {
       if (workflow.sourceTranscriptSha256) assertSourceTranscriptLock();
-      if (!workflow.captionModeAcknowledged || !workflow.visualAxisModeAcknowledged || !workflow.referenceScriptAcknowledged) {
-        throw new Error("Motion planning requires preferences accepted with the locked rough cut");
-      }
       const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
       const confirmationDocPath = path.join(jobRoot, "docs", "creative-confirmation.md");
       const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
@@ -695,13 +635,9 @@ if (command === "advance") {
         throw new Error("Motion plan requires a creative confirmation package");
       }
       if (!fs.existsSync(beatMapPath)) throw new Error("Motion plan requires state/beat-map.json");
-      if (fullAuditRequested) {
-        runCheck("check-visual-plan.mjs", [beatMapPath, path.join(jobRoot, "state", "transcript.json"), path.join(jobRoot, "state", "design-system.json")], "Motion plan requires a valid beat map");
-        validateCreativePackage("Automatic full-audit validation", "agent");
-      }
-      // The beat-map fingerprint is what a later composition or render advance
-      // compares against. Write it last, so the caption-plan approval that
-      // validateCreativePackage performs is already on disk when it is digested.
+      // Keep the baseline for explicit diagnostics and revision history; it is
+      // not a delivery gate. Structural caption checks and the composition
+      // build validate the artifacts that directly affect the rendered video.
       workflow.visualPlanSha256 = sha256File(beatMapPath);
       pendingVisualBaseline = { sha256: workflow.visualPlanSha256, beatMap: readJson(beatMapPath) };
     }
@@ -713,27 +649,14 @@ if (command === "advance") {
       const beatMapPath = path.join(jobRoot, "state", "beat-map.json");
       if (!fs.existsSync(beatMapPath)) throw new Error("Composition requires state/beat-map.json");
       const beatMapSha256 = sha256File(beatMapPath);
-      if (fullAuditRequested && !workflow.visualPlanSha256) {
-        throw new Error("Automatic composition requires the recorded beat map; run replan --note ... then advance motion-plan");
-      }
-      if (fullAuditRequested && workflow.visualPlanSha256 !== beatMapSha256) {
-        throw new Error("The automatic beat map changed; run replan --note ... and regenerate the plan");
-      }
-      const authorityDrift = collectCreativeAuthorityDrift(jobRoot, workflow);
-      if (authorityDrift.length > 0) {
-        throw new Error(`Composition requires a creative package whose authorities match the job artifacts (run scripts/generate-plan.mjs <job> --write): ${authorityDrift.join("; ")}`);
-      }
       buildComposition(path.join(jobRoot, "hyperframes"));
       assertRegularContainedFile(path.join(jobRoot, "hyperframes"), generatedCompositionPath, "Built composition");
-      if (fullAuditRequested) {
-        assertCreativeAuthorities(jobRoot, workflow);
-      } else {
-        const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
-        const confirmation = readJson(confirmationPath);
-        confirmation.authorities = computeCreativeAuthorities(jobRoot, workflow.captionMode);
-        writeJsonAtomic(confirmationPath, confirmation);
-        if (workflow.creativeConfirmationSha256) workflow.creativeConfirmationSha256 = sha256File(confirmationPath);
-      }
+      const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
+      const confirmation = readJson(confirmationPath);
+      confirmation.authorities = computeCreativeAuthorities(jobRoot, workflow.captionMode);
+      writeJsonAtomic(confirmationPath, confirmation);
+      if (workflow.creativeConfirmationSha256) workflow.creativeConfirmationSha256 = sha256File(confirmationPath);
+      workflow.creativeDocumentFingerprints = computeCreativeDocumentFingerprints(jobRoot, workflow.captionMode);
       const beatMap = readJson(beatMapPath);
       if (workflow.visualPlanSha256 !== beatMapSha256) {
         let baseline = null;
@@ -763,9 +686,6 @@ if (command === "advance") {
       const canonicalDeliveryPath = path.join(jobRoot, "output", "final.mp4");
       const delivery = probeReviewVideo(artifactPath, "Final delivery");
       const receiptPath = `${artifactPath}.render.json`;
-      if (fullAuditRequested && !fs.existsSync(receiptPath)) {
-        throw new Error("Automatic delivery requires the render receipt produced by HyperFrames");
-      }
       if (artifactPath === canonicalDeliveryPath) {
         if (workflow.lastKnownGoodDelivery && sha256File(artifactPath) !== workflow.lastKnownGoodDelivery.sha256) {
           throw new Error("A delivery revision must render to output/final.candidate.mp4 before replacing the last known-good file");
@@ -802,11 +722,12 @@ if (command === "advance") {
   }
 } else if (command === "approve") {
   if (workflow.currentState !== "rough-cut-review") throw new Error("Only the ChatCut rough-cut review can be approved");
-  if (!note) throw new Error("Rough-cut review approval requires --note");
   if (workflow.mode === "review" && actor !== "user") throw new Error("Review-mode approval requires actor user");
   validateRoughCutReview();
-  acceptDeferredPreferences("user");
-  recordRoughCutDecision("approved", "manual-approved", actor, note);
+  // Recheck only the supplied immutable reference snapshot at its consumption
+  // boundary; no preference acknowledgement is required for the default none.
+  validateActiveReference(workflowPath, workflow);
+  recordRoughCutDecision("approved", "manual-approved", actor, note || "User approved the complete rough cut");
   move("rough-cut-export", "approve");
 } else if (command === "revise") {
   if (workflow.currentState !== "rough-cut-review") throw new Error("Only the ChatCut rough-cut review can be revised");

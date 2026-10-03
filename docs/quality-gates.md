@@ -1,31 +1,19 @@
-# Quality Checks
+# Minimal Delivery Checks
 
-The default path is human-reviewed and intentionally light. Machine checks establish structure and media integrity; they do not establish semantic correctness, aesthetics, or release readiness.
+This is a maintainer reference. Routine agents follow the active phase in [`workflow.md`](workflow.md) and do not load or run a separate full audit.
 
-## Default `review` path
+The only user approval gate is the complete ChatCut rough-cut review. Plans need no separate approval. Agents deliver the rough cut promptly, prepare key motion inputs while the user listens, and generate the three plans once alongside A-roll export after approval.
 
-- Keep the original source unchanged.
-- Follow the [rough-cut sequence](talking-head-trim-standard.md), then deliver the ChatCut project for listening. The transition checks project/timeline identity and any existing source-transcript lock. Candidate ledgers, cleanup snapshots, reconciliation and coverage reports are not review prerequisites.
-- After approval, export once and run only the basic rough-cut/media lock.
-- Build the HyperFrames composition, render once, and verify that the delivery has readable video/audio, dimensions, frame rate, duration, and a non-empty file.
-- Each transition checks its consumed dependencies; composition permits scoped review-mode visual edits and records the rebuilt result. `node scripts/workflow-state.mjs <workflow.json> verify` is the optional full fingerprint audit, including media and prior delivery.
-- Let the user judge the final captions, MG, timing, semantics, and visual quality.
+Keep only checks that prevent an unusable or materially incorrect file:
 
-Run an optional audit, preview, or standalone validator only for a specific question. Caption promotion includes its release checks. The legacy trim-plan audit applies only to an explicit `ffmpeg-fallback` job.
+- The source and ChatCut project/timeline exist; explicit reference-script conflicts are handled against the recording.
+- The A-roll and final MP4 are readable, contain audio and video, and have plausible synchronized durations.
+- Caption cues cover the locked transcript, preserve protected terms, use valid ordered timing, and install successfully. Caption width and natural Chinese phrase breaks are editorial guidance, not machine gates.
+- The selected MG modules assemble and the HyperFrames composition builds successfully.
+- An explicit FFmpeg fallback keeps its trim-plan/media audit. Normal ChatCut edits do not run it.
 
-## Explicit `auto` / `fallback-auto` path
+An unknown ChatCut caption-rendering flag only warns that the final MP4 may need a duplicate-caption glance. Render receipts and upstream Beat Map, HTML, creative-document, and large-media fingerprint comparisons are bookkeeping or diagnostics; they do not block the routine path. `workflow-state.mjs ... verify`, visual-plan checks, previews, and standalone validators are optional when a specific issue needs investigation.
 
-Auto follows the same stages. The Agent performs the stage instructions; state transitions run only the code checks listed here and do not enforce every Agent action:
+`auto` uses the same minimal media, caption, and build checks; it skips the user gate only when the user explicitly selected automatic operation. No additional full-audit checks run merely because the mode is `auto`.
 
-- rough-cut: the same single editing pass and basic identity checks as review mode; retain existing source-transcript locks. Only explicit `ffmpeg-fallback` exports run the legacy trim-plan audit;
-- transcript/captions: the Agent prepares and installs the approved caption plan and checks timing. State transitions validate reconciliation, caption-plan authority, and the creative package; they do not run caption installation or timing-check commands;
-- motion: beat-map/visual-plan and creative-confirmation checks at the existing state transitions. Font, layout, information-value, and standalone HyperFrames diagnostics remain explicit, on-demand commands; run them together with `scripts/check-composition.sh <job-directory>`, which rebuilds the composition and checks a pruned staging root;
-- delivery: detailed render/media receipt when the renderer produces one, plus FFprobe integrity.
-
-Optional snapshots and reports are evidence artifacts, not approval gates. A short preview can be rendered for a specific visual question without changing the workflow state.
-
-## Authority
-
-The recording is authoritative for spoken content. A supplied reference script is immutable reference evidence and must be reconciled before use. ChatCut/ASR supplies timing; HyperFrames owns released captions and motion graphics.
-
-The user owns the final editorial and aesthetic decision.
+The recording is authoritative for spoken wording. ChatCut supplies editable timing; HyperFrames owns released captions and motion graphics. The user makes the final editorial and visual judgment.

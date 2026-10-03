@@ -4,7 +4,7 @@ This document is for Agents and repository contributors. End users should follow
 
 ## Environment preflight
 
-Inspect the active Agent session for ChatCut, then run:
+Use the ChatCut tools already exposed in the active Agent session. If they are unavailable, report that immediately; do not probe endpoints, inspect daemon logs, or troubleshoot tokens during a normal job. Then run the local dependency check once:
 
 ```bash
 ./scripts/check-environment.sh check
@@ -59,7 +59,7 @@ After dependency-install approval:
 
 ## ChatCut preflight
 
-Inspect the active Agent's loaded tools first. If ChatCut tools are callable, continue. `check-environment.sh check` checks local dependencies; the following optional diagnostic probes a configured HTTP MCP endpoint when tools are unavailable:
+Use ChatCut tools already exposed in the active Agent session. If they are unavailable, report that immediately and stop the normal editing run. Endpoint probing is only for a specific connection diagnosis, never a routine preflight. `check-environment.sh check` verifies local dependencies:
 
 ```bash
 ./scripts/check-environment.sh chatcut
@@ -86,15 +86,11 @@ npm run render
 
 These scripts use the repository's stable delivery route. `npm run render` is the default single delivery render: ordinary jobs stay monolithic and only longer jobs use chunks with HyperFrames' platform-default browser resolution. Use `npm run render:preview` only for an explicit visual question, not as a mandatory pre-render step. Use `npm run render:chunked` only for a known long-media or normal-route failure case; that explicit route selects the exact cached arm64 HeadlessChrome and hardware Metal. Chunk boundaries are normalized to the manifest frame grid, each rendered chunk is probed and cached with a receipt, and the final video is assembled with the authoritative audio. The preview uses HyperFrames `standard` quality; the final render uses `high` quality with the same composition, resolution, frame rate, timing, and audio.
 
-Do not replace these scripts with a bare `hyperframes render` for this job family. HyperFrames 0.7.60 can stall in macOS Apple Silicon media initialization before frame 0 when a composition contains several long videos, a duplicated PiP source, and dense captions. The browser choice alone does not remove that stall; the explicit chunked route isolates the media initialization to short compositions and fails fast when the cached browser is missing. A future CLI upgrade is a separate, explicitly verified change rather than an automatic render fallback.
+Run `npm run render` once. Do not render a preview before final export unless the user asks for a visual check. If the normal render hits a known failure, follow the matching entry in [Troubleshooting](troubleshooting.md); do not probe alternative renderers or worker settings.
 
-If the explicit macOS arm64 chunked route reports that no exact cached browser is available, install or restore the browser for the pinned version and rerun `npm run render:chunked`. Ordinary `auto` renders follow HyperFrames' platform-specific browser setup. Do not wait on a silent monolithic render or switch to Edge as a workaround.
+### Optional preview
 
-### Preview render efficiency and recovery
-
-For a normal preview, try `npm run render:preview` once. If it fails before frame 0 with the known HyperFrames initialization issue, use `npm run render:preview:chunked`; that route uses standard quality and four Chrome workers. HyperFrames documents four as a usual balance, with roughly 256 MB of Chrome memory per worker. Step down to three only when actual memory pressure is observed; step up to five only after timing a representative chunk and confirming memory headroom. Do not force `PRODUCER_MAX_WORKERS=1` or software GPU without a matching measured failure; leaving the producer setting unset preserves HyperFrames' host-aware default. The chunk renderer processes segments sequentially, so the number of segments is not parallelism.
-
-Recovery order: keep one renderer active; for a known pre-frame initialization failure, use the matching chunked package route and inspect the first failed interval before changing worker count. Change worker count only in response to measured memory pressure. Use FFprobe once on the final file and review that MP4; extract stills from it with FFmpeg. Record route, quality, workers, GPU mode, chunk count, and elapsed time.
+Use `npm run render:preview` only when a specific visual question needs an early frame. It is not a delivery step.
 
 ## Repository verification
 
