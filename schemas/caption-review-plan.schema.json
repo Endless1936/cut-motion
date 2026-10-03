@@ -9,8 +9,8 @@
     "wordingAuthority": { "const": "state/transcript.json" },
     "transcriptRevision": { "type": "integer", "minimum": 1 },
     "transcriptSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-    "timingAuthority": { "const": "state/transcript.json word ranges" },
-    "segmentationAuthority": { "enum": ["ChatCut source segment boundaries", "agent-authored word ranges"] },
+    "timingAuthority": { "enum": ["state/transcript.json word ranges", "approved ChatCut main timeline item ranges"] },
+    "segmentationAuthority": { "enum": ["ChatCut source segment boundaries", "agent-authored word ranges", "ChatCut main timeline transcript entries"] },
     "rules": { "type": "object" },
     "exceptions": { "type": "object" },
     "cues": {

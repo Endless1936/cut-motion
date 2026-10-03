@@ -200,7 +200,7 @@ const validateChatcutRoughCutRecord = (recordedArtifactPath) => {
 const chatcutRoughCutArtifact = (relativePath) => relativePath === "state/chatcut-roughcut.json";
 
 const probeReviewVideo = (videoPath, label) => {
-  const probe = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-show_entries", "stream=codec_type,width,height,r_frame_rate,duration", "-of", "json", videoPath], { encoding: "utf8" });
+  const probe = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-show_entries", "stream=codec_type,width,height,r_frame_rate,duration,start_time", "-of", "json", videoPath], { encoding: "utf8" });
   if (probe.status !== 0) throw new Error(`${label} is not a readable media file`);
   const result = JSON.parse(probe.stdout || "{}");
   const duration = Number(result.format?.duration);
@@ -211,11 +211,11 @@ const probeReviewVideo = (videoPath, label) => {
   const audio = result.streams.find((stream) => stream.codec_type === "audio");
   const [numerator, denominator] = String(video?.r_frame_rate ?? "0/1").split("/").map(Number);
   const fps = denominator ? numerator / denominator : 0;
-  const videoDuration = Number(video?.duration);
-  const audioDuration = Number(audio?.duration);
-  if (Number.isFinite(videoDuration) && Number.isFinite(audioDuration)
-    && Math.abs(videoDuration - audioDuration) > Math.max(0.1, 2 / Math.max(fps, 1))) {
-    throw new Error(`${label} audio and video durations differ`);
+  const videoStart = video?.start_time == null ? Number.NaN : Number(video.start_time);
+  const audioStart = audio?.start_time == null ? Number.NaN : Number(audio.start_time);
+  if (Number.isFinite(videoStart) && Number.isFinite(audioStart)
+    && Math.abs(videoStart - audioStart) > Math.max(0.1, 2 / Math.max(fps, 1))) {
+    throw new Error(`${label} audio and video stream start offsets differ`);
   }
   return { duration, width: video?.width, height: video?.height, fps };
 };

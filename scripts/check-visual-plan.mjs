@@ -83,8 +83,8 @@ for (let index = 0; index < beats.length; index += 1) {
   if (component ? beat.semanticTopology !== component.meta.semanticTopology : !["sequence", "comparison", "convergence", "branch", "mapping", "emphasis", "evidence"].includes(beat.semanticTopology)) errors.push(`${beat.id}: motion beat must declare its template semanticTopology`);
   const entryWord = wordsById.get(beat.entryAnchorWordId);
   const exitWord = wordsById.get(beat.exitAnchorWordId);
-  if (!entryWord) errors.push(`${beat.id}: entryAnchorWordId does not resolve to a transcript word`);
-  if (!exitWord) errors.push(`${beat.id}: exitAnchorWordId does not resolve to a transcript word`);
+  if (!entryWord) errors.push(`${beat.id}: entryAnchorWordId does not resolve; use the generated main-NNN:word-001 id for the approved preview entry`);
+  if (!exitWord) errors.push(`${beat.id}: exitAnchorWordId does not resolve; use the generated main-NNN:word-001 id for the approved preview entry`);
   if (!Number.isInteger(beat.exitAnchorOffsetFrames) || beat.exitAnchorOffsetFrames < 0 || beat.exitAnchorOffsetFrames > 12) {
     errors.push(`${beat.id}: exitAnchorOffsetFrames must be an integer from 0 to 12`);
   }

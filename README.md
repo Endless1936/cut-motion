@@ -31,8 +31,8 @@ intake → transcription → rough-cut → rough-cut-review → rough-cut-export
 1. 你提供口播视频；Agent 探测媒体并记录可选偏好。
 2. Agent 转写并对齐录音，处理参考逐字稿与录音之间的差异。
 3. ChatCut 只负责可编辑粗剪：删除明显口误、重复和无意义空白，不在 ChatCut 中制作字幕、MG 或 B-axis 画面。
-4. 唯一人工门控是 `rough-cut-review`：Agent 打开 ChatCut 粗剪时间线，等待你批准或要求返修。`review` 在这里暂停；`auto` 在同一状态路径上执行显式自动校验并继续。
-5. 粗剪导出后，进入 HyperFrames 阶段，在这里完成字幕、MG、A/B-axis 画面、合成与渲染。
+4. `review` 模式先在 `rough-cut-review` 等你审核粗剪；粗剪批准后，Agent 在 A-roll 导出期间生成字幕、MG 和整体风格三份方案，再一次性交给你审核。方案审核期间停在 `motion-plan`。
+5. 你批准方案后，Agent 进入 HyperFrames 制作并导出成片。只有你明确选择 `auto` 时，Agent 才会在方案生成后自动继续。
 6. `review` 快速路径只做必要的基础媒体检查，不跑全量自动校验、标准预览或短样片；默认直接按交付质量渲染一次。`auto` 不增加状态，只在既有转移上执行自动校验。
 
 ## 两种字幕模式

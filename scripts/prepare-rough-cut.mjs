@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Convert saved ChatCut responses; never edit ChatCut or ask the Agent to copy fields.
+// `transcript` is a legacy source-word import for explicit FFmpeg fallback or existing source-word jobs; standard ChatCut plans use the approved main-timeline preview.
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -9,7 +10,7 @@ import { assertRegularContainedFile, readJson, sha256File, writeJsonAtomic } fro
 
 const [job, command, ...files] = process.argv.slice(2);
 if (!job || !["tighten", "transcript"].includes(command) || !files.length) {
-  console.error("Usage: node scripts/prepare-rough-cut.mjs <job> tighten <saved-preview-pages.json>...\n       node scripts/prepare-rough-cut.mjs <job> transcript <saved-inspect-asset-pages.json>...");
+  console.error("Usage: node scripts/prepare-rough-cut.mjs <job> tighten <saved-preview-pages.json>...\n       node scripts/prepare-rough-cut.mjs <job> transcript <saved-inspect-asset-pages.json>...\nThe transcript command imports legacy source-word timing for explicit FFmpeg fallback or existing source-word jobs; standard ChatCut plans use the approved main-timeline preview.");
   process.exit(64);
 }
 const root = path.resolve(job);

@@ -4,15 +4,15 @@
   "lexicon": { "protectedTerms": ["新工具"], "forbiddenStandaloneCues": [] },
   "beats": [
     {
-      "id": "b01-claim", "sceneId": "hook", "sourceSegmentIds": ["s1"],
+      "id": "b01-claim", "sceneId": "hook", "sourceSegmentIds": ["main-001"],
       "text": "今天我要演示", "start": 0.5, "end": 2.4, "intent": "引出工具演示"
     },
     {
-      "id": "b02-tool", "sceneId": "proof", "sourceSegmentIds": ["s2"],
+      "id": "b02-tool", "sceneId": "proof", "sourceSegmentIds": ["main-002"],
       "text": "这个新工具很好用", "start": 3, "end": 5.4,
       "templateId": "annotation", "intent": "补充演示位置",
       "templateData": { "copy": ["演示见片尾"] },
-      "entryAnchorWordId": "s2:word-001", "exitAnchorWordId": "s2:word-003",
+      "entryAnchorWordId": "main-002:word-001", "exitAnchorWordId": "main-002:word-001",
       "exitAnchorOffsetFrames": 0, "exitFrames": 6, "entranceFrames": 6,
       "supportRole": "action", "attentionCost": "low",
       "components": ["批注"],

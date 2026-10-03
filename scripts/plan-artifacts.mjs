@@ -50,10 +50,20 @@ const placementPairs = (sourceTranscript, timelineWindows, fps, corrections) => 
         const previous = placed.at(-1);
         // A cut can split a single ASR token. Join its forward fragments;
         // a repeated take (source time rewinds) remains a distinct occurrence.
-        if (previous?.sourceWordId === next.sourceWordId && next.sourceStart >= previous.sourceEnd - EPSILON
+        const sourceSeamDelta = previous ? next.sourceStart - previous.sourceEnd : Number.POSITIVE_INFINITY;
+        const sourceFrameTolerance = 1 / fps + EPSILON;
+        if (previous?.sourceWordId === next.sourceWordId
+          && next.sourceStart >= previous.sourceStart - EPSILON
+          && Math.abs(sourceSeamDelta) <= sourceFrameTolerance
           && Math.abs(previous.end - next.start) < 1e-5) {
-          previous.end = next.end;
-          previous.sourceEnd = next.sourceEnd;
+          // Normalize a sub-frame source overlap/gap at the midpoint before
+          // folding the fragments back into their single ASR word. Equal
+          // starts are valid when the next clip begins inside that word.
+          const sourceSeam = decimal((previous.sourceEnd + next.sourceStart) / 2);
+          previous.sourceEnd = sourceSeam;
+          next.sourceStart = sourceSeam;
+          previous.end = Math.max(previous.end, next.end);
+          previous.sourceEnd = Math.max(previous.sourceEnd, next.sourceEnd);
         } else placed.push(next);
       }
     }
@@ -128,6 +138,68 @@ export const buildReleasedTranscript = ({
     source,
     segments
   };
+};
+
+/** Build plan timing directly from ChatCut's approved main-timeline preview.
+ * Each returned entry is one transcript unit; its range comes from the
+ * timeline item, never from a per-word ASR lookup.
+ */
+export const buildMainTimelineTranscript = ({ snapshot, fps, revision = 2, language = "zh-CN" }) => {
+  const pages = (Array.isArray(snapshot) ? snapshot : [snapshot]).map((page) => page?.structuredContent ?? page);
+  const entries = pages.flatMap((page) => page?.transcript?.entries ?? []);
+  const first = pages[0] ?? {};
+  const timelineFps = first.state?.fps ?? first.fps ?? fps;
+  if (!Number.isFinite(timelineFps) || timelineFps <= 0) throw new Error("main timeline preview must include a positive fps");
+  if (entries.length === 0) throw new Error("main timeline preview contains no transcript entries");
+  const timelineIds = new Set(pages.map((page) => page.state?.id).filter(Boolean));
+  const pageFps = new Set(pages.map((page) => page.state?.fps ?? page.fps).filter((value) => Number.isFinite(value)));
+  const pageDurations = new Set(pages.map((page) => page.state?.durationFrames ?? page.durationFrames).filter((value) => Number.isInteger(value)));
+  if (timelineIds.size > 1 || pageFps.size > 1 || pageDurations.size > 1) {
+    throw new Error("ChatCut preview pages refer to different timeline snapshots; restart once from page 1 on the approved timeline");
+  }
+  for (const [index, page] of pages.entries()) {
+    const coverage = page?.transcript?.coverage ?? page?.coverage;
+    const nextOffset = page?.nextOffset ?? page?.transcript?.nextOffset ?? page?.transcript?.pagination?.nextOffset;
+    const missing = Array.isArray(coverage?.missingItemIds) ? coverage.missingItemIds : [];
+    const countsKnown = Number.isInteger(coverage?.candidateItemCount) && Number.isInteger(coverage?.coveredItemCount);
+    const status = typeof coverage === "string" ? coverage : coverage?.status;
+    const countsComplete = countsKnown && coverage.coveredItemCount === coverage.candidateItemCount && missing.length === 0;
+    if (missing.length > 0 || status === "partial" || status === "unavailable"
+      || (countsKnown && coverage.coveredItemCount < coverage.candidateItemCount)) {
+      const affected = missing.length > 0 ? ` (${missing.join(", ")})` : "";
+      throw new Error(`ChatCut transcript preview page ${index + 1} has incomplete item coverage${affected}; restore those items' transcript in ChatCut before generating plans`);
+    }
+    const recognizedComplete = status === "complete" || (!status && countsComplete);
+    if (!recognizedComplete) {
+      throw new Error(`ChatCut transcript preview page ${index + 1} has no recognized coverage result; save the complete preview response and retry plan generation`);
+    }
+  }
+  const itemIds = entries.map((entry) => entry.itemId).filter(Boolean);
+  if (itemIds.length === entries.length && new Set(itemIds).size !== itemIds.length) {
+    throw new Error("ChatCut preview repeats timeline item IDs; remove duplicate pages and save each page once in order");
+  }
+  const lastPage = pages.at(-1);
+  const nextOffset = lastPage?.nextOffset ?? lastPage?.transcript?.nextOffset ?? lastPage?.transcript?.pagination?.nextOffset;
+  if (nextOffset !== undefined && nextOffset !== null) throw new Error(`ChatCut main-timeline preview has another page at offset ${nextOffset}; retrieve it and add it to state/chatcut-main-timeline.json before generating plans`);
+
+  const segments = entries.map((entry, index) => {
+    const text = String(entry.text ?? entry.transcript ?? "").trim();
+    const range = entry.timelineRange ?? entry.range ?? {};
+    const startFrame = range.fromFrame ?? range.startFrame;
+    const endFrame = range.toFrame ?? range.endFrame;
+    const id = `main-${pad3(index + 1)}`;
+    if (!text) throw new Error(`ChatCut main-timeline entry ${id} has no transcript text`);
+    if (!Number.isInteger(startFrame) || !Number.isInteger(endFrame) || endFrame <= startFrame) {
+      throw new Error(`ChatCut main-timeline entry ${id} has no valid frame range`);
+    }
+    const start = decimal(startFrame / timelineFps);
+    const end = decimal(endFrame / timelineFps);
+    return { id, text, start, end, confidence: null, words: [{ text, start, end, confidence: null }] };
+  });
+  if (segments.length === 0) throw new Error("main timeline preview contains no transcript entries");
+  const lastFrame = pages.reduce((latest, page) => Math.max(latest, page.state?.durationFrames ?? page.durationFrames ?? 0), 0);
+  const duration = lastFrame > 0 ? lastFrame / timelineFps : Math.max(...segments.map((segment) => segment.end));
+  return { revision, language, duration: decimal(duration), source: "chatcut", segments };
 };
 
 /**
@@ -207,6 +279,8 @@ export const buildCaptionPlan = ({
   transcript,
   transcriptSha256,
   cueLines,
+  timingAuthority = "state/transcript.json word ranges",
+  segmentationAuthority: requestedSegmentationAuthority,
   lexicon = {},
   rules = {},
   exceptions = {},
@@ -251,8 +325,9 @@ export const buildCaptionPlan = ({
     wordingAuthority: "state/transcript.json",
     transcriptRevision: transcript.revision ?? 1,
     transcriptSha256,
-    timingAuthority: "state/transcript.json word ranges",
-    segmentationAuthority: segmentationIsDefault ? "ChatCut source segment boundaries" : "agent-authored word ranges",
+    timingAuthority,
+    segmentationAuthority: requestedSegmentationAuthority
+      ?? (segmentationIsDefault ? "ChatCut source segment boundaries" : "agent-authored word ranges"),
     rules: {
       ...DEFAULT_RULES,
       ...rules,

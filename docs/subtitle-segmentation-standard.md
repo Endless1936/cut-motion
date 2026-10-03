@@ -1,6 +1,6 @@
 # Subtitle Segmentation Standard
 
-Use the generator's default caption segmentation. This standard is for correcting a specific visibly awkward cue, not for manually resegmenting the whole track. Structural and timing checks remain enforced; reading-quality targets are guidance, not extra workflow gates.
+Use the approved ChatCut main-timeline transcript entries and their frame ranges for the routine caption plan. Keep those item boundaries as cues; do not run a character-count or automatic Chinese sentence splitter, and do not fetch source-word timestamps to reconstruct the Script. Exact within-phrase timing changes belong to revisions requested after the user reviews the final video. This guide adds no review or approval gate.
 
 ## Authority
 
@@ -42,4 +42,4 @@ For user-edited segmentation, rebind word anchors to the new text before filling
 
 ## Workflow
 
-Use `state/transcript.json` as wording authority. Keep names, product configurations, number-unit pairs and fixed phrases in the caption lexicon. Let generated segmentation stand by default; add a `cueLines` override only for a specific cue that is clearly awkward or a user-requested change. Do not inspect or rewrite every cue, run `--outline`, or run standalone validators during routine delivery. `compose-job.mjs` checks transcript coverage, protected terms, timing and installation. It promotes the generated plan without a separate user approval.
+Use the approved main-timeline preview as wording and timing authority for a standard ChatCut plan. Keep names, product configurations, number-unit pairs and fixed phrases in the caption lexicon. The generator creates one cue per returned timeline-item transcript entry; this count is not expected to equal the ChatCut Script row count. Do not run `--outline`, fetch per-word timestamps, or repeat a full cue-by-cue audit during routine delivery. `compose-job.mjs` installs the generated plan without a separate user approval.

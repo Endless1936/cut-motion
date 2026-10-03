@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Deterministic assembly order; no rendering, preview, or extra approval.
+// Run after the plan package is approved in Review mode, or after plan generation in explicitly selected Auto mode.
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";

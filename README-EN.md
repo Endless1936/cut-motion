@@ -17,16 +17,16 @@ Use cut-motion to edit this video:
 /Users/your-name/Desktop/video.mov
 ```
 
-The Agent checks the local environment first. If anything needs to be installed or authenticated, it explains why and asks for your permission before continuing.
+The Agent checks the local environment first. Pinned HyperFrames and GSAP packages are reused from, or installed into, the repository's Git-ignored `.cache/cut-motion/` directory. The Agent asks before installing global/system dependencies, changing global Agent settings, or authenticating.
 
 ## What happens next
 
 1. You provide the local path to the talking-head video.
 2. The Agent transcribes it, removes mistakes, repeated takes, reading pauses, and unnecessary dead air.
-3. You review the first edited version and the Agent's recommended caption and visual treatment.
-4. When animation needs approval, the Agent presents one visual plan with the storyboard, wording, timing, and style.
-5. You review the finished preview. After approval, the Agent creates the high-quality final video and tells you its exact file location.
-6. If you request changes later, the Agent only redoes the affected parts instead of starting over.
+3. You review the rough cut in ChatCut and approve it or request revisions.
+4. After rough-cut approval, the Agent starts the clean A-roll export and prepares the caption, motion, and overall-style plans in parallel. In Review mode, you review the three plans together before production continues.
+5. After you approve the plans, the Agent assembles and renders the final video, then gives you the file location. Auto mode continues after plan generation only when you explicitly selected it.
+6. If you request changes after seeing the final video, the Agent revises the affected parts.
 
 ## Two caption styles
 

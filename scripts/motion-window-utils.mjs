@@ -16,7 +16,7 @@ export const resolveBeatRenderWindow = (beat, beatMap, wordsById) => {
   if (!Number.isFinite(fps) || fps <= 0) throw new Error(`${beat.id}: Beat Map fps must be positive`);
   if (!Number.isFinite(fullDuration) || fullDuration <= 0) throw new Error(`${beat.id}: Beat Map duration must be positive`);
   if (!Number.isFinite(start) || start < 0) throw new Error(`${beat.id}: Beat start must be non-negative`);
-  if (!entryWord || !exitWord) throw new Error(`${beat.id}: entry and exit anchors must resolve`);
+  if (!entryWord || !exitWord) throw new Error(`${beat.id}: use entry and exit timing units from the generated transcript; routine ChatCut plans use main-timeline entry units`);
   if (!Number.isInteger(beat.exitAnchorOffsetFrames) || beat.exitAnchorOffsetFrames < 0) {
     throw new Error(`${beat.id}: exitAnchorOffsetFrames must be a non-negative integer`);
   }

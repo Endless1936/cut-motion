@@ -24,7 +24,7 @@ For a visual correction, inspect the affected entrance, readable hold, and exit 
 
 Use the existing Beat fields rather than a second planning document:
 
-- `captionCueIds` and entry/exit word anchors bind the exact spoken clause. A material named after one phrase does not inherit the rest of the paragraph. Check the resolved render end, including exit motion; changing `beat.end` alone does not change an old word anchor.
+- For the first composition, entry/exit anchors use the approved main-timeline phrase range; `:word-001` represents the whole entry in this path. Resolve a within-phrase word time only when the user's final-cut feedback identifies a specific timing change. A material named after one phrase does not inherit the rest of the paragraph. Check the resolved render end, including exit motion; changing `beat.end` alone does not change an existing anchor.
 - `evidenceSource`/`assets` identify the current material. `visualEncoding` describes the region that needs to remain legible and any crop. Keep units, labels, and source context needed to understand the evidence.
 - `visualStyle` describes the reference behavior being reused and the adaptation for this material. `layout` records placement and any user-approved face coverage.
 

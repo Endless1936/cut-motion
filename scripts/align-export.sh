@@ -1,27 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ChatCut renders its preview in the browser, so the exported MP4 often carries an
-# audio track slightly longer than the video track. The workflow's media lock
-# rejects that with "audio and video durations differ" (tolerance max(0.1, 2/fps)),
-# and the fix used to be applied by hand every time.
+# Optional legacy helper for an explicitly requested edit to remove a known
+# trailing audio overhang. Stream end-duration differences alone do not indicate
+# A/V desynchronization, and the normal workflow does not run this helper.
 #
 # Usage:
-#   scripts/align-export.sh <input.mp4> [--output <path>] [--fps <rate>] [--tolerance <seconds>]
+#   scripts/align-export.sh <input.mp4> --output <job-local-path> [--fps <rate>] [--tolerance <seconds>]
 #
-# The trim target is the video duration plus part of one frame, so every video
-# frame survives while the duration gap shrinks below tolerance. Streams are copied
-# (-c copy): no re-encode. The input is never modified; without --output the result
-# is written next to it as <name>.aligned.mp4.
+# The trim target is the video duration plus part of one frame. This may remove
+# audible audio; keep the original and always pass a job-local --output path.
+# Streams are copied (-c copy), with no re-encode; the input is never modified.
 
 usage() {
   cat <<'EOF'
-Usage: scripts/align-export.sh <input.mp4> [--output <path>] [--fps <rate>] [--tolerance <seconds>]
+Usage: scripts/align-export.sh <input.mp4> --output <job-local-path> [--fps <rate>] [--tolerance <seconds>]
 
-Trims a trailing audio overhang so the media lock's duration tolerance passes,
-without dropping video frames and without re-encoding. Exits 0 when the file is
-already within tolerance (nothing is written), 1 when it cannot be aligned, and 64
-on a usage error. Stdout is the usable media path; diagnostics go to stderr.
+Optional: trims a trailing audio overhang after an explicit editorial decision.
+Do not use it as an A/V sync check. Exits 0 when the file is already within the
+duration tolerance (nothing is written), 1 when it cannot be aligned, and 64 on a
+usage error. Stdout is the resulting media path; diagnostics go to stderr.
 EOF
 }
 
@@ -43,6 +41,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -f "$input" ]] || { echo "Input media not found: $input" >&2; exit 66; }
+[[ -n "$output" ]] || { echo "--output must point to a job-local destination; the input is never modified" >&2; exit 64; }
 command -v ffmpeg >/dev/null 2>&1 || { echo "ffmpeg is required" >&2; exit 69; }
 command -v ffprobe >/dev/null 2>&1 || { echo "ffprobe is required" >&2; exit 69; }
 command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 69; }
@@ -118,11 +117,6 @@ if awk -v t="$target" -v l="$longest" 'BEGIN { exit !(t >= l) }'; then
   exit 1
 fi
 
-if [[ -z "$output" ]]; then
-  directory="$(cd "$(dirname "$input")" && pwd)"
-  base="$(basename "$input")"
-  output="${directory}/${base%.*}.aligned.mp4"
-fi
 if [[ "$(cd "$(dirname "$output")" 2>/dev/null && pwd)/$(basename "$output")" == "$(cd "$(dirname "$input")" && pwd)/$(basename "$input")" ]]; then
   echo "Refusing to overwrite the input; choose a different --output" >&2
   exit 64

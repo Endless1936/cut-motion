@@ -134,8 +134,8 @@ printf '#!/usr/bin/env node\n' > "$mismatch_source/hyperframes/node_modules/hype
 chmod +x "$mismatch_source/hyperframes/node_modules/hyperframes/dist/cli.js"
 ln -s ../hyperframes/dist/cli.js "$mismatch_source/hyperframes/node_modules/.bin/hyperframes"
 npm_config_cache="$cache" bash "$reuse_repository/scripts/check-environment.sh" install-job "$mismatch_job" --yes >/dev/null
-[[ -L "$mismatch_job/hyperframes/node_modules/hyperframes" ]] || {
-  echo "Mismatched reusable HyperFrames was not skipped in favor of exact cache" >&2
+[[ "$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1])).version)' "$mismatch_job/hyperframes/node_modules/hyperframes/package.json")" == "0.7.60" ]] || {
+  echo "Mismatched reusable HyperFrames was not skipped in favor of the exact shared cache" >&2
   exit 1
 }
 rm -rf "$mismatch_job"
@@ -146,8 +146,8 @@ mkdir -p "$broken_source/hyperframes/node_modules" "$broken_job/hyperframes/asse
 cp "$repository_root/templates/hyperframes/package.json" "$broken_job/hyperframes/package.json"
 ln -s "$broken_source/missing-hyperframes" "$broken_source/hyperframes/node_modules/hyperframes"
 npm_config_cache="$cache" bash "$reuse_repository/scripts/check-environment.sh" install-job "$broken_job" --yes >/dev/null
-[[ -L "$broken_job/hyperframes/node_modules/hyperframes" ]] || {
-  echo "Broken reusable HyperFrames link did not fall back to exact cache" >&2
+[[ "$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync(process.argv[1])).version)' "$broken_job/hyperframes/node_modules/hyperframes/package.json")" == "0.7.60" ]] || {
+  echo "Broken reusable HyperFrames link did not fall back to the exact shared cache" >&2
   exit 1
 }
 

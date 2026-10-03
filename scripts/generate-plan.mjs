@@ -17,8 +17,8 @@
  *         docs/caption-plan.md              (via render-caption-review-doc.mjs)
  *         docs/creative-confirmation.md
  *
- * Without --write it prints the plan and touches nothing; --outline writes
- * word IDs for agent-authored natural-phrase caption ranges.
+ * Without --write it prints the plan and touches nothing. Archived ChatCut
+ * jobs can opt into their locked source-word timing with --legacy-source-timing.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -29,6 +29,7 @@ import { resolveCaptionCues } from "./caption-review-utils.mjs";
 import {
   buildBeatMap,
   buildCaptionPlan,
+  buildMainTimelineTranscript,
   buildReconciliationItems,
   buildReleasedTranscript,
   buildSourceWordEvidence
@@ -38,7 +39,7 @@ import { renderCreativeConfirmationDoc, renderMotionPlanDoc } from "./render-pla
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const [jobArgument, ...flags] = process.argv.slice(2);
 if (!jobArgument) {
-  console.error("Usage: node scripts/generate-plan.mjs <job-directory> [--outline | --write [--replace-existing]]");
+  console.error("Usage: node scripts/generate-plan.mjs <job-directory> [--outline (legacy) | --legacy-source-timing | --write [--replace-existing]]");
   process.exit(64);
 }
 const write = flags.includes("--write");
@@ -51,7 +52,7 @@ const require_ = (relative) => {
   return absolute;
 };
 
-// Expose transcript word IDs so the Agent can hand-segment captions by phrase.
+// Legacy source-word outline for older jobs; the normal ChatCut route uses main-timeline item ranges.
 if (flags.includes("--outline")) {
   const workflow = read("state/workflow.json");
   const project = read("state/project.json");
@@ -70,7 +71,7 @@ if (flags.includes("--outline")) {
       words: s.words.map((w, i) => ({ ...w, index: i + 1, id: `${s.id}:word-${String(i + 1).padStart(3, "0")}` }))
     }))
   });
-  console.log("Wrote state/planning-outline.json. Use segment IDs and 1-based word indices to enter Chinese phrase boundaries in cueLines.");
+  console.log("Wrote legacy source-word planning outline. Standard ChatCut plans use the approved main-timeline snapshot instead.");
   process.exit(0);
 }
 
@@ -79,28 +80,43 @@ const inputs = read("state/planning-inputs.json");
 const workflow = read("state/workflow.json");
 const project = read("state/project.json");
 const designSystem = read(project.designSystem ?? "state/design-system.json");
-const sourceTranscript = read("state/source-transcript.json");
-if (workflow.sourceTranscriptSha256 && workflow.sourceTranscriptSha256 !== sha256File(rel("state/source-transcript.json"))) {
+const mainTimelinePath = rel("state/chatcut-main-timeline.json");
+const mainTimelineSnapshot = fs.existsSync(mainTimelinePath) ? read("state/chatcut-main-timeline.json") : null;
+const useMainTimeline = mainTimelineSnapshot !== null;
+const useLegacySourceTiming = !useMainTimeline && (project.roughCutEngine === "ffmpeg-fallback" || flags.includes("--legacy-source-timing"));
+if (!useMainTimeline && !useLegacySourceTiming) {
+  throw new Error('Save the approved ChatCut preview_timeline({views:["transcript"]}) response to state/chatcut-main-timeline.json, then run generate-plan.mjs again. Archived source-word jobs can use --legacy-source-timing.');
+}
+const firstMainPage = (Array.isArray(mainTimelineSnapshot) ? mainTimelineSnapshot[0] : mainTimelineSnapshot)?.structuredContent
+  ?? (Array.isArray(mainTimelineSnapshot) ? mainTimelineSnapshot[0] : mainTimelineSnapshot);
+const mainTimelineState = firstMainPage?.state ?? {};
+const sourceTranscript = useMainTimeline ? null : read("state/source-transcript.json");
+if (!useMainTimeline && workflow.sourceTranscriptSha256 && workflow.sourceTranscriptSha256 !== sha256File(rel("state/source-transcript.json"))) {
   throw new Error("Source transcript changed after its workflow lock; restore the locked source transcript before generating plans.");
 }
-const timelineWindows = read("state/timeline-source-windows.json");
+const timelineWindows = useMainTimeline ? null : read("state/timeline-source-windows.json");
 const annotationState = read("state/reference-script-annotations.json");
 
-const fps = project.fps ?? inputs.fps ?? 30;
+const fps = mainTimelineState.fps ?? firstMainPage?.fps ?? project.fps ?? inputs.fps ?? 30;
 // The workflow is the single source of truth; do not block plan generation on
 // a stale duplicate copied into planning-inputs.json.
 const captionMode = workflow.captionMode;
 const corrections = inputs.corrections ?? {};
 
 // ---------------------------------------------------------------- artifacts
-const released = inputs.releasedTranscript
-  ? { ...read("state/transcript.json"), ...inputs.releasedTranscript }
+const baseReleased = useMainTimeline
+  ? buildMainTimelineTranscript({ snapshot: mainTimelineSnapshot, fps, revision: inputs.revision ?? 2, language: project.language ?? "zh-CN" })
   : buildReleasedTranscript({ sourceTranscript, timelineWindows, fps, corrections, revision: inputs.revision ?? 2, language: project.language ?? "zh-CN" });
+const released = !useMainTimeline && inputs.releasedTranscript ? { ...baseReleased, ...inputs.releasedTranscript } : baseReleased;
 
 const captionPlan = buildCaptionPlan({
   transcript: released,
   transcriptSha256: sha256Text(serializeJson(released)),
   cueLines: inputs.cueLines,
+  ...(useMainTimeline ? {
+    timingAuthority: "approved ChatCut main timeline item ranges",
+    segmentationAuthority: "ChatCut main timeline transcript entries"
+  } : {}),
   lexicon: inputs.lexicon ?? {},
   rules: inputs.cueRules ?? {},
   exceptions: inputs.cueExceptions ?? {},
@@ -123,7 +139,9 @@ for (const beat of beatMap.beats) {
   }
 }
 
-const evidence = buildSourceWordEvidence({ sourceTranscript, timelineWindows, releasedTranscript: released, fps, corrections });
+const evidence = useMainTimeline
+  ? { rows: [], entries: [] }
+  : buildSourceWordEvidence({ sourceTranscript, timelineWindows, releasedTranscript: released, fps, corrections });
 const existingReconciliation = fs.existsSync(rel("state/transcript-reconciliation.json")) ? read("state/transcript-reconciliation.json") : {};
 const reconciliationItems = buildReconciliationItems({ transcript: released, corrections, plan: inputs.reconciliation ?? {}, sourceTranscript, existingItems: existingReconciliation.items ?? [], previousTranscript: fs.existsSync(rel("state/transcript.json")) ? read("state/transcript.json") : undefined });
 const referenceItemIds = reconciliationItems.filter((item) => item.referenceText).map((item) => item.id);
@@ -238,11 +256,11 @@ const creativeConfirmation = {
 const localBeats = beatMap.beats.filter((beat) => beat.mgScope === "local");
 console.log(`job            ${path.basename(jobRoot)}`);
 console.log(`caption mode   ${captionMode}`);
-console.log(`released       ${released.segments.length} segments / ${released.segments.reduce((sum, s) => sum + s.words.length, 0)} words / ${released.duration}s`);
+console.log(`released       ${released.segments.length} ChatCut transcript segments / ${released.duration}s`);
 console.log(`captions       ${captionPlan.cues.length} cues, ${captionPlan.cues.filter((cue) => cue.text.length > 0).length} non-empty`);
 console.log(`beats          ${beatMap.beats.length} (${localBeats.length} local MG)`);
 for (const beat of localBeats) console.log(`  ${beat.id}  ${beat.start.toFixed(2)}-${beat.end.toFixed(2)}  cues ${beat.captionCueIds.join(",")}`);
-console.log(`evidence       ${evidence.rows.length} source rows`);
+console.log(`timing source  ${useMainTimeline ? "approved ChatCut main timeline" : `${evidence.rows.length} source-word rows`}`);
 console.log(`reconciliation ${reconciliation.items.length} items (${reconciliation.items.filter((i) => i.type === "asr-correction").length} asr-correction)`);
 
 if (!write) {
@@ -257,19 +275,28 @@ json("state/transcript.json", released);
 json("captions/caption-lexicon.json", inputs.lexicon ?? {});
 json("captions/caption-review-plan.json", captionPlan);
 json("state/beat-map.json", beatMap);
-json("state/timeline-source-words.json", { schemaVersion: "1.0.0", fps, entries: evidence.entries });
+if (!useMainTimeline) json("state/timeline-source-words.json", { schemaVersion: "1.0.0", fps, entries: evidence.entries });
 json("captions/chatcut-pages.json", {
-  source: "ChatCut inspect_asset original source word rows",
+  source: useMainTimeline ? "chatcut-viewer-pages" : "ChatCut inspect_asset original source word rows",
   fps,
   cleanExport: cleanExportPath,
-  timelineVersion: `chatcut-timeline-${inputs.timelineId ?? "unknown"}`,
+  timelineVersion: `chatcut-timeline-${inputs.timelineId ?? mainTimelineState.timelineId ?? mainTimelineState.id ?? "unknown"}`,
   roughCutLocked,
   ...(typeof inputs.cleanExport?.captionRenderDisabled === "boolean"
     ? { captionRenderDisabled: inputs.cleanExport.captionRenderDisabled }
     : {}),
-  rows: evidence.rows,
-  timelineMapping: "state/timeline-source-words.json",
-  timelineMappingSha256: sha256Text(outputs.get("state/timeline-source-words.json"))
+  ...(useMainTimeline
+    ? { pages: released.segments.map((segment) => ({
+      id: segment.id,
+      startFrame: Math.round(segment.start * fps),
+      endFrame: Math.round(segment.end * fps),
+      viewerText: segment.text
+    })) }
+    : {
+      rows: evidence.rows,
+      timelineMapping: "state/timeline-source-words.json",
+      timelineMappingSha256: sha256Text(outputs.get("state/timeline-source-words.json"))
+    })
 });
 json("state/transcript-reconciliation.json", reconciliation);
 outputs.set("docs/motion-plan.md", motionPlanDoc);
@@ -298,7 +325,7 @@ const unchangedScaffold = (name, old) => {
   const template = scaffoldFile[name];
   if (template) return old === fs.readFileSync(path.join(scriptDirectory, "../templates/job", template), "utf8");
   if (name === "state/transcript.json") return ["rough-cut-export", "motion-plan", "composition"].includes(workflow.currentState)
-    && workflow.sourceTranscriptSha256 === sha256Text(old) && workflow.sourceTranscriptSha256 === sha256File(rel("state/source-transcript.json"));
+    && (useMainTimeline || (workflow.sourceTranscriptSha256 === sha256Text(old) && workflow.sourceTranscriptSha256 === sha256File(rel("state/source-transcript.json"))));
   if (name === "state/creative-confirmation.json") {
     const original = readJson(path.join(scriptDirectory, "../templates/job/creative-confirmation.json"));
     original.captionMode = workflow.captionMode;

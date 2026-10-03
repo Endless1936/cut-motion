@@ -1,5 +1,6 @@
 .DS_Store
 node_modules/
+/.cache/cut-motion/
 .env
 .env.*
 # Private work belongs in jobs/, regardless of capitalization or nesting.

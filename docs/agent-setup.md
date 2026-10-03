@@ -46,16 +46,16 @@ Create the job:
 ./scripts/scaffold-project.sh jobs/<job-id> /absolute/path/to/video.mov review
 ```
 
-After dependency-install approval:
+Prepare the pinned renderer dependencies when composition is needed. The command first checks the shared repository cache; if the exact versions are absent, it installs them into that cache automatically. This project-local install never requires user approval and does not install global packages or change Agent configuration.
 
 ```bash
-./scripts/check-environment.sh install-job jobs/<job-id> --yes
+./scripts/check-environment.sh install-job jobs/<job-id>
 ./scripts/install-font.sh jobs/<job-id>
 ```
 
 `install-font.sh` resolves the display font in this order: `--from <file>`, the shared cache under `assets/fonts/` (git-ignored, populated by the first job that has the font), fonts already installed in another job, and finally an explicit `--download` from the upstream release. It copies the font and its license into `hyperframes/<fontAsset>`, repoints `state/design-system.json` at the installed file, and rewrites the `@font-face` in the HyperFrames template so the format match is real rather than assumed. Skip it when no font is available; the composition falls back to sans-serif and the font check is optional.
 
-`install-job` first reuses exact-version dependencies already in the current job, then checks valid dependency trees in other jobs under the same repository, then npm's `_npx` cache. A dependency tree copied from another job includes its hoisted dependencies, so the new job does not depend on the old job remaining in place. Invalid links and version mismatches are skipped. GSAP is resolved independently and its browser runtime is regenerated from the verified package. Only when no exact local source exists does it install the pinned dependencies; it never requires a global HyperFrames installation or a user-configured cache path.
+`install-job` stores the pinned HyperFrames, GSAP, and their dependency tree in the Git-ignored `.cache/cut-motion/node_modules/` directory at the repository root. It checks that cache first, then adopts a matching job or npm cache when available; otherwise it downloads the exact versions declared by the job template into the shared cache. Each job links to that shared tree, while its small GSAP browser asset stays in the job. Do not ask for approval to reuse or install these project-pinned packages. Global/system dependencies, Agent plugins/configuration, and OAuth remain separate setup actions.
 
 ## ChatCut preflight
 
@@ -73,6 +73,7 @@ Check for an existing asset first. Use the active integration's import skill and
 
 - When the hosted plugin supports same-machine editor import, use its bundled local-media helper and `import_media action=from_editor`. Keep the editor open for sync and transcription.
 - Otherwise use the supported desktop import tool or `import_media action=create_session` and its matching upload helper. Follow that helper's arguments; do not transplant `--input`, retry, or transcription-only flags from another client. Keep import tokens out of chat, logs and Git.
+- If the loopback helper returns `listen EPERM` before transferring media, retry that helper only through the host-approved local-network permission path. If the client does not support the loopback bridge, use its documented upload helper; if the host or OS denies the requested operation, stop and ask the user to grant that permission or upload through the editor. Do not change transfer routes to bypass the denial or spend time probing endpoints.
 - On a timeout, inspect progress and the existing asset before retrying. A helper still retrying is not a terminal failure; resume the same asset through its supported recovery path instead of starting another upload/transcode.
 - Wait for transcription readiness using the integration's progress/asset tools before Script editing. An upload acknowledgment alone does not establish transcript readiness, and a provisional status alone does not justify re-uploading.
 

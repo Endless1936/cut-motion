@@ -1,6 +1,6 @@
 # Workflow State Machine
 
-`state/workflow.json` is authoritative. The only approval gate is `rough-cut-review`; every other step advances after its artifact or check is complete.
+`state/workflow.json` is authoritative. In `review`, the user approves the rough cut at `rough-cut-review` and the three-plan package at `motion-plan` before composition. The rough-cut decision is recorded in state; the agent waits at `motion-plan` for the plan decision. Explicitly selected `auto` mode continues after plan generation.
 
 The state machine records and checks workflow transitions; it does not load Agent instructions. `workflow-state.mjs status` preserves JSON on stdout and prints the matching section link to stderr; successful state changes print the destination section link. Use that section in [`workflow.md`](workflow.md) as the stage guide.
 
@@ -13,13 +13,13 @@ intake → transcription → rough-cut → rough-cut-review → rough-cut-export
 
 `rough-cut` keeps the editable ChatCut timeline as its artifact and completes [the Talking-Head Rough-Cut Golden Standard](talking-head-trim-standard.md) before `rough-cut-review`. `chatcut-roughcut.json` records project and timeline evidence; captions, MG, and B-axis composition are authored in HyperFrames. After manual approval or explicit automatic fallback, export once to `roughcut/a-roll.mp4` and run the basic media lock.
 
-For ChatCut, local transcription records are optional before listening. While the user reviews the stable cut, prepare only key MG beats and real exceptions; use generated caption segmentation. After explicit approval, retrieve missing source words once, start A-roll export and generate the three plans concurrently. No separate plan approval is required. From intake, transcription or rough-cut, record the editable cut and enter the existing review gate directly:
+For ChatCut, local transcription records are optional before listening. While the user reviews the stable cut, prepare only MG content/template choices and real exceptions. After explicit approval, start or resume one clean A-roll export and, in parallel, call `preview_timeline({views:["transcript"]})` once on the approved timeline. Save each page's `structuredContent` in order; only when a page returns `nextOffset`, request the next page with `offset: nextOffset`, the returned timeline ID and the same range and filters. Generate the three plans from that snapshot while export runs. Bind source and anchor references to generated `main-001`, `main-002`, etc. IDs in preview order, not ChatCut item IDs or Script rows. Initial MG timing uses the full entry range; `:word-001` represents that whole entry, and word-level lookup is only for a specific timing change requested after the user reviews the final video. The generator keeps one caption cue per returned timeline-item transcript entry; it does not run an automatic Chinese sentence splitter. Routine ChatCut plan generation does not need source-word retrieval. In `review`, deliver the three plans together and wait at `motion-plan` for the user's package approval; explicitly selected `auto` continues after plan generation. Archived ChatCut jobs that already use locked source-word timing can pass `--legacy-source-timing`; the FFmpeg fallback keeps its existing route. From intake, transcription or rough-cut, record the editable cut and enter the existing review gate directly:
 
 ```bash
 node scripts/workflow-state.mjs jobs/<job-id>/state/workflow.json review-cut --project-id <id> --timeline-id <id>
 ```
 
-This writes the project/timeline record, preserves existing source-transcript locks and requests the user's decision. It does not claim to validate listening quality or require cleanup history. If source words are missing, retrieve them once after approval for plan generation. The `ffmpeg-fallback` path keeps its existing trim-plan audit.
+This writes the project/timeline record, preserves existing source-transcript locks and requests the user's decision. It does not claim to validate listening quality or require cleanup history. The `ffmpeg-fallback` path keeps its existing trim-plan audit; use the `prepare-rough-cut.mjs ... transcript` source-word import only for that explicit fallback or an existing legacy source-word job. An archived ChatCut job without a main-timeline snapshot can use its already locked source-word timing with `generate-plan.mjs <job> --legacy-source-timing`.
 
 At `composition`, `workflow-state.mjs` rebuilds `hyperframes/index.html` from `index.template.html`, the Beat Map, transcript, and MG modules, then records that build's hash. Those authored files are the editing source; generated HTML is disposable and the render entrypoint rebuilds from the same source before rendering.
 
@@ -33,9 +33,9 @@ Transitions check only the artifacts needed for the next operation. They do not 
 
 ## Modes
 
-`review` is the default: wait at `rough-cut-review`; the normal phase checks are stated in [`workflow.md`](workflow.md).
+`review` is the default: wait at `rough-cut-review`, then wait at `motion-plan` after delivering the three plans. Resume composition after the user's package approval. The normal phase checks are stated in [`workflow.md`](workflow.md).
 
-`auto` resolves the existing `rough-cut-review` state with `automatic-fallback` and uses the same minimal checks stated in [`workflow.md`](workflow.md). Passing checks do not replace the user's aesthetic decision.
+`auto` resolves the existing `rough-cut-review` state with `automatic-fallback` and continues after plan generation, using the same minimal checks stated in [`workflow.md`](workflow.md). The user must have explicitly selected Auto; passing checks do not replace the user's aesthetic decision.
 
 ## Revisions
 
