@@ -30,7 +30,7 @@ The command builds/reuses the waveform index, converts timeline entries into sou
 
 For each plan clip, send ChatCut the computed `timelineStartFrameAfterShift`, `durationFramesAfterTrim`, `sourceStartUsAfterTrim` and `sourceEndUsAfterTrim` in the tool's corresponding fields. Keep item IDs unchanged. The companion `timeline-source-windows.proposed.json` contains the resulting mapping: adopt it as `timeline-source-windows.json` only after the entire batch succeeds. For a partial failure, fetch the actual current timeline once and report the outcome rather than reapplying the old batch.
 
-One final timeline read confirms the batch landed. Deliver immediately; no further scan, ASR-overlap sweep, gap reclassification, per-seam playback or MP4 export precedes listening. Do not run global audio smoothing by default.
+One final timeline read confirms the batch landed; save its structured pages for later source mapping. Deliver immediately; no further scan, ASR-overlap sweep, gap reclassification, per-seam playback or MP4 export precedes listening. Do not run global audio smoothing by default.
 
 ## Handoff
 
@@ -42,6 +42,6 @@ This generates the rough-cut record and enters the existing `rough-cut-review` f
 
 ## After user feedback
 
-Repair only the reported passages. A targeted waveform lookup or `inspect-media-window.mjs` can help with a specific seam; see [audio index mechanics](source-audio-silence-index.md). `classify-gaps.mjs` and `check-gap-candidates.mjs` remain optional diagnostics for a requested cleanup investigation.
+Repair only the reported passages. Save the timeline snapshot confirming these edits; composition uses it to refresh source windows following [MG speech timing](mg-speech-timing.md), without another tightening pass. A targeted waveform lookup or `inspect-media-window.mjs` can help with a specific seam; see [audio index mechanics](source-audio-silence-index.md). `classify-gaps.mjs` and `check-gap-candidates.mjs` remain optional diagnostics for a requested cleanup investigation.
 
 For an explicit FFmpeg fallback, use the existing trim-plan commands and their media checks. This is not a second pass on a ChatCut cut.

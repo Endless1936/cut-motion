@@ -12,7 +12,7 @@ The layers prevent both failure modes: a static scene with too little happening 
 
 ## Density envelope
 
-Use one focal group and one to four supporting elements. The focal group should occupy 28–65% of the vertical canvas after padding. Support elements should carry meaning: icon, label, live status, track, diagram, progress, or particle response.
+Use one focal group and one to four supporting elements. In motion-copy or a B-axis stage, the focal group should occupy 28–65% of the vertical canvas after padding. A-roll overlays stay compact enough to protect the speaker and captions; that occupancy range is not a minimum for a local MG. Support elements should carry meaning: icon, label, live status, track, diagram, progress, or particle response.
 
 ## MG cadence target
 
@@ -22,11 +22,13 @@ If the frame feels empty, enrich the focal idea before adding decoration. If it 
 
 ## Vertical composition
 
+Calculate the complete background card bounds before playback and keep them fixed during the MG. Progressive speech-bound reveals affect internal content, not the background's width, height or clipping.
+
 - Metadata zone: 5–16% of frame height.
 - Primary stage: 22–78%.
 - Finale and support zone: 72–94% when it does not conflict with playback controls in the target platform.
 
-These are planning zones, not rigid rows. Primary text should not default to the metadata zone.
+These are planning zones for motion-copy and B-axis stages, not rigid rows. A-roll overlays use an upper-middle starting position: 280px (14.58%) on the 1080×1920 canvas. The overall MG and background card remain horizontally centered (`x + width / 2 = 0.5` for normalized bounds); internal alignment is independent. Adjust height and width to avoid captions; eyes and mouth do not need clearance. Tall lists can move upward with compact left-aligned rows inside a centered card; short cards need no full-width empty surface. Templates provide a starting position; adjust the card around the actual caption region.
 
 ## Peak-state measurement
 
@@ -34,8 +36,8 @@ Approved templates reuse their implemented bounds. For a custom or resized layou
 
 ## Timing and typography bounds
 
-- Begin phrase motion within three frames of its acoustic onset; anchor the first meaningful event to a spoken word within 400ms. Connected elements in one reveal group start within two frames.
-- In subtitle mode, use 0.8–1.8 seconds as a spacing guide for meaningful micro-events inside approved local MG; trigger each event from speech or meaning, not a fixed timer. Caption-only passages need no animation.
+- Begin each spoken element's entrance on the first frame at or after its keyword onset, using actual word timing. Connected decorations in the same semantic reveal may start together; separate spoken items follow their own onsets.
+- In subtitle mode, 0.8–1.8 seconds is only a pacing reference for nonspoken embellishments. Speech determines content intervals even when they are shorter or longer; do not mechanically stagger items, rush ahead of narration or prolong the hold after its meaning ends. Caption-only passages need no animation.
 - Reuse the selected template's transition family consistently; vary it when the content benefits, without a repetition quota or reuse justification.
 - For 1080×1920 vertical video, primary Chinese copy is normally 84–156 px and secondary copy at least 42 px. Use 0.92–1.12 display line height and 1.15–1.35 body-copy line height.
 - Keep 54 px horizontal and 88 px vertical canvas clearance, with 18 px around outlined or transformed glyphs. Panel padding is normally 48–72 px.

@@ -2,8 +2,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { templateContent } from "./mg-template-content.mjs";
 
 export const templateRoot = fileURLToPath(new URL("../templates/motion-graphics/", import.meta.url));
+export const DEFAULT_MG_TOP_PX = 280; // Upper placement on the 1080×1920 template canvas.
 const entries = {
   "ordered-steps": ["h3", "p", "h3", "p", "h3", "p", "h3", "p"],
   "parallel-points": ["p", "p", "p", "p"],
@@ -27,7 +29,7 @@ export const componentNames = () => Object.keys(entries);
 export function resolveComponent(reference) {
   const name = aliases[reference] ?? reference;
   if (!Object.hasOwn(entries, name ?? "")) return null;
-  const slots = entries[name];
+  const slots = entries[name]; // Legacy sample count, never a content limit.
   // The shared transition helper has no fragment; every other template owns
   // its semantic metadata on the rendered root element.
   let semanticTopology = "demonstration", primaryFlowAxis = "vertical";
@@ -38,7 +40,7 @@ export function resolveComponent(reference) {
     primaryFlowAxis = root.match(/\bdata-primary-flow-axis=["']([^"']+)["']/)?.[1];
     if (!semanticTopology || !primaryFlowAxis) throw new Error(`${name}: template root needs data-topology and data-primary-flow-axis`);
   }
-  return { meta: { name, semanticTopology, primaryFlowAxis, motionFamily: "editorial", transitionFamily: "template-reveal", summary: `Approved ${name} template`, copySlots: slots.length }, render: ({ beat }) => renderTemplate(name, beat) };
+  return { meta: { name, semanticTopology, primaryFlowAxis, motionFamily: "editorial", transitionFamily: "template-reveal", summary: `Reusable ${name} template`, legacyCopySlots: slots.length, ...(!name.startsWith("stage/") ? { defaultTopPx: DEFAULT_MG_TOP_PX } : {}) }, content: beat => templateContent(name, beat), render: ({ beat }) => renderTemplate(name, beat) };
 }
 export const describeComponents = () => componentNames().map((name) => resolveComponent(name).meta);
 export function componentFor(beat) {
@@ -55,19 +57,24 @@ export function renderTemplate(name, beat) {
   let fragment = fs.readFileSync(path.join(directory, "fragment.html"), "utf8");
   const data = beat.templateData ?? {};
   const copy = data.copy ?? beat.onScreenCopy ?? [];
-  const slots = entries[name];
-  if (!Array.isArray(copy) || copy.length !== slots.length || copy.some((value) => typeof value !== "string")) throw new Error(`${beat.id}: ${name} needs ${slots.length} text slots in templateData.copy`);
-  let index = 0;
-  if (name === "correction") {
-    fragment = fragment.replace(/(<p class="correction-old"[^>]*>)[\s\S]*?(<span)/, (_, open, span) => `${open}${escapeHtml(copy[index++])}\n    ${span}`);
+  if (!Array.isArray(copy) || copy.some(value => typeof value !== "string")) throw new Error(`${beat.id}: MG copy must be text strings`);
+  if (data.items !== undefined && (!Array.isArray(data.items) || data.items.some(item => typeof item !== "string" && (!item || typeof (item.label ?? item.text) !== "string")))) throw new Error(`${beat.id}: items need text or labelled objects`);
+  if (name === "evidence-focus") {
+    if (typeof data.image !== "string" || !data.image.replace(/^\.\//, "").startsWith("assets/") || !/^[a-zA-Z0-9_./-]+$/.test(data.image) || data.image.split("/").includes("..") || typeof data.alt !== "string") throw new Error(`${beat.id}: evidence needs a local assets/ image and alt text`);
+    if (!Array.isArray(data.focus) || !data.focus.length) throw new Error(`${beat.id}: evidence needs focus rectangles`);
+    for (const { x, y, width, height } of data.focus) {
+      if (![x,y,width,height].every(Number.isFinite) || x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > 100 || y + height > 100) throw new Error(`${beat.id}: invalid focus rectangle percentages`);
+    }
   }
-  // Only textual leaves are slots: decorative spans and nested containers stay intact.
-  fragment = fragment.replace(/<(p|h3|h4|code|span)(\s[^>]*)?>([^<]*(?:<br\s*\/?\s*>[^<]*)*)<\/\1>/g, (whole, tag, attrs, text) => {
-    if (!text.trim() || /class="(?:step-number|code-number)"/.test(attrs ?? "")) return whole;
-    if (index >= copy.length) throw new Error(`${name}: template text slots changed`);
-    return `<${tag}${attrs ?? ""}>${escapeHtml(copy[index++]).replaceAll("\n", "<br>")}</${tag}>`;
-  });
-  if (index !== copy.length) throw new Error(`${name}: template text slots changed`);
+  const content = templateContent(name, beat);
+  if (content) {
+    if (name !== "evidence-focus" && !content.copy.length) throw new Error(`${beat.id}: MG needs meaningful content`);
+    const rootTag = fragment.match(/^\s*<div\b[^>]*>/)[0].replace(/\s(?:style|data-layout)="[^"]*"/g, "");
+    const layout = data.layout ?? (name === "linear-flow" && (data.items?.length ?? copy.length) > 4 ? "vertical" : "default");
+    const axis = name === "linear-flow" && layout === "vertical" ? "vertical" : content.axis;
+    fragment = `${rootTag}${content.body}</div>\n`.replace(/data-primary-flow-axis="[^"]*"/, `data-primary-flow-axis="${axis}"`);
+    fragment = fragment.replace(/^(\s*<div[^>]*)(>)/, `$1 data-layout="${escapeHtml(layout)}"$2`);
+  }
   fragment = fragment.replace(/data-beat-id="[^"]*"/, `data-beat-id="${escapeHtml(beat.id)}"`).replace(/data-axis="[^"]*"/, `data-axis="${escapeHtml(beat.axis ?? "A")}"`);
   if (beat.layout?.faceCover) fragment = fragment.replace(/data-face-cover="[^"]*"/, `data-face-cover="${escapeHtml(beat.layout.faceCover)}"`);
   const times = data.revealTimes ?? (beat.microEvents?.length ? beat.microEvents.map((event) => Number(event.time) - Number(beat.start)) : null);
@@ -75,26 +82,17 @@ export function renderTemplate(name, beat) {
   if (times && (times.length !== count || times.some((time) => !Number.isFinite(time) || time < 0 || time >= beat.end - beat.start))) throw new Error(`${beat.id}: revealTimes needs ${count} relative times inside the beat`);
   let atIndex = 0;
   fragment = fragment.replace(/data-at="([^"]*)"/g, (_, value) => {
-    const time = times ? times[atIndex++] : Number(value);
+    const time = times ? times[atIndex++] : (count <= 1 ? 0 : atIndex++ * Math.min(0.55, (beat.end - beat.start) * 0.55 / (count - 1)));
     if (time >= beat.end - beat.start) throw new Error(`${beat.id}: sample reveal exceeds beat; supply revealTimes`);
     return `data-at="${time}"`;
   });
-  if (data.topPx !== undefined) {
-    if (!Number.isFinite(data.topPx)) throw new Error(`${beat.id}: topPx must be finite`);
-    fragment = fragment.replace(/^(<div[^>]*)(>)/, `$1 style="--mg-top:${data.topPx}px"$2`);
-  }
-  if (name === "evidence-focus") {
-    if (typeof data.image !== "string" || !/^(?:\.\/)?assets\/[\w./-]+$/.test(data.image) || data.image.split("/").includes("..") || typeof data.alt !== "string") throw new Error(`${beat.id}: evidence needs a local assets/ image and alt text`);
-    if (!Array.isArray(data.focus) || data.focus.length !== 2) throw new Error(`${beat.id}: evidence needs two focus rectangles`);
-    fragment = fragment.replace(/src="[^"]*"/, `src="${escapeHtml(data.image)}"`).replace(/alt="[^"]*"/, `alt="${escapeHtml(data.alt)}"`);
-    let focusIndex = 0;
-    fragment = fragment.replace(/style="left:[^"]*"/g, () => {
-      const { x, y, width, height } = data.focus[focusIndex++];
-      if (![x,y,width,height].every(Number.isFinite) || x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > 100 || y + height > 100) throw new Error(`${beat.id}: invalid focus rectangle percentages`);
-      return `style="left:${x}%;top:${y}%;width:${width}%;height:${height}%"`;
-    });
+  const topPx = data.topPx !== undefined ? data.topPx : (!name.startsWith("stage/") ? DEFAULT_MG_TOP_PX : undefined);
+  if (topPx !== undefined) {
+    if (!Number.isFinite(topPx)) throw new Error(`${beat.id}: topPx must be finite`);
+    if (data.widthPx !== undefined && (!Number.isFinite(data.widthPx) || data.widthPx <= 0)) throw new Error(`${beat.id}: widthPx must be positive`);
+    const width = data.widthPx === undefined ? "" : `;--mg-width:${data.widthPx}px`;
+    fragment = fragment.replace(/^(\s*<div[^>]*)(>)/, `$1 style="--mg-top:${topPx}px${width}"$2`);
   }
   let style = fs.readFileSync(path.join(directory, "style.css"), "utf8");
-  if (name === "annotation" && data.topPx !== undefined) style += `\n.annotation-caption-copy { top: ${data.topPx}px; }\n`;
   return { fragment, style, timeline: fs.readFileSync(path.join(directory, "timeline.mjs"), "utf8") };
 }

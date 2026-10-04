@@ -1,63 +1,11 @@
-.mg-root {
-  position: absolute;
-  top: var(--mg-top, 28%);
-  left: 6%;
-  width: 88%;
-  max-width: 960px;
-  padding: 36px 42px 40px;
-  color: #F4F1E8;
-  font-family: "Smiley Sans", sans-serif;
-  box-sizing: border-box;
-  border-left: 5px solid #7DF2C4;
-  background: rgba(18, 20, 24, 0.92);
-  opacity: 0;
-  visibility: hidden;
-}
+.mg-root { position:absolute;top:var(--mg-top, 280px);left:0;right:0;margin-inline:auto;width:var(--mg-width,88%);max-width:88%;color:var(--mg-paper,#F4F1E8);font-family:"Smiley Sans",sans-serif;font-weight:400;pointer-events:none;opacity:0;visibility:hidden;box-sizing:border-box; }
+.mg-root *, .mg-root *::before, .mg-root *::after { box-sizing:border-box; }
+.mg-root [data-at] { opacity:0;visibility:hidden; }
 
-.mg-root *,
-.mg-root *::before,
-.mg-root *::after {
-  box-sizing: border-box;
-}
-
-.mg-root [data-at] {
-  opacity: 0;
-  visibility: hidden;
-}
-
-.proof-source {
-  margin: 0 0 14px;
-  color: #FFD15C;
-  font-size: 42px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-}
-
-.proof-reading {
-  display: flex;
-  align-items: baseline;
-  gap: 20px;
-  white-space: nowrap;
-}
-
-.proof-value {
-  color: #7DF2C4;
-  font-size: 240px;
-  font-weight: 700;
-  line-height: 0.98;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-}
-
-.proof-unit {
-  color: #F4F1E8;
-  font-size: 72px;
-  font-weight: 550;
-}
-
-.proof-caption {
-  margin: 22px 0 0;
-  color: rgba(244, 241, 232, 0.78);
-  font-size: 54px;
-  line-height: 1.3;
-}
+.mg-root { padding:28px 34px 28px 56px;background:var(--mg-surface,rgba(18,20,24,.74));border-radius:var(--mg-radius,18px); }
+.mg-root::before { content:"";position:absolute;left:22px;top:28px;bottom:28px;width:5px;border-radius:3px;background:var(--mg-mint,#7DF2C4); }
+.proof-source { margin:0 0 14px;font-size:44px;color:var(--mg-yellow,#FFD15C);line-height:1.15; }
+.proof-reading { display:flex;flex-wrap:wrap;align-items:baseline;column-gap:20px;row-gap:12px; }
+.proof-value { color:var(--mg-mint,#7DF2C4);font-size:160px;line-height:1;font-weight:400;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;max-width:100%; }
+.proof-unit { font-size:64px;line-height:1.15; }
+.proof-caption { margin:18px 0 0;font-size:44px;color:rgba(244,241,232,.9);line-height:1.25; }

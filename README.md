@@ -42,7 +42,7 @@ intake → transcription → rough-cut → rough-cut-review → rough-cut-export
 
 带字幕模式可参考 `examples/traework-reference/` 的字幕与局部 MG 结构；可复用的 MG 实现在 [动效模板库](templates/motion-graphics/README.md)，[Book Video 案例](examples/book-video-reference/)记录网格背景、批注字幕和双向 A/B 轴切换的集成方式。无字幕模式按当前 job 的创意方案设计，不依赖通用成片模板。
 
-如果没有偏好，Agent 会在粗剪审核前给出字幕模式和视觉轴建议，并把选择记录到 job 状态中。
+如果没有偏好，Agent 会直接沿用 job 默认的字幕模式和视觉轴，并把选择记录到 job 状态中，不增加偏好确认轮次。
 
 ## 你可以提供什么
 

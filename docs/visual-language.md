@@ -54,8 +54,8 @@ Vary the family by meaning. Keep typography, corner treatment, shadow logic, and
 
 ## Axis-specific composition
 
-- **A-axis:** keep the talking head full-frame beneath localized MG. Replace information groups in sequence, with one primary group and at most one auxiliary group visible. Prefer a face-safe upper-middle region for portrait MG; expand downward when useful.
-- Use face coverage when the effect itself is the subject; record any user-requested duration through the revision standard. Keep glass and blur localized.
+- **A-axis:** keep the talking head full-frame beneath localized MG. Replace information groups in sequence, with one primary group and at most one auxiliary group visible. Keep portrait MG horizontally centered in the upper-middle region; expand downward when useful while avoiding captions.
+- MG may overlap the eyes and mouth without separate approval. Keep captions clear and glass and blur localized.
 - **B-axis:** let motion design own the frame, with an optional moving speaker PiP. Reserve the PiP exclusion zone, accumulate related MG within a semantic scene, then exit it at the scene boundary.
 - Choose the axis for the phrase's meaning and keep passages coherent. Use the approved sample for copy, timing, or size-only revisions; replan changes to flow or hierarchy.
 

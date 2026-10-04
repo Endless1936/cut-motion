@@ -1,27 +1,8 @@
-/* Approved one-line annotation; the spoken caption remains separate. */
-.annotation-caption-root {
-  position: absolute;
-  inset: 0;
-  z-index: 48;
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-}
+.mg-root { position:absolute;top:var(--mg-top, 280px);left:0;right:0;margin-inline:auto;width:var(--mg-width,88%);max-width:88%;color:var(--mg-paper,#F4F1E8);font-family:"Smiley Sans",sans-serif;font-weight:400;pointer-events:none;opacity:0;visibility:hidden;box-sizing:border-box; }
+.mg-root *, .mg-root *::before, .mg-root *::after { box-sizing:border-box; }
+.mg-root [data-at] { opacity:0;visibility:hidden; }
 
-.annotation-caption-copy {
-  position: absolute;
-  top: 80.625%;
-  left: 0;
-  right: 0;
-  width: auto;
-  margin: 0;
-  color: rgba(244, 241, 232, 0.94);
-  font-family: "Smiley Sans", sans-serif;
-  font-size: 80px;
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: 0.015em;
-  text-align: center;
-  white-space: nowrap;
-  text-shadow: 0 3px 9px rgba(0, 0, 0, 0.7);
-}
+.annotation-caption-root { inset:0;width:100%;max-width:none; }
+.annotation-caption-copy { position:absolute;top:var(--mg-top, 280px);left:0;right:0;margin:0 auto;width:var(--mg-width,max-content);max-width:88%;padding:20px 28px;font-size:72px;line-height:1.15;text-align:center;background:var(--mg-surface,rgba(18,20,24,.74));border-radius:var(--mg-radius,18px); }
+.annotation-caption-copy { display:flex;flex-wrap:wrap;justify-content:center;gap:10px 20px; }
+.annotation-caption-copy span { display:inline-block; }

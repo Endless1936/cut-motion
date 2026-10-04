@@ -105,11 +105,11 @@ try {
   Object.assign(faceCoverage.beats[0], { axis: "A", end: 3.2, sourceSegmentIds: ["seg-001", "seg-002"], exitAnchorWordId: "seg-002:word-003", staticHoldReason: "Read the source evidence" });
   const facePath = path.join(temporaryRoot, "face-coverage.json");
   writeJson(facePath, faceCoverage);
-  script("check-visual-plan.mjs", [facePath, transcript, design], false, /without recorded user approval/);
+  script("check-visual-plan.mjs", [facePath, transcript, design]);
   faceCoverage.beats[0].layout.faceCoverApproval = "user";
   writeJson(facePath, faceCoverage);
-  script("check-visual-plan.mjs", [facePath, transcript, design], false, /without recorded user approval/);
-  faceCoverage.beats[0].layout.faceSafetyNote = "User explicitly permits covering eyes and nose to keep evidence legible";
+  script("check-visual-plan.mjs", [facePath, transcript, design]);
+  faceCoverage.beats[0].layout.faceSafetyNote = "Legacy note, not required for face coverage";
   writeJson(facePath, faceCoverage);
   script("check-visual-plan.mjs", [facePath, transcript, design]);
 
@@ -383,7 +383,7 @@ try {
         removalLoss: "看不出被取消的是哪一个依赖", visualEncoding: "划痕编码已取消", stillFrameValue: "暂停仍可读",
         attentionCost: "low", motionFamily: "editorial", transitionFamily: "strike-reveal",
         components: ["工具标签", "划除线"], entranceFrames: 6,
-        layout: { faceSafetyNote: "面板压在下唇与下巴上，不遮眼睛" }
+        layout: { faceSafetyNote: "旧布局说明，仅保留兼容" }
       }
     ],
     reconciliation: { defaultEvidenceNote: "Fixture evidence at {start}-{end}s." },

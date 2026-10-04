@@ -114,8 +114,8 @@ for (let index = 0; index < beats.length; index += 1) {
   if (captionMode === "subtitles") {
     if (!Array.isArray(beat.captionCueIds) || beat.captionCueIds.length === 0) errors.push(`${beat.id}: subtitle MG must map to captionCueIds`);
     if (typeof beat.visualStyle !== "string" || beat.visualStyle.trim().length === 0) errors.push(`${beat.id}: subtitle MG must declare visualStyle`);
-    if (!Array.isArray(beat.onScreenCopy) || (component ? beat.onScreenCopy.length !== component.meta.copySlots : beat.onScreenCopy.length === 0 || beat.onScreenCopy.length > 6)) {
-      errors.push(`${beat.id}: subtitle MG must declare 1–6 exact onScreenCopy strings`);
+    if (!Array.isArray(beat.onScreenCopy) || (!component && (beat.onScreenCopy.length === 0 || beat.onScreenCopy.length > 6))) {
+      errors.push(`${beat.id}: subtitle MG must declare exact onScreenCopy strings matching its content`);
     } else {
       for (const [copyIndex, copy] of beat.onScreenCopy.entries()) {
         if (typeof copy !== "string" || copy.trim().length === 0) {
@@ -249,8 +249,6 @@ for (let index = 0; index < beats.length; index += 1) {
 const aAxisMotionBeats = beats.filter((beat) => beat.axis === "A" && !(captionMode === "subtitles" && beat.mgScope === "none") && !resolveComponent(beat.templateId ?? beat.recipe)?.meta.name.startsWith("stage/"));
 for (const [index, beat] of aAxisMotionBeats.entries()) {
   const renderWindow = renderWindows.get(beat.id) ?? { start: beat.start, end: beat.end };
-  const userFaceCoverage = beat.layout?.faceCoverApproval === "user" && typeof beat.layout?.faceSafetyNote === "string" && beat.layout.faceSafetyNote.trim();
-  if (beat.layout?.faceCover !== "none" && renderWindow.end - renderWindow.start > 3 && !userFaceCoverage) errors.push(`${beat.id}: A-axis face coverage exceeds three seconds without recorded user approval`);
   const previousWindow = index > 0
     ? renderWindows.get(aAxisMotionBeats[index - 1].id) ?? {
       start: aAxisMotionBeats[index - 1].start,

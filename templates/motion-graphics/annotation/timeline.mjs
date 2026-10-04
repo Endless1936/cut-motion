@@ -1,5 +1,7 @@
-timeline.fromTo(root,
-  { y: 8, autoAlpha: 0 },
-  { y: 0, autoAlpha: 1, duration: 0.18, ease: "power2.out", immediateRender: false },
-  beat.start);
-// Set exitFrames to 4 at 30fps for the original short exit; builder owns it.
+timeline.set(root, { autoAlpha: 1 }, beat.start);
+const elements = select("[data-at]");
+const duration = at => Math.min(.28, Math.max(.04, beat.end - at));
+elements.forEach(element => {
+  const at = beat.start + Number(element.dataset.at);
+  timeline.fromTo(element, { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: duration(at), ease: "power3.out", immediateRender: false }, at);
+});

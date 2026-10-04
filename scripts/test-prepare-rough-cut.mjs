@@ -67,6 +67,25 @@ try {
   assert.equal(proposed.clips[0].durationFrames, 20);
   assert.equal(proposed.clips[0].srcStartUs, plan.clips[0].sourceStartUsAfterTrim);
   assert.equal(read(path.join(tightened, "state", "timeline-source-windows.json")).clips[0].durationFrames, 30);
+
+  const mapped = job("approved-windows");
+  const encoded = spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "color=s=16x16:r=30:d=1", "-c:v", "libx264", "-y", path.join(mapped, "input", "source.mov")], { encoding: "utf8" });
+  assert.equal(encoded.status, 0, encoded.stderr);
+  const entry = (id, from, to, start, end, playbackRate = 1) => ({ id, itemType: "video", asset: { id: "asset" }, trackId: "track",
+    timelineRange: { fromFrame: from, toFrame: to }, sourceRange: { start, end }, playbackRate });
+  const snapshot = (durationFrames, entries) => ({ state: { id: "timeline", fps: 30, durationFrames }, timeline: { totalEntries: entries.length, entries } });
+  run(mapped, "windows", [snapshot(30, [entry("first", 0, 30, 0, 1000000)])]);
+  assert.equal(fs.existsSync(path.join(mapped, "state", "source-audio-waveform-index.json")), false);
+  assert.equal(fs.existsSync(path.join(mapped, "state", "seam-tightening-plan.json")), false);
+  run(mapped, "windows", { structuredContent: snapshot(18, [entry("first", 0, 6, 0, 200000), entry("second", 6, 18, 600000, 1000000)]) });
+  const revisedWindows = read(path.join(mapped, "state", "timeline-source-windows.json"));
+  assert.deepEqual(revisedWindows.clips.map(c => [c.itemId, c.timelineStartFrame, c.durationFrames, c.srcStartUs]), [["first", 0, 6, 0], ["second", 6, 12, 600000]]);
+  run(mapped, "windows", snapshot(15, [entry("fast", 0, 15, 0, 1000000, 2)]));
+  const fast = read(path.join(mapped, "state", "timeline-source-windows.json")).clips[0];
+  assert.equal(fast.playbackRateNumerator / fast.playbackRateDenominator, 2);
+  const beforeInvalid = sha256File(path.join(mapped, "state", "timeline-source-windows.json"));
+  run(mapped, "windows", snapshot(15, [entry("invalid", 0, 15, 0, 1000000, 1)]), false);
+  assert.equal(sha256File(path.join(mapped, "state", "timeline-source-windows.json")), beforeInvalid);
   console.log("prepare-rough-cut fixtures passed");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });

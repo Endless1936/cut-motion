@@ -16,7 +16,7 @@
       "id": "b02-tool", "sceneId": "proof", "sourceSegmentIds": ["main-002"],
       "text": "这个新工具很好用", "start": 3, "end": 5.4,
       "templateId": "annotation", "intent": "补充演示位置",
-      "templateData": { "copy": ["演示见片尾"] },
+      "templateData": { "copy": ["演示见片尾"], "topPx": 280 },
       "entryAnchorWordId": "main-002:word-001", "exitAnchorWordId": "main-002:word-001",
       "exitAnchorOffsetFrames": 0, "exitFrames": 6, "entranceFrames": 6,
       "supportRole": "action", "attentionCost": "low",
@@ -25,9 +25,8 @@
       "factualClaims": [], "terms": [],
       "layout": {
         "primaryOccupancyRatio": 0.041667,
-        "primaryBoundsNormalized": { "x": 0.25, "y": 0.80625, "width": 0.5, "height": 0.041667 },
-        "panelPaddingPx": 0, "faceCover": "none",
-        "faceSafetyNote": "示例批注位于字幕下方；实际 job 重新判断人物位置"
+        "primaryBoundsNormalized": { "x": 0.25, "y": 0.14583333333333334, "width": 0.5, "height": 0.041667 },
+        "panelPaddingPx": 0, "faceCover": "none"
       }
     }
   ],

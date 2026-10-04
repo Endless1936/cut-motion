@@ -5,6 +5,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { componentFor, templateRoot } from "./motion-template-library.mjs";
 import { resolveBeatRenderWindow, transcriptWordsById } from "./motion-window-utils.mjs";
+import { loadSpeechTiming, resolveRevealTimes } from "./mg-speech-timing.mjs";
 
 const [jobArgument, ...flags] = process.argv.slice(2);
 if (!jobArgument) throw new Error("Usage: assemble-mg.mjs <job-directory> [--write] [--beat <id>] [--force]");
@@ -15,6 +16,7 @@ if (flags.includes("--beat") && (!onlyBeat || onlyBeat.startsWith("--"))) throw 
 const jobRoot = path.resolve(jobArgument);
 const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const beatMap = readJson(path.join(jobRoot, "state/beat-map.json"));
+const speechTiming = beatMap.beats.some(beat => beat.templateData?.revealCues) ? loadSpeechTiming(jobRoot, beatMap.fps) : null;
 const words = transcriptWordsById(readJson(path.join(jobRoot, "state/transcript.json")));
 const manifestPath = path.join(jobRoot, "state/mg-assembly.json");
 const manifest = fs.existsSync(manifestPath) ? readJson(manifestPath) : { files: {} };
@@ -33,7 +35,9 @@ for (const beat of targets) {
   if (component.meta.name === "stage/axis-stage-transition") continue;
   if (component.meta.name === "evidence-focus" && !fs.existsSync(path.join(jobRoot, "hyperframes", beat.templateData?.image ?? "missing-evidence"))) throw new Error(`${beat.id}: evidence image is missing from hyperframes/assets`);
   const window = resolveBeatRenderWindow(beat, beatMap, words);
-  const source = component.render({ beat: { ...beat, start: window.start, end: window.end } });
+  const revealTimes = resolveRevealTimes(beat, window, speechTiming);
+  const source = component.render({ beat: { ...beat, start: window.start, end: window.end,
+    templateData: { ...beat.templateData, ...(revealTimes ? { revealTimes } : {}) } } });
   new Function("root", "select", "beat", "timeline", source.timeline);
   if (/<(?:script|style|video|audio)\b/i.test(source.fragment)) throw new Error(`${beat.id}: forbidden shared element`);
   for (const [file, content] of Object.entries({ "fragment.html": source.fragment, "style.css": source.style, "timeline.mjs": source.timeline })) outputs.set(`hyperframes/mg/${beat.id}/${file}`, content);

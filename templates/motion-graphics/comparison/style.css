@@ -1,70 +1,13 @@
-.mg-root {
-  position: absolute;
-  top: var(--mg-top, 28%);
-  left: 6%;
-  width: 88%;
-  max-width: 960px;
-  color: #F4F1E8;
-  font-family: "Smiley Sans", sans-serif;
-  box-sizing: border-box;
-}
+.mg-root { position:absolute;top:var(--mg-top, 280px);left:0;right:0;margin-inline:auto;width:var(--mg-width,88%);max-width:88%;color:var(--mg-paper,#F4F1E8);font-family:"Smiley Sans",sans-serif;font-weight:400;pointer-events:none;opacity:0;visibility:hidden;box-sizing:border-box; }
+.mg-root *, .mg-root *::before, .mg-root *::after { box-sizing:border-box; }
+.mg-root [data-at] { opacity:0;visibility:hidden; }
 
-.mg-root *,
-.mg-root *::before,
-.mg-root *::after {
-  box-sizing: border-box;
-}
-
-.mg-root {
-  opacity: 0;
-  visibility: hidden;
-}
-
-.mg-root [data-at] {
-  opacity: 0;
-  visibility: hidden;
-}
-
-.compare-topic {
-  margin: 0 0 24px;
-  color: #7DF2C4;
-  font-size: 42px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.compare-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 22px;
-}
-
-.compare-side {
-  min-height: 260px;
-  padding: 32px 34px;
-  border-top: 4px solid rgba(244, 241, 232, 0.42);
-}
-
-.compare-right {
-  border-top-color: #7DF2C4;
-}
-
-.compare-kicker {
-  display: block;
-  color: rgba(244, 241, 232, 0.68);
-  font-size: 42px;
-  font-weight: 500;
-}
-
-.compare-value {
-  margin: 38px 0 0;
-  color: #F4F1E8;
-  font-size: 74px;
-  font-weight: 650;
-  line-height: 1.22;
-  letter-spacing: 0.01em;
-}
-
-.compare-right .compare-value {
-  color: #7DF2C4;
-}
+.mg-root { padding:26px 30px;background:var(--mg-surface,rgba(18,20,24,.74));border-radius:var(--mg-radius,18px); }
+.compare-topic { margin:0 0 22px;font-size:44px;color:var(--mg-yellow,#FFD15C);line-height:1.15; }
+.compare-grid { display:grid;grid-template-columns:repeat(var(--items,2),minmax(0,1fr));gap:28px; }
+.compare-side { padding:20px 0 0;border-top:3px solid rgba(244,241,232,.55);min-width:0; }
+.compare-right { border-color:var(--mg-mint,#7DF2C4); }
+.compare-kicker { display:block;font-size:44px;line-height:1.2; }
+.compare-value { margin:18px 0 0;font-size:68px;line-height:1.15;overflow-wrap:anywhere; }
+.compare-right .compare-value { color:var(--mg-mint,#7DF2C4); }
+[data-layout="vertical"] .compare-grid { grid-template-columns:1fr;gap:26px; }

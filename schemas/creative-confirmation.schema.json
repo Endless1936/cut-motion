@@ -102,7 +102,7 @@
           "properties": {
             "accumulation": { "const": "replace" },
             "overlayZones": { "type": "array", "minItems": 1, "items": { "enum": ["top", "bottom", "side"] } },
-            "faceProtection": { "enum": ["brief-semantic-only", "required"] },
+            "faceProtection": { "enum": ["unrestricted", "brief-semantic-only", "required"] },
             "surface": {
               "type": "object",
               "required": ["kind", "fullFrame", "opacityRange", "backdropBlurPx"],

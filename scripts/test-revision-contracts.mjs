@@ -79,9 +79,9 @@ for (const fps of [30, 30000 / 1001]) {
   assert.throws(() => retimeDocument({beats:[{id:"cross",start:boundaryCut.end-1/fps,end:50}]},boundaryCut), /crosses/);
 }
 const group = '<div data-motion-group="proof" data-axis="A" data-face-cover-approval="user"></div>';
-assert.throws(() => bindFaceCoverApproval(group, {id:"proof"}), /recorded user instruction/);
-assert.throws(() => bindFaceCoverApproval(group, {id:"proof",layout:{faceCoverApproval:"user",faceSafetyNote:" "}}), /recorded user instruction/);
-assert.match(bindFaceCoverApproval('<div data-motion-group="proof" data-axis="A"></div>', {id:"proof",layout:{faceCoverApproval:"user",faceSafetyNote:"User explicitly permits extended coverage"}}), /data-face-cover-approval="user"/);
+assert.equal(bindFaceCoverApproval(group, {id:"proof"}), '<div data-motion-group="proof" data-axis="A"></div>');
+assert.doesNotMatch(bindFaceCoverApproval(group, {id:"proof",layout:{faceCoverApproval:"user",faceSafetyNote:" "}}), /data-face-cover-approval/);
+assert.doesNotMatch(bindFaceCoverApproval('<div data-motion-group="proof" data-axis="A"></div>', {id:"proof",layout:{faceCoverApproval:"user",faceSafetyNote:"Legacy note"}}), /data-face-cover-approval/);
 
 const root = {};
 const panel = { parentElement: root, getBoundingClientRect: () => ({ left: 60, top: 350, right: 1020, bottom: 887 }) };

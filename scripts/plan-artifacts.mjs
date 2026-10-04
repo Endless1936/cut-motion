@@ -8,7 +8,7 @@
  * defaults) is derived here so it cannot drift between jobs.
  */
 import { sha256File } from "./workflow-utils.mjs";
-import { resolveComponent } from "./motion-template-library.mjs";
+import { resolveComponent, DEFAULT_MG_TOP_PX } from "./motion-template-library.mjs";
 import { normalizeCaptionText } from "./caption-review-utils.mjs";
 
 export const decimal = (value, places = 6) => Number(Number(value).toFixed(places));
@@ -417,11 +417,20 @@ const applyComponentDefaults = (beat) => {
   if (beat.templateId && beat.templateId !== "custom" && !component) throw new Error(`${beat.id}: unknown templateId ${beat.templateId}`);
   if (!component) return beat;
   beat.templateId = component.meta.name;
+  if (component.meta.defaultTopPx !== undefined) {
+    beat.templateData = { topPx: component.meta.defaultTopPx, ...beat.templateData };
+  }
+  const content = component.content(beat);
+  if (content) {
+    beat.templateData = { ...beat.templateData, ...content.normalizedData, copy: content.copy };
+    if (beat.templateData.widthPx === undefined && (["ordered-steps","quote"].includes(component.meta.name) || (component.meta.name === "linear-flow" && content.axis === "vertical"))) beat.templateData.widthPx = 720;
+    if (beat.primaryFlowAxis === undefined) beat.primaryFlowAxis = beat.templateData.layout === "vertical" ? "vertical" : content.axis;
+  }
   if (beat.templateData?.copy) {
     if (beat.onScreenCopy && JSON.stringify(beat.onScreenCopy) !== JSON.stringify(beat.templateData.copy)) throw new Error(`${beat.id}: onScreenCopy disagrees with templateData.copy`);
     beat.onScreenCopy = [...beat.templateData.copy];
   }
-  if (component.meta.copySlots === 0 && beat.onScreenCopy === undefined) beat.onScreenCopy = [];
+  if (component.meta.legacyCopySlots === 0 && beat.onScreenCopy === undefined) beat.onScreenCopy = [];
   if (beat.visualReference === undefined) beat.visualReference = `templates/motion-graphics/${component.meta.name}`;
   for (const field of DERIVED_BEAT_FIELDS) {
     if (beat[field] === undefined && component.meta[field] !== undefined) beat[field] = component.meta[field];
@@ -494,7 +503,12 @@ export const buildBeatMap = ({
         out.layout = {
           ...DEFAULT_LAYOUT,
           ...out.layout,
-          primaryBoundsNormalized: { ...DEFAULT_LAYOUT.primaryBoundsNormalized, ...out.layout?.primaryBoundsNormalized }
+          primaryBoundsNormalized: {
+            ...DEFAULT_LAYOUT.primaryBoundsNormalized,
+            ...(!out.templateId?.startsWith("stage/") ? { y: (out.templateData?.topPx ?? DEFAULT_MG_TOP_PX) / 1920 } : {}),
+            ...(out.templateData?.widthPx ? { width: Math.min(.88, out.templateData.widthPx / 1080), x: (1 - Math.min(.88, out.templateData.widthPx / 1080)) / 2 } : {}),
+            ...out.layout?.primaryBoundsNormalized
+          }
         };
         if (beat.layout?.supportingElementCount === undefined && Array.isArray(beat.components)) out.layout.supportingElementCount = beat.components.length;
       }

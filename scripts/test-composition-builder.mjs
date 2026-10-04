@@ -106,8 +106,8 @@ try {
     const fragmentPath = path.join(fixture.moduleDirectory, "fragment.html");
     const originalFragment = fs.readFileSync(fragmentPath, "utf8");
     fs.writeFileSync(fragmentPath, originalFragment.replace('data-beat-id="beat-001"', 'data-beat-id="beat-001" data-motion-group="proof" data-axis="A" data-face-cover-approval="user"'));
-    assert.throws(() => buildComposition(fixture.hyperframes), /recorded user instruction/);
-    assert.equal(fs.readFileSync(full.outputPath, "utf8"), fullHtml);
+    buildComposition(fixture.hyperframes);
+    assert.doesNotMatch(fs.readFileSync(full.outputPath, "utf8"), /data-face-cover-approval/);
     fs.writeFileSync(fragmentPath, originalFragment);
   }
 
@@ -133,6 +133,8 @@ try {
   }
 
   const chunkPath = path.join(fixture.hyperframes, "chunks", "f000030-f000060", "index.html");
+  const episodeCssPath = path.join(fixture.hyperframes, "episode-theme.css");
+  fs.writeFileSync(episodeCssPath, ".mg-root { color: #7DF2C4; }");
   const chunk = buildComposition(fixture.hyperframes, { startFrame: 30, endFrame: 60, videoOnly: true, outputPath: chunkPath });
   assert.equal(chunk.duration, 1);
   const chunkHtml = fs.readFileSync(chunkPath, "utf8");
@@ -146,6 +148,11 @@ try {
     fs.readFileSync(path.join(path.dirname(chunkPath), "caption.css"), "utf8"),
     fs.readFileSync(path.join(fixture.hyperframes, "caption.css"), "utf8")
   );
+  const localizedEpisodeCss = path.join(path.dirname(chunkPath), "episode-theme.css");
+  assert.equal(fs.readFileSync(localizedEpisodeCss, "utf8"), fs.readFileSync(episodeCssPath, "utf8"));
+  fs.writeFileSync(episodeCssPath, ".mg-root { color: #FFD15C; }");
+  buildComposition(fixture.hyperframes, { startFrame: 30, endFrame: 60, videoOnly: true, outputPath: chunkPath });
+  assert.equal(fs.readFileSync(localizedEpisodeCss, "utf8"), fs.readFileSync(episodeCssPath, "utf8"), "localized styles must refresh after a theme edit");
 
   const samplePath = path.join(fixture.hyperframes, "visual-sample", "index.html");
   const sample = buildComposition(fixture.hyperframes, {

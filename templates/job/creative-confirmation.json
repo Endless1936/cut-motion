@@ -43,7 +43,7 @@
     "A": {
       "accumulation": "replace",
       "overlayZones": ["top", "bottom", "side"],
-      "faceProtection": "brief-semantic-only",
+      "faceProtection": "unrestricted",
       "surface": {
         "kind": "localized-glass",
         "fullFrame": false,

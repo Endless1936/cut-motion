@@ -109,7 +109,7 @@ if (aAxis?.accumulation !== "replace") errors.push("A-axis must use replace beha
 if (!Array.isArray(aAxis?.overlayZones) || aAxis.overlayZones.some((zone) => !["top", "bottom", "side"].includes(zone))) {
   errors.push("A-axis overlay zones must be top, bottom, or side");
 }
-if (!["brief-semantic-only", "required"].includes(aAxis?.faceProtection)) errors.push("A-axis must declare its face-cover policy");
+if (!["unrestricted", "brief-semantic-only", "required"].includes(aAxis?.faceProtection)) errors.push("A-axis must declare its face-cover policy");
 if (aAxis?.surface?.kind !== "localized-glass" || aAxis.surface?.fullFrame !== false) errors.push("A-axis must use localized, non-full-frame glass");
 if (!Array.isArray(aAxis?.surface?.opacityRange) || aAxis.surface.opacityRange.length !== 2 || aAxis.surface.opacityRange[0] < 0.5 || aAxis.surface.opacityRange[1] > 0.8 || aAxis.surface.opacityRange[0] > aAxis.surface.opacityRange[1]) {
   errors.push("A-axis glass opacity must stay within 0.50–0.80");

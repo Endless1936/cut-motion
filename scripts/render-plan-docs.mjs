@@ -93,7 +93,7 @@ export const renderMotionPlanDoc = ({ jobId, captionMode, visualAxisMode, transc
       `- 对应字幕：${cueIds} — ${escapeCell(cueText(beat, cues))}`,
       `- 用途：${escapeCell(beat.intent)}；任务 \`${beat.supportRole}\``,
       `- 表现：${escapeCell(beat.visualStyle)}；拓扑 \`${beat.semanticTopology}\`，主轴 \`${beat.primaryFlowAxis}\`，参考 \`${beat.visualReference}\``,
-      `- 位置：${beat.layout.primaryBoundsNormalized.x}, ${beat.layout.primaryBoundsNormalized.y}，${beat.layout.primaryBoundsNormalized.width}×${beat.layout.primaryBoundsNormalized.height}；遮脸 \`${beat.layout.faceCover}\`${beat.layout.faceSafetyNote ? ` — ${escapeCell(beat.layout.faceSafetyNote)}` : ""}`
+      `- 位置：${beat.layout.primaryBoundsNormalized.x}, ${beat.layout.primaryBoundsNormalized.y}，${beat.layout.primaryBoundsNormalized.width}×${beat.layout.primaryBoundsNormalized.height}`
     );
     if (beat.reuseGroup) lines.push(`- 复用：\`reuseGroup: ${beat.reuseGroup}\` — ${escapeCell(beat.reuseReason)}`);
     if (beat.factualClaims?.length) lines.push(`- 事实来源：${beat.factualClaims.map((claim) => `${claim.claim}（${claim.source}）`).join("；")}`);

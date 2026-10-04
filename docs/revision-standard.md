@@ -1,6 +1,6 @@
 # Editorial revisions
 
-Use this standard for revisions to an existing job. It adds no approval gate or full-video audit. The user's settled wording, visual direction, face-coverage preference, and requested frame rate remain authoritative across turns.
+Use this standard for revisions to an existing job. It adds no approval gate or full-video audit. The user's settled wording, visual direction, placement preference, and requested frame rate remain authoritative across turns.
 
 ## Start from the delivered revision
 
@@ -24,11 +24,11 @@ For a visual correction, inspect the affected entrance, readable hold, and exit 
 
 Use the existing Beat fields rather than a second planning document:
 
-- For the first composition, entry/exit anchors use the approved main-timeline phrase range; `:word-001` represents the whole entry in this path. Resolve a within-phrase word time only when the user's final-cut feedback identifies a specific timing change. A material named after one phrase does not inherit the rest of the paragraph. Check the resolved render end, including exit motion; changing `beat.end` alone does not change an existing anchor.
+- Entry/exit anchors use the approved main-timeline phrase range; `:word-001` represents the whole entry. Multi-element MG internal reveals use [actual keyword timing](mg-speech-timing.md). A material named after one phrase does not inherit the rest of the paragraph. Check the resolved render end, including exit motion; changing `beat.end` alone does not change an existing anchor.
 - `evidenceSource`/`assets` identify the current material. `visualEncoding` describes the region that needs to remain legible and any crop. Keep units, labels, and source context needed to understand the evidence.
-- `visualStyle` describes the reference behavior being reused and the adaptation for this material. `layout` records placement and any user-approved face coverage.
+- `visualStyle` describes the reference behavior being reused and the adaptation for this material. `layout` records placement and caption clearance.
 
-Size the display to the material's aspect ratio and reading needs. A tall image normally gets a tall display; do not center it inside a wide empty plate. A background card is optional and follows the visible content. Before reducing scale or cropping useful information, use available vertical space and the user's permitted face coverage. Captions remain protected.
+Size the display to the material's aspect ratio and reading needs. A tall image normally gets a tall display; do not center it inside a wide empty plate. A background card is optional and follows the visible content. Before reducing scale or cropping useful information, use available vertical space; overlapping the eyes or mouth is allowed. Captions remain protected.
 
 For source-video proof, retain enough of the original frame, including the speaker when relevant, to establish that it came from the prior video. Do not crop it into a standalone replay of the MG unless that is the intended evidence. Remove phone status bars or other irrelevant chrome only when they do not carry the claim.
 
@@ -36,7 +36,7 @@ For spotlight emphasis, keep one source image inside one fixed viewport. Darken 
 
 For multiple covers, a direct fan reveal is one available grammar. Avoid preparatory shuffling or extra bounces without a semantic reason. References supply relationships and choreography, not compulsory coordinates, durations, or templates.
 
-When the user explicitly permits longer face coverage, record `layout.faceCoverApproval: "user"` and the instruction in `layout.faceSafetyNote`. The builder derives `data-face-cover-approval="user"` for that Beat's A-axis groups and rejects an authored permission without the matching record. This overrides the default face-duration limit only, not caption protection, replacement behavior, or canvas bounds.
+Face coverage needs no separate approval or safety note. Preserve caption clearance, group replacement and canvas bounds.
 
 ## Captions and small text revisions
 

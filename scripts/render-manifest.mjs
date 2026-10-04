@@ -33,6 +33,7 @@ const renderManifestPath = fileURLToPath(new URL("./render-manifest.mjs", import
 const renderDeliveryPath = fileURLToPath(new URL("./render-delivery.mjs", import.meta.url));
 const workflowUtilsPath = fileURLToPath(new URL("./workflow-utils.mjs", import.meta.url));
 const motionWindowUtilsPath = fileURLToPath(new URL("./motion-window-utils.mjs", import.meta.url));
+const mgSpeechTimingPath = fileURLToPath(new URL("./mg-speech-timing.mjs", import.meta.url));
 const frameWindowUtilsPath = fileURLToPath(new URL("./frame-window-utils.mjs", import.meta.url));
 const beatMapSchemaPath = fileURLToPath(new URL("../schemas/beat-map.schema.json", import.meta.url));
 const boundaryIsSafe = (frame, intervals) => !intervals.some((interval) => interval.startFrame < frame && frame < interval.endFrame);
@@ -201,6 +202,8 @@ export const deriveRenderInputs = (jobRootInput) => {
     renderDeliveryPath,
     workflowUtilsPath,
     motionWindowUtilsPath,
+    mgSpeechTimingPath,
+    ...(beatMap.beats.some(beat => beat.templateData?.revealCues) ? [path.join(jobRoot, "state/mg-speech-timing.json")] : []),
     frameWindowUtilsPath,
     beatMapSchemaPath,
     packagePath,

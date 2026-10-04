@@ -9,8 +9,8 @@ import { computeSeamTighteningPlan } from "./compute-seam-tightening.mjs";
 import { assertRegularContainedFile, readJson, sha256File, writeJsonAtomic } from "./workflow-utils.mjs";
 
 const [job, command, ...files] = process.argv.slice(2);
-if (!job || !["tighten", "transcript"].includes(command) || !files.length) {
-  console.error("Usage: node scripts/prepare-rough-cut.mjs <job> tighten <saved-preview-pages.json>...\n       node scripts/prepare-rough-cut.mjs <job> transcript <saved-inspect-asset-pages.json>...\nThe transcript command imports legacy source-word timing for explicit FFmpeg fallback or existing source-word jobs; standard ChatCut plans use the approved main-timeline preview.");
+if (!job || !["tighten", "windows", "transcript"].includes(command) || !files.length) {
+  console.error("Usage: node scripts/prepare-rough-cut.mjs <job> tighten|windows <saved-preview-pages.json>...\n       node scripts/prepare-rough-cut.mjs <job> transcript <saved-inspect-asset-pages.json>...\nwindows refreshes source placement without audio analysis or another tightening pass. The transcript command imports legacy source-word timing for explicit FFmpeg fallback or existing source-word jobs; standard ChatCut plans use the approved main-timeline preview.");
   process.exit(64);
 }
 const root = path.resolve(job);
@@ -65,7 +65,7 @@ if (command === "transcript") {
 } else {
   const first = pages[0];
   const fps = first?.state?.fps;
-  if (!Number.isSafeInteger(fps) || fps <= 0) throw new Error("This adapter requires an integer timeline fps; use the calculator manifest for other rates");
+  if (!Number.isFinite(fps) || fps <= 0 || (command === "tighten" && !Number.isSafeInteger(fps))) throw new Error("Tightening requires an integer timeline fps; source windows require a positive timeline fps");
   const total = first?.timeline?.totalEntries;
   if (!Number.isSafeInteger(total) || total < 1) throw new Error("Save the structured preview_timeline response, including totalEntries");
   const entries = new Map();
@@ -82,24 +82,43 @@ if (command === "transcript") {
   const indexPath = state("source-audio-waveform-index.json");
   const sourceHash = sha256File(source);
   let index = fs.existsSync(indexPath) ? readJson(indexPath) : null;
-  if (index?.schemaVersion !== 4 || index?.source?.sha256 !== sourceHash) {
+  if (command === "tighten" && (index?.schemaVersion !== 4 || index?.source?.sha256 !== sourceHash)) {
     run("index-source-silence.mjs", [source, "--output", indexPath]);
     index = readJson(indexPath);
   }
-  const manifest = { schemaVersion: 1, sourceSha256: sourceHash, sourceDurationUs: index.source.durationUs,
+  let sourceDurationUs = index?.source?.sha256 === sourceHash ? index.source.durationUs : null;
+  if (command === "windows" && !(sourceDurationUs > 0)) {
+    const probe = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", source], { encoding: "utf8" });
+    sourceDurationUs = Math.round(Number(probe.stdout?.trim()) * 1e6);
+    if (probe.error || probe.status !== 0 || !(sourceDurationUs > 0)) throw new Error("Cannot read source duration for the approved timeline mapping");
+  }
+  const manifest = { schemaVersion: 1, sourceSha256: sourceHash, sourceDurationUs,
     sourceAssetId: clips[0].asset.id, timelineFps: { numerator: fps, denominator: 1 },
     clips: clips.map((e) => {
       if (e.itemType !== "video" || !e.id || !e.asset?.id) throw new Error("Unsupported timeline entry");
-      if (e.playbackRate !== undefined && e.playbackRate !== 1) throw new Error("Retimed footage needs an explicit source mapping");
+      const rate = e.playbackRate ?? 1;
+      if (command === "tighten" && rate !== 1) throw new Error("Retimed footage needs an explicit source mapping");
       const start = e.timelineRange?.fromFrame;
       const duration = e.timelineRange?.toFrame - start;
-      // Source span and timeline duration establish the linear 1x mapping. The
-      // calculator checks their agreement within one frame, without per-item RPCs.
+      if (command === "windows" && (!Number.isFinite(rate) || rate <= 0
+        || !Number.isSafeInteger(start) || !Number.isSafeInteger(duration) || start < 0 || duration <= 0
+        || !Number.isSafeInteger(e.sourceRange?.start) || !Number.isSafeInteger(e.sourceRange?.end)
+        || e.sourceRange.start < 0 || e.sourceRange.end <= e.sourceRange.start
+        || e.sourceRange.end > sourceDurationUs
+        || Math.abs((e.sourceRange.end - e.sourceRange.start) / 1e6 / rate * fps - duration) > 1 + 1e-6)) throw new Error("Source span, playback rate and timeline duration must describe the same clip");
+      // Tightening keeps its linear 1x mapping; windows also accepts an explicit playback rate.
       return { itemId: e.id, assetId: e.asset.id, timelineStartFrame: start, durationFrames: duration,
         srcStartUs: e.sourceRange?.start, srcEndUs: e.sourceRange?.end,
-        playbackRateNumerator: 1, playbackRateDenominator: 1 };
+        playbackRateNumerator: rate === 1 ? 1 : Math.round(rate * 1e6), playbackRateDenominator: rate === 1 ? 1 : 1e6 };
     }) };
   if (manifest.clips[0].timelineStartFrame !== 0 || manifest.clips.at(-1).timelineStartFrame + manifest.clips.at(-1).durationFrames !== first.state.durationFrames) throw new Error("Timeline coverage differs from the snapshot duration");
+  if (command === "windows") {
+    project.fps = fps;
+    writeJsonAtomic(state("project.json"), project);
+    writeJsonAtomic(state("timeline-source-windows.json"), manifest);
+    console.log(`Refreshed ${manifest.clips.length} source windows from the approved timeline; no audio scan or tightening plan generated.`);
+    process.exit(0);
+  }
   const plan = computeSeamTighteningPlan(index, manifest);
   project.fps = fps;
   writeJsonAtomic(state("project.json"), project);
