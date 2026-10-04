@@ -34,4 +34,4 @@ if (workflow.captionMode === "subtitles") {
 }
 // The transition rebuilds once and binds the actual output for rendering.
 run("workflow-state.mjs", [workflowPath, "advance", "--artifact", "hyperframes/index.html"]);
-console.log("Composition ready. Run npm run render from the job's hyperframes directory (render:revision for a delivery revision).");
+console.log("Composition ready. Inspect MG final-state HTML snapshots per docs/workflow.md#mg-final-state-self-review, then run npm run render from the job's hyperframes directory. Initial deliveries and revisions write output/final.mp4.");

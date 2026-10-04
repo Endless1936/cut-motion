@@ -42,12 +42,12 @@ Approved templates reuse their implemented bounds. For a custom or resized layou
 - For 1080×1920 vertical video, primary Chinese copy is normally 84–156 px and secondary copy at least 42 px. Use 0.92–1.12 display line height and 1.15–1.35 body-copy line height.
 - Keep 54 px horizontal and 88 px vertical canvas clearance, with 18 px around outlined or transformed glyphs. Panel padding is normally 48–72 px.
 - Set Chinese line breaks around complete phrases; keep at least two visible characters on each line when a semantic break is needed.
-- Give every panel meaningful copy, an icon, status, diagram, or animated state. Check the entrance, peak, hold, and exit at the rendered size.
+- Give every panel meaningful copy, an icon, status, diagram, or animated state. Inspect the fully expanded final state at the intended size using [MG final-state self-review](workflow.md#mg-final-state-self-review); inspect other motion phases only for a specific animation issue.
 
 The on-demand `scripts/check-layout-constraints.mjs` is a static source diagnostic. It checks declared layout settings, motion-group and role metadata, connector/container markers, and caption placement/style declarations; it does not measure rendered DOM or judge visual quality. Motion groups use the boolean `data-motion-group` marker and `data-topology` attribute from the authoring contract.
 
 ## Visual review guidance
 
-Use the code-backed examples for the components they demonstrate. The rendered MP4 is the review handoff; capture a still or window only for a specific visual question. `auto` runs only the checks listed in `docs/quality-gates.md`.
+Use the code-backed examples for the components they demonstrate. HTML final-state snapshots support the Agent's routine MG self-review before export; the rendered MP4 is the user handoff. Additional windows or full audits address specific visual questions. `auto` follows the same self-review and the checks listed in `docs/quality-gates.md`.
 
 Keep meaningful content at the intended scale and remove excess decoration before reducing its clarity.

@@ -34,6 +34,8 @@ try {
     source
   ]);
   run(path.join(repositoryRoot, "scripts", "scaffold-project.sh"), [jobRoot, source, "review", "subtitles"]);
+  const jobPackage = readJson(path.join(jobRoot, "hyperframes", "package.json"));
+  assert.equal(jobPackage.scripts["render:revision"], "npm run render");
   if (fontPath && path.isAbsolute(fontPath) && fs.existsSync(fontPath)) {
     fs.mkdirSync(path.join(jobRoot, "hyperframes", "assets", "fonts"), { recursive: true });
     fs.copyFileSync(fontPath, path.join(jobRoot, "hyperframes", "assets", "fonts", "smiley-sans-oblique.woff2"));
@@ -112,17 +114,19 @@ try {
 
   const finalPath = path.join(jobRoot, "output", "final.mp4");
   fs.copyFileSync(source, finalPath);
-  script("workflow-state.mjs", [workflowPath, "advance", "--artifact", "output/final.mp4"]);
+  assert.match(script("workflow-state.mjs", [workflowPath, "advance", "--artifact", "output/final.mp4"]), /Final delivery: output\/final\.mp4/);
   let completed = readJson(workflowPath);
   assert.equal(completed.currentState, "complete");
   assert.equal(completed.lastKnownGoodDelivery.path, "output/final.mp4");
 
-  script("workflow-state.mjs", [workflowPath, "reopen", "delivery", "--actor", "user", "--note", "Retest delivery promotion"]);
-  fs.copyFileSync(finalPath, path.join(jobRoot, "output", "final.candidate.mp4"));
-  script("workflow-state.mjs", [workflowPath, "advance", "--artifact", "output/final.candidate.mp4"]);
+  const firstDeliveryHash = completed.lastKnownGoodDelivery.sha256;
+  script("workflow-state.mjs", [workflowPath, "reopen", "delivery", "--actor", "user", "--note", "Retest direct final delivery"]);
+  run("ffmpeg", ["-v", "error", "-y", "-i", source, "-c", "copy", "-metadata", "comment=delivery revision", finalPath]);
+  assert.notEqual(sha256File(finalPath), firstDeliveryHash);
+  script("workflow-state.mjs", [workflowPath, "advance", "--artifact", "output/final.mp4"]);
   completed = readJson(workflowPath);
   assert.equal(completed.currentState, "complete");
-  assert.equal(fs.existsSync(path.join(jobRoot, "output", "final.candidate.mp4")), false);
+  assert.equal(completed.lastKnownGoodDelivery.path, "output/final.mp4");
   assert.equal(sha256File(finalPath), completed.lastKnownGoodDelivery.sha256);
 
   script("workflow-state.mjs", [workflowPath, "reopen", "rough-cut", "--actor", "user", "--note", "Retest transcript lock"]);

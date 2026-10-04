@@ -115,7 +115,20 @@ try {
   succeeded(promote(external, { source: exportPath, consume: true }));
   assertPromoted(external);
   assert.equal(fs.existsSync(exportPath), false);
-  console.log("Media promotion tests passed: missing, stale, same-inode, repeat, consume, rollback and external export.");
+
+  const finalJob = fixture("direct-final-revision", "old");
+  fs.mkdirSync(path.join(finalJob.root, "output"));
+  const finalPath = path.join(finalJob.root, "output/final.mp4");
+  fs.copyFileSync(media.blue, finalPath);
+  fs.writeFileSync(path.join(finalJob.root, "state/workflow.json"), JSON.stringify({
+    lastKnownGoodDelivery: { path: "output/final.mp4", sha256: oldHash }
+  }));
+  succeeded(run(process.execPath, [promotionScript, finalJob.root, "final", media.red]));
+  assert.equal(sha256File(finalPath), currentHash);
+  assert.deepEqual(fs.readdirSync(path.dirname(finalPath)), ["final.mp4"]);
+  assert.equal(readJson(finalJob.projectPath).mediaArtifacts.final.path, "output/final.mp4");
+  assert.equal(sha256File(finalJob.asset), oldHash, "final replacement does not touch A-roll assets");
+  console.log("Media promotion tests passed: missing, stale, same-inode, repeat, consume, rollback, external export and direct final revision.");
 } finally {
   fs.rmSync(temporaryRoot, { recursive: true, force: true });
 }

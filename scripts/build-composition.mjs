@@ -392,7 +392,7 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
     timelines.push([
       `// ${beatId}`,
       "{",
-      `  const beat = Object.freeze({ id: ${JSON.stringify(beatId)}, start: ${decimal(beat.start)}, duration: ${decimal(beat.end - beat.start)}, entryAnchorTime: ${decimal(renderWindow.entryAnchorTime)}, exitAnchorTime: ${decimal(renderWindow.exitAnchorTime)}, exitStartTime: ${decimal(renderWindow.exitStartTime)}, exitDuration: ${renderWindow.exitDuration} });`,
+      `  const beat = Object.freeze({ id: ${JSON.stringify(beatId)}, start: ${decimal(beat.start)}, end: ${decimal(beat.end)}, duration: ${decimal(beat.end - beat.start)}, entryAnchorTime: ${decimal(renderWindow.entryAnchorTime)}, exitAnchorTime: ${decimal(renderWindow.exitAnchorTime)}, exitStartTime: ${decimal(renderWindow.exitStartTime)}, exitDuration: ${renderWindow.exitDuration} });`,
       `  const root = document.querySelector(${JSON.stringify(rootSelector)});`,
       `  if (!root) throw new Error(${JSON.stringify(`${beatId}: Beat root is missing`)});`,
       "  const select = (selector) => [...root.querySelectorAll(selector)].filter((node) => root.contains(node));",

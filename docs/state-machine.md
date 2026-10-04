@@ -46,4 +46,4 @@ Use `reopen` from the earliest affected state for completed jobs. During an acti
 - `composition`: explicit localized MG/caption implementation changes and parameter adjustments;
 - `delivery`: encoding-only changes.
 
-Use a short affected-window preview for parameter changes when useful. Preserve the source and use `output/final.candidate.mp4` for a delivery revision so the last delivery remains available until promotion.
+Follow the Agent's MG final-state self-review for visual revisions; use a short affected-window preview for a specific animation issue. Preserve the source and render both initial deliveries and revisions directly to `output/final.mp4`.

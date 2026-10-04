@@ -71,9 +71,24 @@ The phase steps below contain routine commands and checks. Read [`state-machine.
 
 ## Delivery
 
+- Before encoding the full video, perform [MG final-state self-review](#mg-final-state-self-review) on the built HTML.
 - Use the job package's `npm run render` or `npm run render:revision` entrypoint for the normal one-render delivery path. The final MP4 must be readable, contain audio and video, and have a positive duration with aligned stream starts.
-- On successful render, run `node scripts/workflow-state.mjs <job>/state/workflow.json advance --artifact output/final.mp4` (use `output/final.candidate.mp4` for a revision), then give the output path to the user. The renderer and transition already probe media; do not add another full audit or preview cycle without a specific failure or request.
+- Both initial deliveries and revisions write directly to `output/final.mp4`. On successful render, run `node scripts/workflow-state.mjs <job>/state/workflow.json advance --artifact output/final.mp4`, then give that actual output path to the user. The renderer and transition already probe media; no additional full audit or post-export preview cycle is needed for routine delivery.
 - Review the rendered MP4 as the user's editorial handoff; that review is not another workflow state or gate. Claim automatic-validation completion only when `auto` was explicitly selected and its listed checks passed.
+
+### MG final-state self-review
+
+After HTML assembly, choose one timestamp per MG after its last content reveal finishes and before its exit starts, using the authored timeline and delivery frame grid. The target is the complete expanded state, not the last frame of the MG interval. Capture all requested times in one batch from the job's `hyperframes/` directory:
+
+```bash
+./node_modules/.bin/hyperframes snapshot --at <t1,t2,...> --no-end --describe false --output ../previews/mg-final-state
+```
+
+The Agent must open the images and inspect complete phrases, one-character orphan lines, overflow, layout spacing, horizontal centering and caption clearance. Fit the actual copy by adjusting card width, column/node space or arrangement before shrinking text. Template reuse does not replace this inspection.
+
+Review every MG on the first delivery; after a local revision, review only affected MGs. Fix issues and recapture those final states before full export. Routine review covers only the complete state; inspect entrance, intermediate or exit motion only for a reported animation issue. If HTML snapshots cannot show a specific MG correctly, use a short 2–3 second affected-window preview to inspect that same complete state.
+
+This is an Agent visual task, not an automated pass/fail validator. It adds no code-level blocking checks, review receipts, workflow state or user approval. Other standalone validators and full-video audits remain optional diagnostics.
 
 ## Revisions
 

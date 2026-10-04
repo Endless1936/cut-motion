@@ -40,9 +40,6 @@ if (fs.existsSync(workflowPath)) {
   if (kind === "roughcut" && gate?.status === "approved" && gate.artifact === targets[kind]) {
     throw new Error("Cannot replace approved roughcut media before reopening its producing stage");
   }
-  if (kind === "final" && workflow.lastKnownGoodDelivery?.path === targets.final) {
-    throw new Error("Render a delivery revision to output/final.candidate.mp4 and let the workflow promote it after validation");
-  }
 }
 
 const probeMedia = (mediaPath) => {

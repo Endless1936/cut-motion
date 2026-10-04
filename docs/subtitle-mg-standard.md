@@ -43,4 +43,4 @@ Background cards use their final width and height from the first frame; internal
 
 `compose-job.mjs` instantiates templates and installs captions in order. For a specific local revision, use `assemble-mg.mjs --beat <id>`; preserve manually edited modules.
 
-The rendered video is the visual handoff. Inspect a short preview or a still for a specific uncertainty or requested change, rather than making every template repeat a five-part written review. Keep readability, synchronization, caption clearance and source accuracy as the acceptance criteria.
+Before full export, follow [MG final-state self-review](workflow.md#mg-final-state-self-review) for actual copy and layout. The rendered video is the user handoff. Keep readability, synchronization, caption clearance and source accuracy as the acceptance criteria; no five-part written review or automated visual gate is required.

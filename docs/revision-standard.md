@@ -18,7 +18,7 @@ After the initial motion plan is established, use `docs/motion-plan.md` and the 
 
 When the user reports repeated defects, identify all Beats sharing the faulty layout, timing rule, or motion treatment. Correct that family while preserving accepted decisions elsewhere. Distinguish a source-code fix, a built composition, a rendered file, and a visually inspected frame in progress reports.
 
-For a visual correction, inspect the affected entrance, readable hold, and exit in the rebuilt composition, including the first frame after the intended exit. A 1–3 second local window is normally enough. Use a temporary window containing the actual motion when its behavior needs longer to assess. This is targeted evidence for the reported defect, not another approval gate or mandatory full-video review. A successful media probe does not establish visual quality.
+For a visual correction, inspect only the affected MGs' fully expanded final states in the rebuilt HTML using [MG final-state self-review](workflow.md#mg-final-state-self-review). Inspect a short motion window only when the reported defect concerns animation. This adds no approval gate or full-video review. A successful media probe does not establish visual quality.
 
 ## Evidence layout and timing
 
@@ -58,4 +58,4 @@ For an editable revision, re-align the current transcript from immutable source 
 
 For a final removal after visuals are settled, precision trimming a completed HyperFrames master can preserve all layers as one picture. Record the parent file/hash, kept source frame intervals, new frame count, and revised subtitle/motion timing in a delivery edit map. Keep the editable parent intact and identify the edit map as an additional reproducible delivery step. Do not claim the parent composition now uses the shorter timeline. Avoid repeated lossy trims by returning to the same parent master for later cut revisions.
 
-Export to a new candidate, verify frame count/rate, dimensions and audio, then update the delivery pointer. When asked to stop, stop the owned render process if still active; if it already completed, report that accurately and do not start another render.
+Export revisions directly to `output/final.mp4`, use the existing media checks, then record completion with `advance --artifact output/final.mp4`. When asked to stop, stop the owned render process if still active; if it already completed, report that accurately and do not start another render.

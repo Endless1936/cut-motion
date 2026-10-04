@@ -87,7 +87,7 @@ npm run render
 
 These scripts use the repository's stable delivery route. `npm run render` is the default single delivery render: ordinary jobs stay monolithic and only longer jobs use chunks with HyperFrames' platform-default browser resolution. Use `npm run render:preview` only for an explicit visual question, not as a mandatory pre-render step. Use `npm run render:chunked` only for a known long-media or normal-route failure case; that explicit route selects the exact cached arm64 HeadlessChrome and hardware Metal. Chunk boundaries are normalized to the manifest frame grid, each rendered chunk is probed and cached with a receipt, and the final video is assembled with the authoritative audio. The preview uses HyperFrames `standard` quality; the final render uses `high` quality with the same composition, resolution, frame rate, timing, and audio.
 
-Run `npm run render` once. Do not render a preview before final export unless the user asks for a visual check. If the normal render hits a known failure, follow the matching entry in [Troubleshooting](troubleshooting.md); do not probe alternative renderers or worker settings.
+Perform [MG final-state self-review](workflow.md#mg-final-state-self-review) from HTML snapshots, then run `npm run render` once. `render:revision` is an alias for the same direct `output/final.mp4` output. If the normal render hits a known failure, follow the matching entry in [Troubleshooting](troubleshooting.md); do not probe alternative renderers or worker settings.
 
 ### Optional preview
 

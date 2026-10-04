@@ -683,23 +683,10 @@ if (command === "advance") {
       workflow.visualPlanSha256 = beatMapSha256;
     }
     if (workflow.currentState === "render") {
-      const canonicalDeliveryPath = path.join(jobRoot, "output", "final.mp4");
       const delivery = probeReviewVideo(artifactPath, "Final delivery");
-      const receiptPath = `${artifactPath}.render.json`;
-      if (artifactPath === canonicalDeliveryPath) {
-        if (workflow.lastKnownGoodDelivery && sha256File(artifactPath) !== workflow.lastKnownGoodDelivery.sha256) {
-          throw new Error("A delivery revision must render to output/final.candidate.mp4 before replacing the last known-good file");
-        }
-      } else {
-        if (path.basename(artifactPath) !== "final.candidate.mp4") {
-          throw new Error("A delivery revision must use output/final.candidate.mp4");
-        }
-        fs.renameSync(artifactPath, canonicalDeliveryPath);
-        if (fs.existsSync(receiptPath)) fs.renameSync(receiptPath, `${canonicalDeliveryPath}.render.json`);
-      }
       workflow.lastKnownGoodDelivery = {
-        path: "output/final.mp4",
-        sha256: sha256File(canonicalDeliveryPath),
+        path: path.relative(jobRoot, artifactPath).split(path.sep).join("/"),
+        sha256: sha256File(artifactPath),
         validatedAt: now
       };
       if (!(delivery.duration > 0)) throw new Error("Final delivery has no positive duration");
@@ -741,6 +728,9 @@ if (command === "advance") {
 }
 save();
 console.log(`Workflow state: ${workflow.currentState}`);
+if (command === "advance" && workflow.currentState === "complete") {
+  console.log(`Final delivery: ${workflow.lastKnownGoodDelivery.path}`);
+}
 if (workflow.currentState === "rough-cut-review") {
   console.log("Deliver the ChatCut project link and current duration now; report any skipped operation, then wait for the user's listening decision.");
 }
