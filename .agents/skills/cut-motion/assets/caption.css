@@ -1,0 +1,32 @@
+.caption {
+  position: absolute;
+  top: auto;
+  left: 54px;
+  right: 54px;
+  bottom: 384px;
+  z-index: 80;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+.caption p {
+  margin: 0;
+  color: white;
+  font-family: "Smiley Sans", sans-serif;
+  font-size: 96px;
+  font-weight: 400;
+  font-synthesis: none;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  text-shadow: 0 8px 18px rgb(0 0 0 / 72%);
+}
+.motion-copy {
+  top: 44%;
+  bottom: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.motion-copy p { font-size: 104px; opacity: 0; visibility: hidden; }
+.motion-copy .emphasis { color: #7DF2C4; }

@@ -1,0 +1,26 @@
+{
+  "mode": "review",
+  "captionMode": "subtitles",
+  "source": {
+    "video": "roughcut/a-roll.mp4",
+    "original": "input/recording.mov"
+  },
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "captions": [
+    { "text": "文案画面音频剪辑", "start": 0.5, "end": 4.8 },
+    { "text": "全部用一个工具完成", "start": 4.8, "end": 7.5 }
+  ],
+  "motions": [
+    {
+      "id": "mg-001",
+      "template": "converge-sources",
+      "start": 0.3,
+      "end": 7.5,
+      "copy": ["文案", "画面", "音频", "剪辑", "工具"],
+      "data": { "sources": ["文案", "画面", "音频", "剪辑"], "target": "工具" },
+      "revealAt": [0.5, 1.6, 2.7, 3.8, 5.2]
+    }
+  ]
+}

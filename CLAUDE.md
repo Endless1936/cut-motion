@@ -1,3 +1,3 @@
-# Claude Code Entry Point
+# cut-motion
 
-Read and follow `AGENTS.md` as the canonical cut-motion workflow. Do not replace the staged Agent process with a generic coding workflow or a fixed video template.
+Follow [AGENTS.md](AGENTS.md) and the [cut-motion Skill](.agents/skills/cut-motion/SKILL.md).

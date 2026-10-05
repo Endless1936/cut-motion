@@ -1,0 +1,8 @@
+{
+  "name": "cut-motion-runtime",
+  "private": true,
+  "dependencies": {
+    "gsap": "3.13.0",
+    "hyperframes": "0.7.60"
+  }
+}

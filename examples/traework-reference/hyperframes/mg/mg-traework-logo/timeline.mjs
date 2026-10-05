@@ -1,1 +1,0 @@
-const stage=select(".logo-stage"); const icon=select(".brand-icon"); timeline.set(root,{autoAlpha:1},beat.start); timeline.fromTo(stage,{x:-36,autoAlpha:0},{x:0,autoAlpha:1,duration:.2},beat.start); timeline.fromTo(icon,{scale:.72,rotation:-8},{scale:1,rotation:0,duration:.24,ease:"back.out(1.35)"},beat.start+.05);
