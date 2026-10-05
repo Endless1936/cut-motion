@@ -46,7 +46,7 @@ try {
  fs.copyFileSync(source, path.join(jobRoot, "roughcut", "a-roll.mp4"));
 
   fs.copyFileSync(
-    path.join(repositoryRoot, "examples", "transcript.example.json"),
+    path.join(repositoryRoot, "tests", "fixtures", "transcript.json"),
     path.join(jobRoot, "state", "transcript.json")
   );
   const transcript = readJson(path.join(jobRoot, "state", "transcript.json"));

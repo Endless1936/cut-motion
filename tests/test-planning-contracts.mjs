@@ -108,10 +108,10 @@ try {
     assert.throws(() => parseReferenceScript(malformed));
   }
 
-  const transcript = path.join(repositoryRoot, "examples", "transcript.example.json");
+  const transcript = path.join(repositoryRoot, "tests", "fixtures", "transcript.json");
   const design = path.join(repositoryRoot, "assets", "design-system.default.json");
-  const validMotion = path.join(repositoryRoot, "examples", "beat-map.example.json");
-  const validSubtitles = path.join(repositoryRoot, "examples", "beat-map.subtitles.example.json");
+  const validMotion = path.join(repositoryRoot, "tests", "fixtures", "beat-map.motion-copy.json");
+  const validSubtitles = path.join(repositoryRoot, "tests", "fixtures", "beat-map.subtitles.json");
   script("check-visual-plan.mjs", [validMotion, transcript, design]);
   script("check-visual-plan.mjs", [validSubtitles, transcript, design]);
 
@@ -185,10 +185,10 @@ try {
   const captions = path.join(job, "captions", "captions.json");
   const pages = path.join(job, "captions", "chatcut-pages.json");
   const reviewPlan = path.join(job, "captions", "caption-review-plan.json");
-  fs.copyFileSync(path.join(repositoryRoot, "examples", "captions.approved-semantic.example.json"), captions);
-  fs.copyFileSync(path.join(repositoryRoot, "examples", "chatcut-caption-pages.example.json"), pages);
+  fs.copyFileSync(path.join(repositoryRoot, "tests", "fixtures", "captions.approved-semantic.json"), captions);
+  fs.copyFileSync(path.join(repositoryRoot, "tests", "fixtures", "chatcut-caption-pages.json"), pages);
   fs.copyFileSync(transcript, path.join(job, "state", "transcript.json"));
-  const approvedPlan = readJson(path.join(repositoryRoot, "examples", "caption-review-plan.example.json"));
+  const approvedPlan = readJson(path.join(repositoryRoot, "tests", "fixtures", "caption-review-plan.json"));
   approvedPlan.status = "approved";
   writeJson(reviewPlan, approvedPlan);
   script("check-captions.mjs", [captions, pages, design]);
@@ -224,8 +224,8 @@ try {
   script("check-captions.mjs", [captions, pages, design]);
   writeJson(reviewPlan, approvedPlan);
   fs.writeFileSync(design, baselineDesignText);
-  fs.copyFileSync(path.join(repositoryRoot, "examples", "captions.approved-semantic.example.json"), captions);
-  fs.copyFileSync(path.join(repositoryRoot, "examples", "chatcut-caption-pages.example.json"), pages);
+  fs.copyFileSync(path.join(repositoryRoot, "tests", "fixtures", "captions.approved-semantic.json"), captions);
+  fs.copyFileSync(path.join(repositoryRoot, "tests", "fixtures", "chatcut-caption-pages.json"), pages);
   const cardPages = readJson(pages);
   cardPages.cleanExport = true;
   cardPages.cards = cardPages.pages.map((page) => ({
@@ -239,8 +239,8 @@ try {
   writeJson(pages, cardPages);
   writeJson(captions, { ...currentCaptions, source: { ...currentCaptions.source, cleanExport: true } });
   script("check-captions.mjs", [captions, pages, design]);
-  fs.copyFileSync(path.join(repositoryRoot, "examples", "captions.approved-semantic.example.json"), captions);
-  fs.copyFileSync(path.join(repositoryRoot, "examples", "chatcut-caption-pages.example.json"), pages);
+  fs.copyFileSync(path.join(repositoryRoot, "tests", "fixtures", "captions.approved-semantic.json"), captions);
+  fs.copyFileSync(path.join(repositoryRoot, "tests", "fixtures", "chatcut-caption-pages.json"), pages);
 
   const sourcePages = readJson(pages);
   sourcePages.source = "ChatCut inspect_asset original source word rows";

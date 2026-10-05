@@ -1,6 +1,6 @@
 # Motion Graphics templates
 
-13 reusable content templates for a 1080×1920 talking-head video, plus two stage helpers. Choose by meaning, then supply content and spoken anchors. Counts in examples are not limits.
+13 reusable content templates for a 1080×1920 talking-head video, plus two stage helpers. Choose by meaning, then supply content and spoken anchors. Counts in template demonstrations are not limits.
 
 ## Coverage and selection
 
@@ -76,8 +76,8 @@ Slot order follows the DOM: optional heading then each list row; parallel conclu
 
 ## Preview and stage helpers
 
-`node scripts/preview-mg-templates.mjs` replaces `renders/` with one lightweight, scrubbable gallery from current sources in `renders/current/index.html` (ignored by Git), including its local font and GSAP assets. Keep only this latest preview; do not accumulate old videos, galleries or temporary render files. `--verify` also checks actual browser geometry, early visibility, complete reveals and backward seeking for the 13 examples and longer / variable-count variants. The striped background and evidence screenshot are fictional demonstrations. Do not present older rendered clips as current-source previews.
+`node scripts/preview-mg-templates.mjs` replaces `renders/` with one lightweight, scrubbable gallery from current sources in `renders/current/index.html` (ignored by Git), including its local font and GSAP assets. Keep only this latest preview; do not accumulate old videos, galleries or temporary render files. `--verify` also checks actual browser geometry, early visibility, complete reveals and backward seeking for the 13 demonstrations and longer / variable-count variants. The striped background and evidence screenshot are fictional demonstrations. Do not present older rendered clips as current-source previews.
 
-Stage helpers [b-axis-horizon-grid](stage/b-axis-horizon-grid/) and [axis-stage-transition](stage/axis-stage-transition/) retain full-frame geometry. Use the transition in the shared composition timeline, with B-axis intervals at least twice its duration and no overlap on the speaker track; see [stage integration](../../examples/book-video-reference/REPRODUCTION.md#a-axis--b-axis-stage-transition).
+Stage helpers [b-axis-horizon-grid](stage/b-axis-horizon-grid/) and [axis-stage-transition](stage/axis-stage-transition/) retain full-frame geometry. Use the transition in the shared composition timeline, with B-axis intervals at least twice its duration and no overlap on the speaker track.
 
-Use custom MGs when a real content relationship or explicit design request cannot be expressed here, with a brief reason in the Motion Plan. Keep experimental designs in examples until their general content and timing interface is ready.
+Use custom MGs when a real content relationship or explicit design request cannot be expressed here, with a brief reason in the Motion Plan. Keep experimental designs in the active job until their reusable content and timing interface is ready.

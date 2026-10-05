@@ -41,13 +41,13 @@ const scaffold = (name, ...options) => {
 
 const prepareCaptionPlan = (job, axisMode = "a-axis-overlay") => {
   const transcriptPath = path.join(job, "state", "transcript.json");
-  fs.copyFileSync(path.join(repositoryRoot, "examples", "transcript.example.json"), transcriptPath);
+  fs.copyFileSync(path.join(repositoryRoot, "tests", "fixtures", "transcript.json"), transcriptPath);
   const transcript = readJson(transcriptPath);
-  const plan = readJson(path.join(repositoryRoot, "examples", "caption-review-plan.example.json"));
+  const plan = readJson(path.join(repositoryRoot, "tests", "fixtures", "caption-review-plan.json"));
   plan.status = "approved";
   plan.transcriptSha256 = sha256File(transcriptPath);
   writeJsonAtomic(path.join(job, "captions", "caption-review-plan.json"), plan);
-  fs.copyFileSync(path.join(repositoryRoot, "examples", "chatcut-caption-pages.example.json"), path.join(job, "captions", "chatcut-pages.json"));
+  fs.copyFileSync(path.join(repositoryRoot, "tests", "fixtures", "chatcut-caption-pages.json"), path.join(job, "captions", "chatcut-pages.json"));
   const beats = transcript.segments.map((segment, index) => ({
     id: `caption-beat-${index + 1}`, start: segment.start, end: segment.end,
     text: segment.text, audioAnchorTime: segment.start, sourceSegmentIds: [segment.id],

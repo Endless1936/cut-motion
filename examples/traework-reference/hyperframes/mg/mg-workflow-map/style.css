@@ -1,8 +1,0 @@
-.mg-root{position:absolute;inset:0;opacity:0;visibility:hidden;pointer-events:none;color:#fff}
-.workflow-stage{position:absolute;left:140px;top:180px;width:800px}
-.workflow-title{height:116px;padding:0 42px;display:flex;align-items:center;box-sizing:border-box;border-radius:8px;background:rgba(18,20,24,.82);box-shadow:0 22px 56px rgba(0,0,0,.34);backdrop-filter:blur(14px);font-size:52px;line-height:1;color:#7df2c4}
-.workflow-list{position:relative;display:flex;flex-direction:column;gap:16px;margin-top:16px}
-.workflow-line{position:absolute;left:42px;top:52px;width:4px;height:648px;background:#7df2c4;transform-origin:top;transform:scaleY(0)}
-.step{position:relative;display:flex;align-items:center;gap:30px;height:108px;padding:0 28px;border-radius:8px;background:rgba(18,20,24,.82);box-shadow:0 14px 34px rgba(0,0,0,.28);backdrop-filter:blur(14px);box-sizing:border-box;opacity:0}
-.step b{display:flex;align-items:center;justify-content:center;width:54px;height:54px;border-radius:50%;background:#7df2c4;color:#161719;font-size:28px;font-weight:400;z-index:1}
-.step span{font-size:58px;line-height:1;font-weight:400}

@@ -1,9 +1,0 @@
-.mg-root{position:absolute;inset:0;opacity:0;visibility:hidden;pointer-events:none;color:#fff}
-.search-stage{position:absolute;left:60px;top:88px;width:960px;height:918px;overflow:hidden;border-radius:8px;box-shadow:0 24px 64px rgba(0,0,0,.34)}
-.search-shot{display:block;width:960px;height:auto}
-.search-mask{position:absolute;left:0;width:960px;background:rgba(7,9,12,.82);transform:scaleY(0)}
-.mask-top{top:0;height:690px;transform-origin:top}
-.mask-bottom{bottom:0;height:220px;transform-origin:bottom}
-.cn-emphasis{position:absolute;left:18px;top:270px;width:924px;height:450px;border-radius:8px;box-sizing:border-box;box-shadow:inset 0 0 0 5px #20c486,0 0 28px rgba(32,196,134,.72);opacity:0}
-.benefit-stage{position:absolute;left:140px;top:300px;width:800px;display:flex;flex-direction:column;gap:20px}
-.benefit{height:126px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:rgba(18,20,24,.82);box-shadow:0 20px 52px rgba(0,0,0,.32);backdrop-filter:blur(14px);font-size:68px;line-height:1;opacity:0}

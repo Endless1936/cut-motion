@@ -1,4 +1,4 @@
-// Public examples only; no job-specific transcript or media.
+// Public demonstration content only; no job-specific transcript or media.
 // Pixel bounds refer to the 960×660 sample SVG's marked information rows.
 const sampleRow = y => ({x:68/960*100,y:y/660*100,width:824/960*100,height:132/660*100});
 export const evidenceSampleFocus = [172,324,476].map(sampleRow);

@@ -95,7 +95,7 @@ Use `npm run render:preview` only when a specific visual question needs an early
 
 ## Repository verification
 
-Keep user media, transcripts, job state, and credentials under ignored local paths, normally `jobs/`. Media is ignored by default. New public examples require user approval and an explicit ignore exception. Never force-add private files. Ignoring a file does not remove it from Git's index or history.
+Keep user media, transcripts, job state, and credentials under ignored local paths, normally `jobs/`. Media is ignored by default. Tracking public reference media requires user approval and an explicit ignore exception. Never force-add private files. Ignoring a file does not remove it from Git's index or history.
 
 Before committing, run `node scripts/check-repository-privacy.mjs --staged` against the actual index. Static verification also checks working-tree candidates for common credential patterns without printing secret values. This lightweight check cannot recognize every personal document or arbitrary key: inspect the staged diff as well. It is repository maintenance, not a video-production gate.
 

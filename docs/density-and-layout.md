@@ -1,6 +1,6 @@
 # Density and Layout Specification
 
-This document gives measurable layout guidance for the available references and each job's creative plan. Use `examples/traework-reference/` for subtitle-led structure and [`templates/motion-graphics/`](../templates/motion-graphics/README.md) for reusable modules; [`examples/book-video-reference/`](../examples/book-video-reference/) documents the original case and integration. Motion-copy is planned per job; the repository does not maintain a complete motion-copy reference composition.
+This document gives measurable layout guidance for the current job's creative plan. Use [`templates/motion-graphics/`](../templates/motion-graphics/README.md) for reusable modules and [caption modes](caption-modes.md) for subtitle-led composition. Motion-copy is planned per job.
 
 ## Three rhythm layers
 
@@ -48,6 +48,6 @@ The on-demand `scripts/check-layout-constraints.mjs` is a static source diagnost
 
 ## Visual review guidance
 
-Use the code-backed examples for the components they demonstrate. HTML final-state snapshots support the Agent's routine MG self-review before export; the rendered MP4 is the user handoff. Additional windows or full audits address specific visual questions. `auto` follows the same self-review and the checks listed in `docs/quality-gates.md`.
+Use the reusable motion templates for their supported content relationships. HTML final-state snapshots support the Agent's routine MG self-review before export; the rendered MP4 is the user handoff. Additional windows or full audits address specific visual questions. `auto` follows the same self-review and the checks listed in `docs/quality-gates.md`.
 
 Keep meaningful content at the intended scale and remove excess decoration before reducing its clarity.

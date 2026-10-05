@@ -18,11 +18,11 @@ try {
   write(".gitignore", fs.readFileSync(new URL("../.gitignore", import.meta.url)));
   write("README.md", "Public workflow documentation");
   git("add", ".gitignore", "README.md");
-  for (const file of ["jobs/a/state/transcript.json", "Jobs/B/input.MOV", "nested/JOBS/x.json", ".env.local", "credentials.json", "private.key", "capture.mp4", "examples/unapproved.png"]) {
+  for (const file of ["jobs/a/state/transcript.json", "Jobs/B/input.MOV", "nested/JOBS/x.json", ".env.local", "credentials.json", "private.key", "capture.mp4", "reference/unapproved.png"]) {
     write(file, "private fixture");
     git("check-ignore", "--quiet", file);
   }
-  const example = "examples/gold-standard/hyperframes/assets/example.jpg";
+  const example = "reference/assets/sample.jpg";
   write(example, "example media fixture");
   git("check-ignore", "--quiet", example);
   assert.deepEqual(checkRepositoryPrivacy(root), []);

@@ -38,6 +38,6 @@ Creative confirmation calls these treatments **A-axis overlay mode** and **B-axi
 
 Use `docs/subtitle-mg-standard.md` for selection and placement. One concise `intent` explains the MG's use; duplicate written justifications are unnecessary.
 
-### Preferred subtitle-led reference
+### Default subtitle-led treatment
 
-Use `examples/traework-reference/` and `recipes/traework-subtitles.json` as the default visual reference for subtitle-led talking-head work. The talking head remains full-frame on the A-axis, captions carry the complete wording, real evidence is shown at its original aspect ratio, and B-axis staging is reserved for a coherent demonstration range with a protected moving speaker window.
+Use `recipes/traework-subtitles.json` and the reusable motion templates as the default visual treatment for subtitle-led talking-head work. The talking head remains full-frame on the A-axis, captions carry the complete wording, real evidence is shown at its original aspect ratio, and B-axis staging is reserved for a coherent demonstration range with a protected moving speaker window.
