@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { checkRepositoryPrivacy, secretKind } from "./check-repository-privacy.mjs";
+import { checkRepositoryPrivacy, secretKind } from "../scripts/check-repository-privacy.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-privacy-"));
 const git = (...args) => execFileSync("git", args, { cwd: root, stdio: "pipe" });
@@ -55,7 +55,7 @@ try {
   assert.equal(secretKind("-----BEGIN " + "PRIVATE KEY-----"), "private key");
   write("bin/git", `#!/bin/sh\nprintf '%s' '${token}' >&2\nexit 2\n`);
   fs.chmodSync(path.join(root, "bin/git"), 0o700);
-  const failed = spawnSync(process.execPath, [fileURLToPath(new URL("./check-repository-privacy.mjs", import.meta.url))], {
+  const failed = spawnSync(process.execPath, [fileURLToPath(new URL("../scripts/check-repository-privacy.mjs", import.meta.url))], {
     encoding: "utf8", env: { ...process.env, PATH: `${path.join(root, "bin")}${path.delimiter}${process.env.PATH}` }
   });
   assert.equal(failed.status, 1);

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildComposition, findContentCollision, rebuildVisualSample } from "./build-composition.mjs";
+import { buildComposition, findContentCollision, rebuildVisualSample } from "../scripts/build-composition.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const templateRoot = path.join(repositoryRoot, "templates", "hyperframes");

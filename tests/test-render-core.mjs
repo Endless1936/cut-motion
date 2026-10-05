@@ -3,8 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { deriveMotionIndex } from "./motion-index.mjs";
-import { deriveRenderManifest, resolveRenderMode, unsafeRenderIntervals } from "./render-manifest.mjs";
+import { deriveMotionIndex } from "../scripts/motion-index.mjs";
+import { deriveRenderManifest, resolveRenderMode, unsafeRenderIntervals } from "../scripts/render-manifest.mjs";
 import {
   assertPinnedArtifacts,
   pinRenderedArtifacts,
@@ -15,8 +15,8 @@ import {
   renderChunkedOutput,
   validateCacheReceipt,
   verifyAssemblyReceipt
-} from "./render-chunks.mjs";
-import { readJson, sha256File, writeJsonAtomic } from "./workflow-utils.mjs";
+} from "../scripts/render-chunks.mjs";
+import { readJson, sha256File, writeJsonAtomic } from "../scripts/workflow-utils.mjs";
 
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-render-core-"));
 const jobRoot = path.join(temporaryRoot, "job");

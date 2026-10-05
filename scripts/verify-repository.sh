@@ -10,7 +10,7 @@ mode="${1:---static}"
 }
 
 node "$repository_root/scripts/check-repository-privacy.mjs"
-node "$repository_root/scripts/test-repository-privacy.mjs"
+node "$repository_root/tests/test-repository-privacy.mjs"
 
 while IFS= read -r json_file; do
   jq -e . "$json_file" >/dev/null
@@ -22,11 +22,11 @@ done < <(
 
 while IFS= read -r shell_file; do
   bash -n "$shell_file"
-done < <(find "$repository_root/scripts" -name '*.sh' -type f)
+done < <(find "$repository_root/scripts" "$repository_root/tests" -name '*.sh' -type f)
 
 while IFS= read -r module_file; do
   node --check "$module_file"
-done < <(find "$repository_root/scripts" -name '*.mjs' -type f)
+done < <(find "$repository_root/scripts" "$repository_root/tests" -name '*.mjs' -type f)
 
 bash "$repository_root/scripts/check-environment.sh" check
 
@@ -74,15 +74,20 @@ done
   exit 1
 }
 
-node "$repository_root/scripts/test-composition-builder.mjs"
-node "$repository_root/scripts/test-revision-contracts.mjs"
-node "$repository_root/scripts/test-render-core.mjs"
-node "$repository_root/scripts/test-validation-receipts.mjs"
-node "$repository_root/scripts/test-planning-contracts.mjs"
-node "$repository_root/scripts/test-gap-candidates.mjs"
-node "$repository_root/scripts/test-mg-components.mjs"
-node "$repository_root/scripts/test-workflow-contracts.mjs"
-bash "$repository_root/scripts/test-media-pipeline.sh" --static
+node "$repository_root/tests/test-composition-builder.mjs"
+node "$repository_root/tests/test-revision-contracts.mjs"
+node "$repository_root/tests/test-render-core.mjs"
+node "$repository_root/tests/test-validation-receipts.mjs"
+node "$repository_root/tests/test-planning-contracts.mjs"
+node "$repository_root/tests/test-gap-candidates.mjs"
+node "$repository_root/tests/test-mg-components.mjs"
+node "$repository_root/tests/test-mg-speech-timing.mjs"
+node "$repository_root/tests/test-mg-preview-player.mjs"
+node "$repository_root/tests/test-workflow-contracts.mjs"
+node "$repository_root/tests/test-check-chatcut.mjs"
+node "$repository_root/tests/test-compute-seam-tightening.mjs"
+node "$repository_root/tests/test-production-helpers.mjs"
+bash "$repository_root/tests/test-media-pipeline.sh" --static
 
 if [[ "$mode" == "--runtime" ]]; then
   runtime_font="${CUT_MOTION_FONT:-${MOTIONSCRIPT_FONT:-}}"
@@ -90,9 +95,11 @@ if [[ "$mode" == "--runtime" ]]; then
     echo "Runtime verification requires CUT_MOTION_FONT=/absolute/path/to/smiley-sans-oblique.woff2" >&2
     exit 66
   }
-  bash "$repository_root/scripts/test-media-pipeline.sh" --runtime
-  node "$repository_root/scripts/test-media-promotion.mjs"
-  node "$repository_root/scripts/test-delivery-workflow.mjs" "$runtime_font"
+  bash "$repository_root/tests/test-media-pipeline.sh" --runtime
+  node "$repository_root/tests/test-prepare-rough-cut.mjs"
+  node "$repository_root/tests/test-source-audio-index.mjs"
+  node "$repository_root/tests/test-media-promotion.mjs"
+  node "$repository_root/tests/test-delivery-workflow.mjs" "$runtime_font"
 fi
 
 echo "cut-motion repository verification passed ($mode)."

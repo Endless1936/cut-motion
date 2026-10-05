@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { detectGapCandidates, silenceSweepCompleted } from "./gap-detection.mjs";
+import { detectGapCandidates, silenceSweepCompleted } from "../scripts/gap-detection.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-gaps-"));

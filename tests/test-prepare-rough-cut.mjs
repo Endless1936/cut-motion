@@ -5,9 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { sha256File } from "./workflow-utils.mjs";
+import { sha256File } from "../scripts/workflow-utils.mjs";
 
-const script = path.join(path.dirname(fileURLToPath(import.meta.url)), "prepare-rough-cut.mjs");
+const script = path.join(path.dirname(fileURLToPath(import.meta.url)), "../scripts/prepare-rough-cut.mjs");
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-prepare-"));
 const write = (file, data) => fs.writeFileSync(file, JSON.stringify(data));
 const read = (file) => JSON.parse(fs.readFileSync(file, "utf8"));

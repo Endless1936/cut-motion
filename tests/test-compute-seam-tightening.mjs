@@ -5,9 +5,9 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { computeSeamTighteningPlan } from "./compute-seam-tightening.mjs";
+import { computeSeamTighteningPlan } from "../scripts/compute-seam-tightening.mjs";
 
-const scriptPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "compute-seam-tightening.mjs");
+const scriptPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../scripts/compute-seam-tightening.mjs");
 const sourceSha256 = "ab".repeat(32);
 
 function makeIndex({

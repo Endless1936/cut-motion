@@ -8,8 +8,22 @@ import { renderTemplate } from "./motion-template-library.mjs";
 import { templateSamples, evidenceSampleFocus } from "./mg-template-samples.mjs";
 
 const rootPath = path.resolve(new URL("../", import.meta.url).pathname);
-const output = path.join(rootPath, "templates/motion-graphics/renders/current");
-fs.mkdirSync(output, { recursive: true });
+const rendersPath = path.join(rootPath, "templates/motion-graphics/renders");
+const output = path.join(rendersPath, "current");
+const assetsPath = path.join(output, "assets");
+const fontCandidates = ["woff2", "ttf", "otf"].flatMap(extension => [
+  path.join(rootPath, `assets/fonts/smiley-sans-oblique.${extension}`),
+  path.join(assetsPath, `font.${extension}`)
+]);
+const fontPath = fontCandidates.find(candidate => fs.existsSync(candidate));
+const font = fontPath ? fs.readFileSync(fontPath) : null;
+const fontName = fontPath ? `font${path.extname(fontPath)}` : null;
+const gsap = fs.readFileSync(path.join(rootPath, ".cache/cut-motion/node_modules/gsap/dist/gsap.min.js"));
+// This generated directory holds only the latest preview; load dependencies before replacing it.
+fs.rmSync(rendersPath, { recursive: true, force: true });
+fs.mkdirSync(assetsPath, { recursive: true });
+if (font) fs.writeFileSync(path.join(assetsPath, fontName), font);
+fs.writeFileSync(path.join(assetsPath, "gsap.min.js"), gsap);
 const names = Object.keys(templateSamples);
 const variants = {
   "ordered-six": ["ordered-steps", {title:"六个制作步骤",items:["初始化","文案","画面","配音","剪辑","成片"]}],
@@ -36,13 +50,13 @@ for (const [key, name, data] of cases) {
     fs.copyFileSync(path.join(rootPath, "templates/motion-graphics/evidence-focus/sample-evidence.svg"), path.join(evidencePath, "sample-evidence.svg"));
   }
   const html = `<!doctype html><meta charset="utf-8"><style>
-  @font-face{font-family:"Smiley Sans";src:url("../wb-review/font.ttf")}
+  ${font ? `@font-face{font-family:"Smiley Sans";src:url("assets/${fontName}")}` : ""}
   html,body{margin:0;width:1080px;height:1920px;overflow:hidden}
   body{background:linear-gradient(135deg,#d4be90 0 20%,#68767a 20% 40%,#c5a878 40% 60%,#56666c 60% 80%,#d3bd92 80%)}
   #canvas{position:relative;width:1080px;height:1920px;background:linear-gradient(0deg,rgba(20,26,29,.4),transparent)}
   .guide{position:absolute;top:1370px;width:100%;text-align:center;color:white;font:72px "Smiley Sans";text-shadow:0 3px 8px #222}
   ${style}\n${key==="evidence-pan"?".evidence-surface{max-height:280px}":""}</style><div id="canvas">${fragment}<p class="guide">字幕区域示意</p></div>
-  <script src="../wb-review/gsap.min.js"></script>
+  <script src="assets/gsap.min.js"></script>
   <script>
   window.ready=document.fonts.ready.then(()=>new Promise(resolve=>{
     const images=[...document.images]; Promise.all(images.map(img=>img.decode().catch(()=>{}))).then(()=>{
@@ -53,6 +67,11 @@ for (const [key, name, data] of cases) {
       window.mgTL=timeline;window.seek=time=>timeline.seek(time,false);window.seek(3.4);resolve();
     });
   }));
+  window.addEventListener("message",event=>{
+    if(event.source!==window.parent||event.data?.type!=="mg-preview-seek"||!Number.isFinite(event.data.time))return;
+    window.ready.then(()=>window.seek(Math.max(0,Math.min(8,event.data.time))));
+  });
+  window.ready.then(()=>window.parent.postMessage({type:"mg-preview-ready"},location.protocol==="file:"?"*":location.origin));
   </script>`;
   fs.writeFileSync(path.join(output, key + ".html"), html);
 }
@@ -60,7 +79,24 @@ const cards=names.map(name=>`<article><h2>${name}</h2><div class="phone"><iframe
 fs.writeFileSync(path.join(output, "index.html"), `<!doctype html><meta charset="utf-8"><title>MG 模板预览</title>
 <style>body{margin:30px;background:#171b1b;color:#eee;font:16px system-ui}h1{font-size:26px}header{position:sticky;top:0;background:#171b1b;padding:12px;z-index:2}main{display:grid;grid-template-columns:repeat(auto-fit,270px);gap:24px}h2{font-size:17px}.phone{width:270px;height:480px;overflow:hidden;border-radius:14px}iframe{border:0;width:1080px;height:1920px;transform:scale(.25);transform-origin:0 0}input{width:50vw}</style>
 <header><h1>13 个共用 MG · 当前源码预览</h1><p>卡片整体居中 · 内容按语义展开 · 演示时间可拖动</p><button id="play">播放全部</button> <input id="time" type="range" min="0" max="8" step=".033" value="3.4"><span id="readout">3.4 s</span></header><main>${cards}</main>
-<script>const frames=[...document.querySelectorAll("iframe")],slider=document.querySelector("#time");let playing=false;function seek(t){frames.forEach(f=>f.contentWindow.seek?.(t));slider.value=t;document.querySelector("#readout").textContent=Number(t).toFixed(2)+" s"}slider.oninput=()=>{playing=false;seek(slider.value)};document.querySelector("#play").onclick=()=>{playing=!playing;if(playing){const start=performance.now();function tick(now){if(!playing)return;const t=(now-start)/1000;seek(Math.min(t,8));if(t<8)requestAnimationFrame(tick);else playing=false}requestAnimationFrame(tick)}};</script>`);
+<script>
+const frames=[...document.querySelectorAll("iframe")],slider=document.querySelector("#time"),button=document.querySelector("#play"),readout=document.querySelector("#readout");
+const targetOrigin=location.protocol==="file:"?"*":location.origin;
+let playing=false,animationFrame=null;
+function send(frame,time){frame.contentWindow.postMessage({type:"mg-preview-seek",time},targetOrigin)}
+function seek(time){time=Math.max(0,Math.min(8,Number(time)));slider.value=time;readout.textContent=time.toFixed(2)+" s";frames.forEach(frame=>send(frame,time))}
+function stop(){playing=false;cancelAnimationFrame(animationFrame);animationFrame=null;button.textContent="播放全部"}
+slider.oninput=()=>{stop();seek(slider.value)};
+button.onclick=()=>{
+  if(playing){stop();return}
+  playing=true;button.textContent="暂停";seek(0);
+  const start=performance.now();
+  function tick(now){if(!playing)return;const time=Math.min((now-start)/1000,8);seek(time);if(time<8)animationFrame=requestAnimationFrame(tick);else stop()}
+  animationFrame=requestAnimationFrame(tick);
+};
+window.addEventListener("message",event=>{if(event.data?.type!=="mg-preview-ready")return;const frame=frames.find(frame=>frame.contentWindow===event.source);if(frame)send(frame,Number(slider.value))});
+seek(slider.value);
+</script>`);
 if (!process.argv.includes("--verify") && !process.argv.includes("--serve")) {
   console.log(JSON.stringify({gallery:path.join(output,"index.html")}));
   process.exit(0);

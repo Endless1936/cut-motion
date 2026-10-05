@@ -10,8 +10,8 @@ import {
   validateCanonicalReceipt,
   validateReceipt,
   validateSnapshotReviews
-} from "./validation-receipt.mjs";
-import { readJson, sha256File } from "./workflow-utils.mjs";
+} from "../scripts/validation-receipt.mjs";
+import { readJson, sha256File } from "../scripts/workflow-utils.mjs";
 
 const repositoryRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const jobRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-validation-"));

@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-mcp-test-"));
-const script = fileURLToPath(new URL("./check-chatcut.mjs", import.meta.url));
+const script = fileURLToPath(new URL("../scripts/check-chatcut.mjs", import.meta.url));
 const hook = path.join(directory, "mock-fetch.mjs");
 const trace = path.join(directory, "calls.jsonl");
 const secret = "fixture-secret-not-a-real-token";

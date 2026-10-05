@@ -4,11 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { readJson, sha256File } from "./workflow-utils.mjs";
+import { readJson, sha256File } from "../scripts/workflow-utils.mjs";
 
 // Tiny synthetic media only; never inspect or modify repository jobs.
 const temporaryRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-media-promotion-")));
-const promotionScript = fileURLToPath(new URL("./promote-job-media.mjs", import.meta.url));
+const promotionScript = fileURLToPath(new URL("../scripts/promote-job-media.mjs", import.meta.url));
 const run = (command, args) => spawnSync(command, args, { encoding: "utf8" });
 const succeeded = (result) => assert.equal(result.status, 0, result.error?.message ?? result.stderr);
 

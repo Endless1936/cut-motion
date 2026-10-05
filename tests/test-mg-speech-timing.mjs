@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { mapSourceWord, prepareSpeechTiming, loadSpeechTiming, keywordFrame, resolveRevealTimes, bindSpeechReveals } from "./mg-speech-timing.mjs";
-import { resolveComponent } from "./motion-template-library.mjs";
+import { mapSourceWord, prepareSpeechTiming, loadSpeechTiming, keywordFrame, resolveRevealTimes, bindSpeechReveals } from "../scripts/mg-speech-timing.mjs";
+import { resolveComponent } from "../scripts/motion-template-library.mjs";
 
 const clip = { itemId: "abcdef12-3456", timelineStartFrame: 60, durationFrames: 90, srcStartUs: 10000000, srcEndUs: 13000000, playbackRateNumerator: 1, playbackRateDenominator: 1 };
 const word = { text: "文", sourceStartUs: 10310000, sourceEndUs: 10510000 };

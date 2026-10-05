@@ -4,10 +4,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseReferenceScript, buildReferenceScriptAnnotations } from "./reference-script-annotations.mjs";
-import { buildBeatMap, buildReleasedTranscript, buildCaptionPlan, buildReconciliationItems, buildSourceWordEvidence } from "./plan-artifacts.mjs";
-import { resolveComponent } from "./motion-template-library.mjs";
-import { sha256File } from "./workflow-utils.mjs";
+import { parseReferenceScript, buildReferenceScriptAnnotations } from "../scripts/reference-script-annotations.mjs";
+import { buildBeatMap, buildReleasedTranscript, buildCaptionPlan, buildReconciliationItems, buildSourceWordEvidence } from "../scripts/plan-artifacts.mjs";
+import { resolveComponent } from "../scripts/motion-template-library.mjs";
+import { sha256File } from "../scripts/workflow-utils.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-planning-"));

@@ -5,7 +5,7 @@ script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd "${script_directory}/.." && pwd)"
 mode="${1:---static}"
 [[ "$mode" == "--static" || "$mode" == "--runtime" ]] || {
-  echo "Usage: scripts/test-media-pipeline.sh [--static|--runtime]" >&2
+  echo "Usage: tests/test-media-pipeline.sh [--static|--runtime]" >&2
   exit 64
 }
 

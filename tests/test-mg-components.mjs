@@ -4,9 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { componentNames, resolveComponent, templateRoot, DEFAULT_MG_TOP_PX } from "./motion-template-library.mjs";
-import { buildComposition } from "./build-composition.mjs";
-import { buildBeatMap } from "./plan-artifacts.mjs";
+import { componentNames, resolveComponent, templateRoot, DEFAULT_MG_TOP_PX } from "../scripts/motion-template-library.mjs";
+import { buildComposition } from "../scripts/build-composition.mjs";
+import { buildBeatMap } from "../scripts/plan-artifacts.mjs";
 
 const planBeat = (beat) => buildBeatMap({
   transcript: { duration: 5 }, captionMode: "subtitles",

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { computeCreativeAuthorities, readJson, sha256File, writeJsonAtomic } from "./workflow-utils.mjs";
+import { computeCreativeAuthorities, readJson, sha256File, writeJsonAtomic } from "../scripts/workflow-utils.mjs";
 
 const [fontPath] = process.argv.slice(2);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");

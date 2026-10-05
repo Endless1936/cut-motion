@@ -4,10 +4,10 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { assertCaptionSequence, frameWindowTiming } from "./frame-window-utils.mjs";
-import { resolveCaptionCues } from "./caption-review-utils.mjs";
-import { createTimelineCut, cutFromSeconds, retimeDocument } from "./timeline-cut-utils.mjs";
-import { clippedContentRect, findContentCollision, bindFaceCoverApproval } from "./build-composition.mjs";
+import { assertCaptionSequence, frameWindowTiming } from "../scripts/frame-window-utils.mjs";
+import { resolveCaptionCues } from "../scripts/caption-review-utils.mjs";
+import { createTimelineCut, cutFromSeconds, retimeDocument } from "../scripts/timeline-cut-utils.mjs";
+import { clippedContentRect, findContentCollision, bindFaceCoverApproval } from "../scripts/build-composition.mjs";
 
 const cue = (id, startFrame, endFrame) => ({ id, startFrame, endFrame, lines: [id] });
 assertCaptionSequence([cue("a", 0, 32), cue("b", 32, 60)]);
@@ -101,7 +101,7 @@ try {
   const input = path.join(temp, "captions.json");
   const output = path.join(temp, "candidate.json");
   fs.writeFileSync(input, original);
-  const script = fileURLToPath(new URL("./shift-timestamps.sh", import.meta.url));
+  const script = fileURLToPath(new URL("../scripts/shift-timestamps.sh", import.meta.url));
   const run = (target, start = String(626 / 30)) => spawnSync("bash", [script, input, start, "38", target], { encoding: "utf8" });
   assert.equal(run(output).status, 0);
   assert.equal(JSON.parse(fs.readFileSync(output, "utf8")).cues[1].startFrame, 626);

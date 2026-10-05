@@ -13,7 +13,7 @@ import {
   sha256File,
   visualPlanChanges,
   writeJsonAtomic
-} from "./workflow-utils.mjs";
+} from "../scripts/workflow-utils.mjs";
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-workflow-"));

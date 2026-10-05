@@ -76,7 +76,7 @@ Slot order follows the DOM: optional heading then each list row; parallel conclu
 
 ## Preview and stage helpers
 
-`node scripts/preview-mg-templates.mjs` generates a lightweight, scrubbable gallery from current sources in `renders/current/index.html` (ignored by Git). `--verify` also checks actual browser geometry, early visibility, complete reveals and backward seeking for the 13 examples and longer / variable-count variants. The striped background and evidence screenshot are fictional demonstrations. Do not present older rendered clips as current-source previews.
+`node scripts/preview-mg-templates.mjs` replaces `renders/` with one lightweight, scrubbable gallery from current sources in `renders/current/index.html` (ignored by Git), including its local font and GSAP assets. Keep only this latest preview; do not accumulate old videos, galleries or temporary render files. `--verify` also checks actual browser geometry, early visibility, complete reveals and backward seeking for the 13 examples and longer / variable-count variants. The striped background and evidence screenshot are fictional demonstrations. Do not present older rendered clips as current-source previews.
 
 Stage helpers [b-axis-horizon-grid](stage/b-axis-horizon-grid/) and [axis-stage-transition](stage/axis-stage-transition/) retain full-frame geometry. Use the transition in the shared composition timeline, with B-axis intervals at least twice its duration and no overlap on the speaker track; see [stage integration](../../examples/book-video-reference/REPRODUCTION.md#a-axis--b-axis-stage-transition).
 
