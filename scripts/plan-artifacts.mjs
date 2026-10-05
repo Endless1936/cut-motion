@@ -48,20 +48,16 @@ const placementPairs = (sourceTranscript, timelineWindows, fps, corrections) => 
           confidence: word.confidence ?? 0.9
         };
         const previous = placed.at(-1);
-        // A cut can split a single ASR token. Join its forward fragments;
-        // a repeated take (source time rewinds) remains a distinct occurrence.
+        // A cut can remove any length from inside one ASR token. Join its
+        // forward fragments when the retained timeline is continuous. Permit
+        // only sub-frame source overlap; rewinds and replays stay distinct.
         const sourceSeamDelta = previous ? next.sourceStart - previous.sourceEnd : Number.POSITIVE_INFINITY;
         const sourceFrameTolerance = 1 / fps + EPSILON;
         if (previous?.sourceWordId === next.sourceWordId
           && next.sourceStart >= previous.sourceStart - EPSILON
-          && Math.abs(sourceSeamDelta) <= sourceFrameTolerance
+          && sourceSeamDelta >= -sourceFrameTolerance
+          && next.sourceEnd > previous.sourceEnd + EPSILON
           && Math.abs(previous.end - next.start) < 1e-5) {
-          // Normalize a sub-frame source overlap/gap at the midpoint before
-          // folding the fragments back into their single ASR word. Equal
-          // starts are valid when the next clip begins inside that word.
-          const sourceSeam = decimal((previous.sourceEnd + next.sourceStart) / 2);
-          previous.sourceEnd = sourceSeam;
-          next.sourceStart = sourceSeam;
           previous.end = Math.max(previous.end, next.end);
           previous.sourceEnd = Math.max(previous.sourceEnd, next.sourceEnd);
         } else placed.push(next);

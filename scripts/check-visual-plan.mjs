@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { resolveBeatRenderWindow, transcriptWordsById } from "./motion-window-utils.mjs";
-import { resolveComponent } from "./motion-template-library.mjs";
+import { resolveComponent, DEFAULT_MG_TOP_PX } from "./motion-template-library.mjs";
 
 const [beatMapPath, transcriptPath, designSystemPath] = process.argv.slice(2);
 
@@ -175,7 +175,12 @@ for (let index = 0; index < beats.length; index += 1) {
     && bounds.y >= 0.8
     && bounds.height <= 0.04;
   const maximumPrimaryY = annotationTemplate ? 0.86 : captionCompanionLabel ? 0.84 : designSystem.canvas.primaryStageYRatio[1];
-  if (primaryCenterY < designSystem.canvas.primaryStageYRatio[0] || primaryCenterY > maximumPrimaryY) errors.push(`${beat.id}: primary content is placed in an edge strip`);
+  // A short annotation's center sits above the generic panel band at the
+  // canonical MG top. Accept that placement without relaxing other panels.
+  const minimumPrimaryY = annotationTemplate
+    ? Math.min(designSystem.canvas.primaryStageYRatio[0], DEFAULT_MG_TOP_PX / designSystem.canvas.height + bounds.height / 2)
+    : designSystem.canvas.primaryStageYRatio[0];
+  if (primaryCenterY < minimumPrimaryY || primaryCenterY > maximumPrimaryY) errors.push(`${beat.id}: primary content is placed in an edge strip`);
   if (beat.axis === "B" && pipExclusionZone) {
     const pipBounds = {
       x: 1 - (pipExclusionZone.rightPx + pipExclusionZone.widthPx) / designSystem.canvas.width,

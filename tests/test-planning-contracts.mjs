@@ -30,6 +30,21 @@ try {
   const splitWindows = { clips: [clip(0, 0.4, 0), clip(0.6, 1, 0.4)] };
   const split = buildReleasedTranscript({ sourceTranscript: source, timelineWindows: splitWindows, fps: 30 });
   assert.equal(split.segments.map((segment) => segment.text).join(""), "你好");
+  assert.deepEqual(split.segments[0].words.map(({ text, start, end }) => ({ text, start, end })), [{ text: "你好", start: 0, end: 0.8 }]);
+  assert.equal(buildCaptionPlan({ transcript: split }).cues[0].text, "你好");
+  const splitEvidence = buildSourceWordEvidence({ sourceTranscript: source, timelineWindows: splitWindows, releasedTranscript: split, fps: 30 });
+  assert.deepEqual(splitEvidence.entries, [{ sourceStartMs: 0, sourceEndMs: 1000, timelineStartFrame: 0, timelineEndFrame: 24 }]);
+  const fragmentedWindows = { clips: [clip(0, 0.2, 0), clip(0.4, 0.6, 0.2), clip(0.8, 1, 0.4)] };
+  const fragmented = buildReleasedTranscript({ sourceTranscript: source, timelineWindows: fragmentedWindows, fps: 30 });
+  assert.deepEqual(fragmented.segments[0].words.map(({ text, start, end }) => ({ text, start, end })), [{ text: "你好", start: 0, end: 0.6 }]);
+  const rewound = buildReleasedTranscript({ sourceTranscript: source, timelineWindows: { clips: [clip(0.6, 1, 0), clip(0, 0.4, 0.4)] }, fps: 30 });
+  assert.deepEqual(rewound.segments.map((segment) => segment.text), ["你好", "你好"]);
+  const shortSource = { segments: [{ id: "short", words: [{ text: "好", start: 0, end: 1 / 30 }] }] };
+  const repeatedShort = buildReleasedTranscript({ sourceTranscript: shortSource, timelineWindows: { clips: [clip(0, 1 / 30, 0), clip(0, 1 / 30, 1 / 30)] }, fps: 30 });
+  assert.deepEqual(repeatedShort.segments.map((segment) => segment.text), ["好", "好"], "replaying a short source word is a separate occurrence");
+  const spokenRepeatSource = { segments: [{ id: "spoken-repeat", words: [{ text: "你好", start: 0, end: 0.4 }, { text: "你好", start: 0.6, end: 1 }] }] };
+  const spokenRepeat = buildReleasedTranscript({ sourceTranscript: spokenRepeatSource, timelineWindows: splitWindows, fps: 30 });
+  assert.equal(spokenRepeat.segments.map((segment) => segment.text).join(""), "你好你好", "different source words preserve spoken repetition");
   const reorderedWindows = { clips: [clip(2, 3, 0), clip(0, 1, 1), clip(0, 1, 2)] };
   const reordered = buildReleasedTranscript({ sourceTranscript: source, timelineWindows: reorderedWindows, fps: 30 });
   assert.deepEqual(reordered.segments.map((segment) => segment.text), ["再见", "你好", "你好"]);
@@ -632,6 +647,7 @@ try {
   script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
 
   // The public example is a complete input for this fixture, not a pseudo-schema.
+  const legacyReconciliation = readJson(reconciliationPath);
   writeJson(path.join(planJob, "state", "chatcut-main-timeline.json"), {
     state: { id: "fixture-timeline", fps: 30, durationFrames: 180 },
     transcript: {
@@ -652,6 +668,11 @@ try {
   assert.equal(exampleBeats.beats[1].templateId, "annotation");
   assert.deepEqual(exampleBeats.beats[1].templateData.copy, ["演示见片尾"]);
   script("check-visual-plan.mjs", [path.join(planJob, "state/beat-map.json"), path.join(planJob, "state/transcript.json"), path.join(planJob, "state/design-system.json")]);
+  const edgeAnnotation = structuredClone(exampleBeats);
+  edgeAnnotation.beats[1].layout.primaryBoundsNormalized.y = 0;
+  const edgeAnnotationPath = path.join(temporaryRoot, "edge-annotation.json");
+  writeJson(edgeAnnotationPath, edgeAnnotation);
+  script("check-visual-plan.mjs", [edgeAnnotationPath, path.join(planJob, "state/transcript.json"), path.join(planJob, "state/design-system.json")], false, /edge strip/);
   script("assemble-mg.mjs", [planJob, "--write"]);
   fs.copyFileSync(path.join(repositoryRoot, "templates/hyperframes/index.template.html"), path.join(planJob, "hyperframes/index.template.html"));
   script("build-composition.mjs", [path.join(planJob, "hyperframes")]);
@@ -667,7 +688,7 @@ try {
   Object.assign(referenceWorkflow, { referenceScriptStatus: "provided", referenceScriptPath: referencePath, referenceScriptSha256: referenceSha });
   writeJson(path.join(planJob, "state/workflow.json"), referenceWorkflow);
   writeJson(path.join(planJob, "state/reference-script-annotations.json"), buildReferenceScriptAnnotations({ status: "provided", path: referencePath, sha256: referenceSha, text: referenceText }));
-  const originalReconciliation = readJson(reconciliationPath);
+  const originalReconciliation = legacyReconciliation;
   originalReconciliation.items = originalReconciliation.items.map((item) => ({ ...item, type: "matched", resolution: "accepted-speech", releaseImpact: false, referenceText: item.heardText }));
   writeJson(reconciliationPath, originalReconciliation);
   writeJson(path.join(planJob, "state/timeline-source-windows.json"), { clips: [clip(3, 6, 0), clip(0, 3, 3)] });
@@ -680,7 +701,9 @@ try {
   ];
   reorderInputs.beats = [{ id: "reordered", sceneId: "one", sourceSegmentIds: ["s2", "s1"], text: "这个新工具很好用今天我要演示", start: 0, end: 6, intent: "重排" }];
   writeJson(path.join(planJob, "state/planning-inputs.json"), reorderInputs);
-  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
+  // Switching this fixture back to legacy timing replaces its old source-word
+  // evidence, which the main-timeline generation manifest no longer owns.
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing", "--replace-existing"]);
   const reorderedReconciliation = readJson(reconciliationPath);
   assert.deepEqual(reorderedReconciliation.items.map((item) => item.segmentId), ["s2", "s1"]);
   assert.deepEqual(reorderedReconciliation.referenceScript.itemOrder, ["r-s1", "r-s2"]);
