@@ -57,7 +57,7 @@ try {
       windows: Array.from({ length: 100 }, (_, i) => i >= 20 && i < 80 ? [600, 600, 4, 0] : [0, 0, 0, 480]) }
   });
   const indexHash = sha256File(indexPath);
-  run(tightened, "tighten", { state: { id: "timeline", fps: 30, durationFrames: 30 },
+  run(tightened, "tighten", { projectId: "project", state: { id: "timeline", fps: 30, durationFrames: 30 },
     timeline: { totalEntries: 1, entries: [{ id: "clip", itemType: "video", asset: { id: "asset" }, trackId: "track",
       timelineRange: { fromFrame: 0, toFrame: 30 }, sourceRange: { start: 0, end: 1000000 } }] } });
   assert.equal(sha256File(indexPath), indexHash, "Valid cached index must be reused");
@@ -67,6 +67,53 @@ try {
   assert.equal(proposed.clips[0].durationFrames, 20);
   assert.equal(proposed.clips[0].srcStartUs, plan.clips[0].sourceStartUsAfterTrim);
   assert.equal(read(path.join(tightened, "state", "timeline-source-windows.json")).clips[0].durationFrames, 30);
+  assert.deepEqual(plan.editItemArgs, { projectId: "project", ripple: false, updates: [{
+    id: "clip", timelineId: "timeline", trackId: "track", fromFrame: 0,
+    durationInFrames: 20, sourceStartFromInSeconds: plan.clips[0].sourceStartUsAfterTrim / 1e6,
+  }] });
+
+  // Rounded microsecond endpoints can represent slightly more than two frames.
+  // Only the first clip needs tightening; later clips shift but must not grow.
+  const precise = job("frame-preservation");
+  const preciseIndex = read(indexPath);
+  preciseIndex.source.sha256 = sha256File(path.join(precise, "input", "source.mov"));
+  preciseIndex.source.durationUs = preciseIndex.audio.durationUs = 2000000;
+  preciseIndex.waveform.decodedSampleCount = 96000;
+  preciseIndex.waveform.windows.push(...Array.from({ length: 100 }, () => [600, 600, 4, 0]));
+  write(path.join(precise, "state", "source-audio-waveform-index.json"), preciseIndex);
+  const preciseEntries = [{ id: "trimmed", itemType: "video", asset: { id: "asset" }, trackId: "track",
+    timelineRange: { fromFrame: 0, toFrame: 30 }, sourceRange: { start: 0, end: 1000000 } },
+    ...Array.from({ length: 15 }, (_, i) => ({ id: `unchanged-${i}`, itemType: "video", asset: { id: "asset" }, trackId: "track",
+      timelineRange: { fromFrame: 30 + i * 2, toFrame: 32 + i * 2 },
+      sourceRange: { start: Math.round(1000000 + i * 2e6 / 30), end: Math.round(1000000 + (i + 1) * 2e6 / 30) } }))];
+  assert.ok(preciseEntries.slice(1).some(e => Math.ceil((e.sourceRange.end - e.sourceRange.start) * 30 / 1e6) > 2),
+    "Fixture exposes the extra-frame error caused by microsecond ceil conversion");
+  const precisePages = [preciseEntries.slice(0, 8), preciseEntries.slice(8)].map(entries => ({ structuredContent: {
+    projectId: "precise-project", state: { id: "precise-timeline", fps: 30, durationFrames: 60 },
+    timeline: { totalEntries: 16, entries },
+  } }));
+  run(precise, "tighten", precisePages);
+  const precisePlan = read(path.join(precise, "state", "seam-tightening-plan.json"));
+  assert.equal(precisePlan.proposedDurationFrames, 50);
+  assert.equal(precisePlan.editItemArgs.updates.length, 16, "Submit all final track positions together");
+  for (const [i, update] of precisePlan.editItemArgs.updates.slice(1).entries()) {
+    assert.equal(update.durationInFrames, 2, "Untrimmed clip keeps its original frame duration");
+    assert.equal(update.fromFrame, 20 + i * 2, "Later clip shifts by the preceding trim only");
+    assert.equal(update.sourceStartFromInSeconds, preciseEntries[i + 1].sourceRange.start / 1e6);
+    assert.equal(update.timelineId, "precise-timeline");
+    assert.equal(update.trackId, "track");
+  }
+  const beforeMixed = sha256File(path.join(precise, "state", "seam-tightening-plan.json"));
+  const mixedPages = structuredClone(precisePages);
+  mixedPages[1].structuredContent.projectId = "different-project";
+  assert.match(run(precise, "tighten", mixedPages, false), /different snapshots or projects/);
+  assert.equal(sha256File(path.join(precise, "state", "seam-tightening-plan.json")), beforeMixed);
+
+  run(tightened, "tighten", { state: { id: "timeline", fps: 30, durationFrames: 2 },
+    timeline: { totalEntries: 1, entries: [{ id: "no-op", itemType: "video", asset: { id: "asset" }, trackId: "track",
+      timelineRange: { fromFrame: 0, toFrame: 2 }, sourceRange: { start: 0, end: 66667 } }] } });
+  assert.deepEqual(read(path.join(tightened, "state", "seam-tightening-plan.json")).editItemArgs,
+    { ripple: false, updates: [] }, "No trim needs no edit call, including legacy snapshots without projectId");
 
   const mapped = job("approved-windows");
   const encoded = spawnSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "color=s=16x16:r=30:d=1", "-c:v", "libx264", "-y", path.join(mapped, "input", "source.mov")], { encoding: "utf8" });

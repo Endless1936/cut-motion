@@ -18,7 +18,7 @@ const fontCandidates = ["woff2", "ttf", "otf"].flatMap(extension => [
 const fontPath = fontCandidates.find(candidate => fs.existsSync(candidate));
 const font = fontPath ? fs.readFileSync(fontPath) : null;
 const fontName = fontPath ? `font${path.extname(fontPath)}` : null;
-const gsap = fs.readFileSync(path.join(rootPath, ".cache/cut-motion/node_modules/gsap/dist/gsap.min.js"));
+const gsap = fs.readFileSync(path.join(rootPath, "node_modules/gsap/dist/gsap.min.js"));
 // This generated directory holds only the latest preview; load dependencies before replacing it.
 fs.rmSync(rendersPath, { recursive: true, force: true });
 fs.mkdirSync(assetsPath, { recursive: true });
@@ -33,8 +33,10 @@ const variants = {
   "flow-auto-six": ["linear-flow", {items:["录制","转写","整理","配音","剪辑","成片"]}],
   "relation-vertical": ["relation-map", {layout:"vertical",source:"内容来源",items:["图文内容","视频素材","播客音频","文档摘要","课程讲解"]}],
   "converge-six": ["converge-sources", {items:["文案内容","画面素材","配音音频","剪辑节奏","字幕方案","模型能力"],result:"完整成片",revealTimes:[0,.18,.82,1.37,2.13,2.94,4.61]}],
+  "converge-five": ["converge-sources", {items:["项目文件","图片","视频","音频","模型"],result:"全部在云端",revealTimes:[0,.6,1.2,1.8,2.4,3]}],
   "transform-horizontal": ["map-transform", {layout:"horizontal",source:"原始素材",result:"完整成片"}],
   "compare-vertical": ["comparison", {layout:"vertical",title:"两种制作方式",items:[{label:"手动流程",description:"逐项打开工具并传递素材"},{label:"自动流程",description:"统一编排制作步骤"}]}],
+  "compare-parts": ["comparison", {title:"画面方案",items:[{label:"普通方案",description:"速度更快"},{label:"精细方案",description:["质感更好","多花半分钟"]}],revealTimes:[0,.3,.9,1.5,2.4,4.5]}],
   "quote-single": ["quote", {text:"一个清楚的观点"}],
   "metric-long": ["metric-proof", {source:"示例数据",value:"1,234,567",unit:"次",caption:"数据只用于版式演示"}],
   "evidence-three": ["evidence-focus", {...templateSamples["evidence-focus"],focus:evidenceSampleFocus}]
@@ -102,7 +104,7 @@ if (!process.argv.includes("--verify") && !process.argv.includes("--serve")) {
   process.exit(0);
 }
 const require=createRequire(import.meta.url);
-const puppeteer=require(path.join(rootPath,".cache/cut-motion/node_modules/puppeteer-core"));
+const puppeteer=require(path.join(rootPath,"node_modules/puppeteer-core"));
 const browserRoot=path.join(process.env.HOME,".cache/hyperframes/chrome/chrome-headless-shell");
 const version=fs.readdirSync(browserRoot).sort().at(-1);
 const executablePath=path.join(browserRoot,version,"chrome-headless-shell-mac-arm64/chrome-headless-shell");
@@ -182,7 +184,7 @@ try {
     if(oldWidths[key]&&geometry.width<oldWidths[key]*1.6)failures.push(key+": width must reach 160% of the previous sample");
     if(geometry.maxFocusErrorPx>.1||geometry.changingBackplate||geometry.uncoveredContent||geometry.ahead||geometry.premature||Math.abs(geometry.center-540)>1||geometry.bottom>1250||geometry.overflow||JSON.stringify(geometry.early)!==JSON.stringify(geometry.again))failures.push(key+": placement, overflow or seeking");
     if(geometry.late.some(value=>value<.99)&&name!=="evidence-focus")failures.push(key+": missing reveal");
-    if(names.includes(key) || key==="converge-six") await page.screenshot({path:path.join(output,key+".png")});
+    if(names.includes(key) || ["converge-six","converge-five","compare-parts"].includes(key)) await page.screenshot({path:path.join(output,key+".png")});
   }
   await page.setViewport({width:1260,height:1700});
   await page.goto(`http://127.0.0.1:${server.address().port}/templates/motion-graphics/renders/current/index.html`);

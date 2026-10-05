@@ -17,7 +17,7 @@ Use cut-motion to edit this video:
 /Users/your-name/Desktop/video.mov
 ```
 
-The Agent checks the local environment first. Pinned HyperFrames and GSAP packages are reused from, or installed into, the repository's Git-ignored `.cache/cut-motion/` directory. The Agent asks before installing global/system dependencies, changing global Agent settings, or authenticating.
+The Agent checks the local environment first. Pinned HyperFrames and GSAP packages are reused from, or installed into, the repository's Git-ignored `node_modules/` directory. The Agent asks before installing global/system dependencies, changing global Agent settings, or authenticating.
 
 ## What happens next
 
@@ -33,7 +33,7 @@ The Agent checks the local environment first. Pinned HyperFrames and GSAP packag
 - **With subtitles** — the default. Spoken content appears as readable captions, with animation added only where it improves understanding.
 - **Without subtitles** — spoken phrases become part of the motion design instead of appearing in a separate subtitle band.
 
-You do not need to choose in advance. If you have no preference, the Agent recommends a suitable mode after reviewing the footage.
+You do not need to choose in advance. If you have no preference, the Agent uses the job defaults without an extra confirmation round.
 
 ## What you can provide
 

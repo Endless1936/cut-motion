@@ -66,6 +66,10 @@ cp "$repository_root/scripts/check-environment.sh" "$cache_repository/scripts/ch
 cp "$repository_root/scripts/workflow-utils.mjs" "$cache_repository/scripts/workflow-utils.mjs"
 cp "$repository_root/templates/hyperframes/package.json" "$dependency_job/hyperframes/package.json"
 npm_config_cache="$cache" bash "$cache_repository/scripts/check-environment.sh" install-job "$dependency_job" --yes >/dev/null
+[[ -L "$dependency_job/hyperframes/node_modules" && -d "$cache_repository/node_modules" && ! -e "$cache_repository/.cache" ]] || {
+  echo "Pinned dependencies did not use the standard root node_modules" >&2
+  exit 1
+}
 [[ -L "$dependency_job/hyperframes/node_modules/hyperframes" ]] || {
   echo "Exact cached HyperFrames was not linked" >&2
   exit 1
@@ -97,7 +101,19 @@ printf '{"version":"3.13.0"}\n' > "$reuse_source/hyperframes/node_modules/gsap/p
 printf 'reused gsap fixture\n' > "$reuse_source/hyperframes/node_modules/gsap/dist/gsap.min.js"
 printf '{"name":"transitive-fixture"}\n' > "$reuse_source/hyperframes/node_modules/transitive/package.json"
 printf 'stale gsap fixture\n' > "$reuse_job/hyperframes/assets/gsap.min.js"
+mkdir -p "$reuse_repository/node_modules/unrelated" "$reuse_repository/node_modules/@scope/keep" "$reuse_repository/node_modules/.bin"
+printf 'keep\n' > "$reuse_repository/node_modules/unrelated/marker"
+printf 'keep\n' > "$reuse_repository/node_modules/@scope/keep/marker"
+printf 'keep\n' > "$reuse_repository/node_modules/.bin/other-tool"
 npm_config_cache="$cache" bash "$reuse_repository/scripts/check-environment.sh" install-job "$reuse_job" --yes >/dev/null
+[[ -f "$reuse_repository/node_modules/unrelated/marker" && -f "$reuse_repository/node_modules/@scope/keep/marker" && -f "$reuse_repository/node_modules/.bin/other-tool" ]] || {
+  echo "Dependency adoption removed unrelated root packages or commands" >&2
+  exit 1
+}
+[[ ! -e "$reuse_repository/.cache" && "$(readlink "$reuse_job/hyperframes/node_modules")" == "$reuse_repository/node_modules" ]] || {
+  echo "Reusable dependencies were not attached from the standard root node_modules" >&2
+  exit 1
+}
 [[ ! -L "$reuse_job/hyperframes/node_modules/hyperframes" ]] || {
   echo "Reusable job dependencies still point at the old job" >&2
   exit 1

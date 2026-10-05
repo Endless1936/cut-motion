@@ -18,6 +18,8 @@
 
 The 13 types cover ordinary talking-head explanations. Complex charts and multilevel graphs may need a custom MG; a different item count alone does not.
 
+Choose the relationship before styling. For “文案、画面、音频、剪辑，全部用豆包完成”, use `converge-sources` with four `items` and `result:"豆包"`: each input follows its spoken word, then the collector leads downward to the named result. A parallel card with “豆包” in its initial title would expose that result early. Only a neutral organizational heading may enter at group start; a spoken tool, number, comparison or outcome keeps its own keyword cue even when displayed as a heading.
+
 ## Shared design
 
 Content MGs start at `topPx:280`. The overall MG and background card are horizontally centered, including narrow vertical lists. Internal rows may align left; headings stay inside their card. Ordered steps, vertical linear flows and quotations default to 720px wide; `widthPx` can set a centered width, capped at 88% of the canvas. Fit tall cards above captions by choosing a compact layout, moving the whole card upward or splitting a dense beat; eyes and mouth do not need clearance.
@@ -34,9 +36,9 @@ Use `templateData.items` for variable lists. An item is a string or `{label, des
 | parallel-points | Optional title / conclusion; default vertical, or `layout:"chips"` |
 | linear-flow | Optional title / descriptions; horizontal or vertical; more than four items defaults to vertical |
 | relation-map | `source`, items; default horizontal destinations or `layout:"vertical"` |
-| converge-sources | Items and `result`; branches follow each input, then a downward collector reveals the result |
+| converge-sources | Items and `result`; one row for up to four inputs, otherwise deterministic three-column rows with the last row centered (five inputs: 3+2). Branches follow each input, then a downward collector reveals the result |
 | map-transform | `source`, `result`; vertical or `layout:"horizontal"` |
-| comparison | Optional title; items use label and optional description; horizontal or vertical |
+| comparison | Optional title; items use label and optional description; a description array such as `["质感更好", "多花半分钟"]` gives each phrase an independent reveal. Horizontal or vertical |
 | metric-proof | `source?`, `value`, `unit?`, `caption?`; long values and units can wrap |
 | evidence-focus | Local `assets/` image, alt text, focus array of rectangles measured against the actual image. Keep highlights anchored during entry; pan the image and highlights together. |
 | quote | `text`, optional `credit`; no mandatory attribution or fixed rule height |
@@ -72,7 +74,7 @@ Choose the template and content in the existing Motion Plan, then run `scripts/c
 
 From the first composition, bind multi-element reveals to [spoken keywords](../../docs/mg-speech-timing.md). Each `data-at` slot is relative to the beat; supplied `revealTimes` or resolved `revealCues` replace demonstration spacing. Connectors use the corresponding element's cue, never a fixed lead offset. Background cards appear at their final width and height from the first frame and stay that size throughout the MG. Only internal content and connectors reveal; do not animate the card's height, width or clipping with the text. Previous content remains available, sequential markers advance, and the existing builder owns the exit anchor and fade. No extra approval, workflow state or blocking step is introduced.
 
-Slot order follows the DOM: optional heading then each list row; parallel conclusion last; relation source then destinations; convergence inputs then result; comparison heading then each side's label / description; metric optional source then value-and-unit together then optional caption; quote rule then text then optional credit; correction old text then strike then replacement; evidence each region; annotation each piece. Decorative slots such as a quote rule or strike can use `atStart` or an explicit `after` cue. Recompute bindings when adding or removing content.
+Slot order follows the DOM: optional heading then each list row; parallel conclusion last; relation source then destinations; convergence inputs then result; comparison heading then each side's label followed by its description parts in array order; metric optional source then value-and-unit together then optional caption; quote rule then text then optional credit; correction old text then strike then replacement; evidence each region; annotation each piece. A neutral heading or decorative slot may use `atStart` or an explicit `after` cue. Spoken entities and outcomes use their own measured keyword; their position in a title does not turn them into decoration. Recompute bindings when adding or removing content.
 
 ## Preview and stage helpers
 

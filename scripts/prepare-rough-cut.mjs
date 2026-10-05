@@ -70,7 +70,7 @@ if (command === "transcript") {
   if (!Number.isSafeInteger(total) || total < 1) throw new Error("Save the structured preview_timeline response, including totalEntries");
   const entries = new Map();
   for (const p of pages) {
-    if (p.state?.id !== first.state.id || p.state.fps !== fps || p.state.durationFrames !== first.state.durationFrames || p.timeline?.totalEntries !== total) throw new Error("Timeline pages describe different snapshots");
+    if (p.state?.id !== first.state.id || p.state.fps !== fps || p.state.durationFrames !== first.state.durationFrames || p.timeline?.totalEntries !== total || p.projectId !== first.projectId) throw new Error("Timeline pages describe different snapshots or projects");
     for (const e of p.timeline.entries) {
       if (entries.has(e.id) && JSON.stringify(entries.get(e.id)) !== JSON.stringify(e)) throw new Error("Conflicting timeline pages");
       entries.set(e.id, e);
@@ -120,6 +120,21 @@ if (command === "transcript") {
     process.exit(0);
   }
   const plan = computeSeamTighteningPlan(index, manifest);
+  // Keep exact snapshot frame counts. Microsecond source ends are rounded media
+  // addresses, not a new duration to ceil back into frames. Supply the entire
+  // track in one atomic edit so ChatCut sees the final positions together.
+  plan.editItemArgs = {
+    ...(typeof first.projectId === "string" && first.projectId.trim() ? { projectId: first.projectId } : {}),
+    updates: plan.proposedTotalTrimFrames === 0 ? [] : plan.clips.map((c, i) => ({
+      id: c.itemId,
+      timelineId: first.state.id,
+      trackId: clips[i].trackId,
+      fromFrame: c.timelineStartFrameAfterShift,
+      durationInFrames: c.durationFramesAfterTrim,
+      sourceStartFromInSeconds: c.sourceStartUsAfterTrim / 1e6,
+    })),
+    ripple: false,
+  };
   project.fps = fps;
   writeJsonAtomic(state("project.json"), project);
   writeJsonAtomic(state("timeline-source-windows.json"), manifest);
@@ -130,5 +145,15 @@ if (command === "transcript") {
         srcStartUs: p.sourceStartUsAfterTrim, srcEndUs: p.sourceEndUsAfterTrim };
   }) };
   writeJsonAtomic(state("timeline-source-windows.proposed.json"), updated);
-  console.log(`Prepared ${plan.clipCount} clips; trim ${plan.proposedTotalTrimFrames} frames. Apply seam-tightening-plan.json once, then adopt timeline-source-windows.proposed.json only after ChatCut confirms all edits. No ASR overlap audit is needed.`);
+  console.log(JSON.stringify({
+    clipCount: plan.clipCount,
+    trimFrames: plan.proposedTotalTrimFrames,
+    durationFrames: plan.proposedDurationFrames,
+    durationSeconds: plan.proposedDurationFrames / fps,
+    updates: plan.editItemArgs.updates.length,
+    planPath: state("seam-tightening-plan.json"),
+    next: plan.editItemArgs.updates.length
+      ? "Send plan.editItemArgs directly to edit_item once (add the snapshot's projectId only if absent); confirm the timeline, then adopt timeline-source-windows.proposed.json."
+      : "No edge edits needed; deliver the rough cut.",
+  }));
 }

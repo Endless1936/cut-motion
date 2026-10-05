@@ -15,8 +15,8 @@ check verifies local cut-motion runtime dependencies. Use ChatCut tools already
 loaded in the active Agent session; if unavailable, report it and stop. Run the
 endpoint probe only to diagnose a specific connection failure.
 
-install-job checks the repository's ignored shared dependency cache first. If
-no exact version is available locally, it installs the pinned packages there.
+install-job checks the repository's ignored node_modules first. If no exact
+version is available locally, it installs the pinned packages there.
 It never installs global packages, Agent plugins, fonts, or system dependencies.
 EOF
 }
@@ -98,7 +98,7 @@ install_job() {
     node -e 'const p=JSON.parse(require("fs").readFileSync(process.argv[1])); console.log(p.devDependencies.hyperframes,p.devDependencies.gsap)' "$hyperframes_directory/package.json"
   )
   npm_cache="$(npm config get cache)"
-  cache_directory="$repository_root/.cache/cut-motion"
+  cache_directory="$repository_root"
   cache_node_modules="$cache_directory/node_modules"
 
   module_version() {
@@ -179,6 +179,17 @@ install_job() {
   copy_tree() {
     local source_directory="$1"
     local target_directory="$2"
+    if [[ "$target_directory" == "$cache_node_modules" ]]; then
+      local prepared
+      prepared="$(mktemp -d "$hyperframes_directory/.dependency-reuse.XXXXXX")"
+      if cp -R -L "$source_directory/." "$prepared/"; then
+        publish_dependencies "$prepared"
+        remove_path "$prepared"
+        return
+      fi
+      remove_path "$prepared"
+      return 1
+    fi
     local staging_directory="${target_directory}.${process_id}.reuse"
     [[ -d "$source_directory" ]] || return 1
     rm -rf "$staging_directory"
@@ -192,6 +203,34 @@ install_job() {
   }
 
   process_id="$$"
+
+  publish_dependencies() {
+    # Replace prepared package entries, preserving unrelated root dependencies.
+    node - "$1" "$cache_node_modules" <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+const [source, target] = process.argv.slice(2);
+fs.mkdirSync(target, { recursive: true });
+const sameEntry = (from, to) => fs.existsSync(from) && fs.existsSync(to) && fs.realpathSync(from) === fs.realpathSync(to);
+for (const entry of fs.readdirSync(source)) {
+  const prepared = path.join(source, entry);
+  const destination = path.join(target, entry);
+  if (sameEntry(prepared, destination)) continue;
+  if (entry === ".bin" || entry.startsWith("@")) {
+    fs.mkdirSync(destination, { recursive: true });
+    for (const child of fs.readdirSync(path.join(source, entry))) {
+      const childTarget = path.join(destination, child);
+      if (sameEntry(path.join(source, entry, child), childTarget)) continue;
+      fs.rmSync(childTarget, { recursive: true, force: true });
+      fs.renameSync(path.join(source, entry, child), childTarget);
+    }
+  } else {
+    fs.rmSync(destination, { recursive: true, force: true });
+    fs.renameSync(path.join(source, entry), destination);
+  }
+}
+NODE
+  }
 
   link_hyperframes_cli() {
     local binary
@@ -225,14 +264,15 @@ install_job() {
         [[ -d "$node_modules_directory/gsap" ]] || ln -s "$cached" "$node_modules_directory/gsap"
       else
         mkdir -p "$cache_directory" "$cache_node_modules"
-        staging="$cache_directory/.gsap-install-$process_id"
+        staging="$hyperframes_directory/.gsap-install-$process_id"
         rm -rf "$staging"
         if ! npm install --prefix "$staging" --no-save --package-lock=false --ignore-scripts "gsap@$required_gsap_version"; then
           rm -rf "$staging"
           echo "Could not retrieve the pinned GSAP package. Check npm network access and retry." >&2
           exit 69
         fi
-        mv "$staging/node_modules/gsap" "$cache_node_modules/gsap"
+        publish_dependencies "$staging/node_modules"
+        ln -s "$cache_node_modules/gsap" "$node_modules_directory/gsap"
         rm -rf "$staging"
       fi
     fi
@@ -276,11 +316,9 @@ install_job() {
   move_job_dependencies_to_shared_cache() {
     mkdir -p "$cache_directory"
     if ! cache_valid; then
-      if [[ -e "$cache_node_modules" || -L "$cache_node_modules" ]]; then
-        remove_path "$cache_node_modules"
-      fi
       [[ -d "$node_modules_directory" && ! -L "$node_modules_directory" ]] || return 1
-      mv "$node_modules_directory" "$cache_node_modules"
+      publish_dependencies "$node_modules_directory"
+      remove_path "$node_modules_directory"
     fi
     cache_valid || return 1
     attach_shared_cache
@@ -288,7 +326,7 @@ install_job() {
 
   if cache_valid; then
     attach_shared_cache || { echo "Could not link shared dependencies into this job" >&2; exit 66; }
-    echo "Reused shared HyperFrames/GSAP cache: $cache_directory"
+    echo "Reused pinned HyperFrames/GSAP: $cache_node_modules"
     return
   fi
 
@@ -301,7 +339,7 @@ install_job() {
     validate_hyperframes || { echo "Existing job HyperFrames installation is incomplete" >&2; exit 66; }
     prepare_gsap || exit 66
     move_job_dependencies_to_shared_cache || { echo "Could not move job dependencies into the shared repository cache" >&2; exit 66; }
-    echo "Moved job dependencies into shared cache: $cache_directory"
+    echo "Adopted job dependencies: $cache_node_modules"
     return
   fi
 
@@ -313,7 +351,7 @@ install_job() {
       link_hyperframes_cli
       if validate_hyperframes && prepare_gsap; then
         move_job_dependencies_to_shared_cache || { echo "Could not move reusable dependencies into the shared cache" >&2; exit 66; }
-        echo "Moved reusable dependencies from ${cached_hyperframes%/hyperframes/node_modules} into shared cache: $cache_directory"
+        echo "Reused dependencies from ${cached_hyperframes%/hyperframes/node_modules}: $cache_node_modules"
         return
       fi
     fi
@@ -330,16 +368,13 @@ install_job() {
     link_hyperframes_cli
     if validate_hyperframes && prepare_gsap; then
       move_job_dependencies_to_shared_cache || { echo "Could not move cached dependencies into the shared repository cache" >&2; exit 66; }
-      echo "Moved npm-cached dependencies into shared cache: $cache_directory"
+      echo "Reused npm-cached dependencies: $cache_node_modules"
       return
     fi
     rm -rf "$node_modules_directory"
   fi
 
-  staging="$cache_directory/.install-$process_id"
-  if [[ -e "$cache_node_modules" || -L "$cache_node_modules" ]]; then
-    remove_path "$cache_node_modules"
-  fi
+  staging="$hyperframes_directory/.install-$process_id"
   if [[ -e "$staging" || -L "$staging" ]]; then
     remove_path "$staging"
   fi
@@ -353,11 +388,11 @@ install_job() {
     echo "Could not install the pinned HyperFrames/GSAP packages into the repository cache. Check npm network access and retry." >&2
     exit 69
   fi
-  mv "$staging/node_modules" "$cache_node_modules"
+  publish_dependencies "$staging/node_modules"
   remove_path "$staging"
 
   move_job_dependencies_to_shared_cache || { echo "Could not move installed dependencies into the shared repository cache" >&2; exit 66; }
-  echo "Installed pinned dependencies in shared cache: $cache_directory"
+  echo "Installed pinned dependencies: $cache_node_modules"
 }
 
 case "$command_name" in

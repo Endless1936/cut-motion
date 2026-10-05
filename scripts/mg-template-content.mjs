@@ -3,12 +3,16 @@ const escape = value => { if (typeof value !== "string") throw new Error("MG tex
 const text = value => escape(value).replaceAll("\n", "<br>");
 const labelOf = item => typeof item === "string" ? item : item.label ?? item.text;
 const paragraph = (className, value, timed = true) => value ? `<p class="${className}"${timed ? ' data-at="0"' : ""}>${text(value)}</p>` : "";
-const list = items => {
+const list = (items, { descriptionParts = false } = {}) => {
   if (!Array.isArray(items) || !items.length) throw new Error("MG items need at least one item");
   return items.map(item => {
     if (typeof item !== "string" && (!item || typeof item !== "object")) throw new Error("MG items need text or labelled objects");
     const label = labelOf(item);
-    if (typeof label !== "string" || !label.trim() || (item.description !== undefined && typeof item.description !== "string")) throw new Error("MG items need text strings");
+    const description = item.description;
+    const validDescription = description === undefined || typeof description === "string"
+      || (descriptionParts && Array.isArray(description) && description.length > 0
+        && description.every(part => typeof part === "string" && part.trim()));
+    if (typeof label !== "string" || !label.trim() || !validDescription) throw new Error("MG items need text strings; comparison descriptions may contain separately timed text parts");
     return typeof item === "string" ? { label } : { ...item, label };
   });
 };
@@ -62,7 +66,13 @@ export function templateContent(name, beat) {
     case "converge-sources": {
       const items = list(data.items ?? copy.slice(0, -1));
       normalizedData = { items, result: data.result ?? copy.at(-1) };
-      body = `<section class="converge-panel"><div class="converge-inputs" style="--items:${items.length}">${items.map(item => `<h3 data-at="0">${text(add(item.label))}</h3>`).join("")}</div><svg class="converge-wiring" aria-hidden="true"><g class="converge-branches"></g><path class="converge-collector" fill="none"/></svg>${paragraph("converge-result", add(data.result ?? copy.at(-1)))}</section>`;
+      const columns = items.length <= 4 ? items.length : 3;
+      const remaining = items.length % columns;
+      const lastRow = items.length - remaining;
+      body = `<section class="converge-panel"><div class="converge-inputs" style="--items:${items.length};--grid-columns:${columns * 2};--input-font-size:${items.length > 4 ? 56 : 64}px">${items.map((item, i) => {
+        const column = remaining && i >= lastRow ? ` style="grid-column:${columns - remaining + 1 + (i - lastRow) * 2} / span 2"` : "";
+        return `<h3 data-at="0"${column}>${text(add(item.label))}</h3>`;
+      }).join("")}</div><svg class="converge-wiring" aria-hidden="true"><g class="converge-branches"></g><path class="converge-collector" fill="none"/></svg>${paragraph("converge-result", add(data.result ?? copy.at(-1)))}</section>`;
       break;
     }
     case "map-transform": {
@@ -73,11 +83,12 @@ export function templateContent(name, beat) {
     }
     case "comparison": {
       axis = data.layout === "vertical" ? "vertical" : "horizontal";
-      const items = list(data.items ?? [{ label: copy[1], description: copy[2] }, { label: copy[3], description: copy[4] }]);
+      const items = list(data.items ?? [{ label: copy[1], description: copy[2] }, { label: copy[3], description: copy[4] }], { descriptionParts: true });
       normalizedData = { items, title: data.title ?? (data.items ? "" : copy[0] ?? "") };
       body = title("compare-topic", normalizedData.title) + `<div class="compare-grid" style="--items:${items.length}">${items.map((item, i) => {
-        add(item.label); add(item.description);
-        return `<section class="compare-side${i ? " compare-right" : " compare-left"}"><span class="compare-kicker" data-at="0">${text(item.label)}</span>${paragraph("compare-value", item.description)}</section>`;
+        add(item.label);
+        const descriptions = Array.isArray(item.description) ? item.description : [item.description];
+        return `<section class="compare-side${i ? " compare-right" : " compare-left"}"><span class="compare-kicker" data-at="0">${text(item.label)}</span>${descriptions.map(part => paragraph("compare-value", add(part))).join("")}</section>`;
       }).join("")}</div>`;
       break;
     }

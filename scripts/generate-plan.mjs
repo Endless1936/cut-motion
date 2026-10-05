@@ -26,6 +26,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { readJson, REAPPROVAL_FIELD_NAMES, sha256File, sha256Text, writeJsonAtomic } from "./workflow-utils.mjs";
 import { resolveCaptionCues } from "./caption-review-utils.mjs";
+import { chatcutPages, normalizeCaptionCards } from "./chatcut-caption-data.mjs";
 import {
   buildBeatMap,
   buildCaptionPlan,
@@ -87,8 +88,7 @@ const useLegacySourceTiming = !useMainTimeline && (project.roughCutEngine === "f
 if (!useMainTimeline && !useLegacySourceTiming) {
   throw new Error('Save the approved ChatCut preview_timeline({views:["transcript"]}) response to state/chatcut-main-timeline.json, then run generate-plan.mjs again. Archived source-word jobs can use --legacy-source-timing.');
 }
-const firstMainPage = (Array.isArray(mainTimelineSnapshot) ? mainTimelineSnapshot[0] : mainTimelineSnapshot)?.structuredContent
-  ?? (Array.isArray(mainTimelineSnapshot) ? mainTimelineSnapshot[0] : mainTimelineSnapshot);
+const firstMainPage = chatcutPages(mainTimelineSnapshot)[0];
 const mainTimelineState = firstMainPage?.state ?? {};
 const timelineId = useMainTimeline
   ? (mainTimelineState.timelineId ?? mainTimelineState.id ?? inputs.timelineId)
@@ -108,14 +108,20 @@ const corrections = inputs.corrections ?? {};
 
 // ---------------------------------------------------------------- artifacts
 const baseReleased = useMainTimeline
-  ? buildMainTimelineTranscript({ snapshot: mainTimelineSnapshot, fps, revision: inputs.revision ?? 2, language: project.language ?? "zh-CN" })
+  ? buildMainTimelineTranscript({ snapshot: mainTimelineSnapshot, fps, corrections, revision: inputs.revision ?? 2, language: project.language ?? "zh-CN" })
   : buildReleasedTranscript({ sourceTranscript, timelineWindows, fps, corrections, revision: inputs.revision ?? 2, language: project.language ?? "zh-CN" });
 const released = !useMainTimeline && inputs.releasedTranscript ? { ...baseReleased, ...inputs.releasedTranscript } : baseReleased;
+const captionData = inputs.captionTimingPath ? normalizeCaptionCards(read(inputs.captionTimingPath), { fps,
+  timelineId, projectId: firstMainPage?.projectId }) : undefined;
 
 const captionPlan = buildCaptionPlan({
   transcript: released,
   transcriptSha256: sha256Text(serializeJson(released)),
   captionCues: inputs.captionCues,
+  captionData,
+  captionEdits: inputs.captionEdits,
+  corrections,
+  fps,
   cueLines: inputs.cueLines,
   ...(inputs.captionCues !== undefined ? {
     timingAuthority: useMainTimeline
@@ -125,8 +131,10 @@ const captionPlan = buildCaptionPlan({
       ? "agent-authored phrase cues within ChatCut main timeline entries"
       : "agent-authored phrase cues within transcript segments"
   } : useMainTimeline ? {
-    timingAuthority: "approved ChatCut main timeline item ranges",
-    segmentationAuthority: "ChatCut main timeline transcript entries"
+    timingAuthority: inputs.captionEdits
+      ? "existing measured word/card boundaries; unmatched phrase timing allocated within parent frames for captions only"
+      : "approved ChatCut main timeline item ranges",
+    segmentationAuthority: inputs.captionEdits ? "agent-authored sparse phrases" : "ChatCut main timeline transcript entries"
   } : {}),
   lexicon: inputs.lexicon ?? {},
   rules: inputs.cueRules ?? {},

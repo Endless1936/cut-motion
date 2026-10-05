@@ -46,7 +46,7 @@ Create the job:
 ./scripts/scaffold-project.sh jobs/<job-id> /absolute/path/to/video.mov review
 ```
 
-Prepare the pinned renderer dependencies when composition is needed. The command first checks the shared repository cache; if the exact versions are absent, it installs them into that cache automatically. This project-local install never requires user approval and does not install global packages or change Agent configuration.
+Prepare the pinned renderer dependencies when composition is needed. The command first reuses the repository's `node_modules/`; if the exact versions are absent, it installs them there automatically. This project-local install never requires user approval and does not install global packages or change Agent configuration.
 
 ```bash
 ./scripts/check-environment.sh install-job jobs/<job-id>
@@ -55,7 +55,7 @@ Prepare the pinned renderer dependencies when composition is needed. The command
 
 `install-font.sh` resolves the display font in this order: `--from <file>`, the shared cache under `assets/fonts/` (git-ignored, populated by the first job that has the font), fonts already installed in another job, and finally an explicit `--download` from the upstream release. It copies the font and its license into `hyperframes/<fontAsset>`, repoints `state/design-system.json` at the installed file, and rewrites the `@font-face` in the HyperFrames template so the format match is real rather than assumed. Skip it when no font is available; the composition falls back to sans-serif and the font check is optional.
 
-`install-job` stores the pinned HyperFrames, GSAP, and their dependency tree in the Git-ignored `.cache/cut-motion/node_modules/` directory at the repository root. It checks that cache first, then adopts a matching job or npm cache when available; otherwise it downloads the exact versions declared by the job template into the shared cache. Each job links to that shared tree, while its small GSAP browser asset stays in the job. Do not ask for approval to reuse or install these project-pinned packages. Global/system dependencies, Agent plugins/configuration, and OAuth remain separate setup actions.
+`install-job` stores pinned HyperFrames, GSAP, and their dependency tree in the Git-ignored root `node_modules/`. It checks that tree first, then adopts a matching job or npm cache before downloading packages. Each job links to the shared tree; its small GSAP browser asset stays in the job. Dependency adoption preserves unrelated root packages. Do not create another checkout or repository cache for production.
 
 ## ChatCut preflight
 
@@ -74,12 +74,20 @@ Check for an existing asset first. Use the active integration's import skill and
 - When the hosted plugin supports same-machine editor import, use its bundled local-media helper and `import_media action=from_editor`. Keep the editor open for sync and transcription.
 - Otherwise use the supported desktop import tool or `import_media action=create_session` and its matching upload helper. Follow that helper's arguments; do not transplant `--input`, retry, or transcription-only flags from another client. Keep import tokens out of chat, logs and Git.
 - If the loopback helper returns `listen EPERM` before transferring media, retry that helper only through the host-approved local-network permission path. If the client does not support the loopback bridge, use its documented upload helper; if the host or OS denies the requested operation, stop and ask the user to grant that permission or upload through the editor. Do not change transfer routes to bypass the denial or spend time probing endpoints.
+- Reuse the confirmed helper invocation and its running session for the rest of the job. Summarize tool results with IDs, status, duration, and next offset; save complete structured data directly under the job rather than printing it and parsing truncated terminal output.
 - On a timeout, inspect progress and the existing asset before retrying. A helper still retrying is not a terminal failure; resume the same asset through its supported recovery path instead of starting another upload/transcode.
 - Wait for transcription readiness using the integration's progress/asset tools before Script editing. An upload acknowledgment alone does not establish transcript readiness, and a provisional status alone does not justify re-uploading.
 
 ## Render commands
 
-From `jobs/<job-id>/hyperframes`:
+After the existing plan-package approval and A-roll media lock, prepare once:
+
+```bash
+./scripts/check-environment.sh install-job jobs/<job-id>
+node scripts/compose-job.mjs jobs/<job-id>
+```
+
+Follow the composition command's batch snapshot command, inspect the expanded MGs, and recapture only affected groups after a local change. Then render from `jobs/<job-id>/hyperframes`:
 
 ```bash
 npm run render
@@ -87,7 +95,7 @@ npm run render
 
 These scripts use the repository's stable delivery route. `npm run render` is the default single delivery render: ordinary jobs stay monolithic and only longer jobs use chunks with HyperFrames' platform-default browser resolution. Use `npm run render:preview` only for an explicit visual question, not as a mandatory pre-render step. Use `npm run render:chunked` only for a known long-media or normal-route failure case; that explicit route selects the exact cached arm64 HeadlessChrome and hardware Metal. Chunk boundaries are normalized to the manifest frame grid, each rendered chunk is probed and cached with a receipt, and the final video is assembled with the authoritative audio. The preview uses HyperFrames `standard` quality; the final render uses `high` quality with the same composition, resolution, frame rate, timing, and audio.
 
-Perform [MG final-state self-review](workflow.md#mg-final-state-self-review) from HTML snapshots, then run `npm run render` once. `render:revision` is an alias for the same direct `output/final.mp4` output. If the normal render hits a known failure, follow the matching entry in [Troubleshooting](troubleshooting.md); do not probe alternative renderers or worker settings.
+Perform [MG final-state self-review](workflow.md#mg-final-state-self-review) in one snapshot batch, then run `npm run render` once. Resume a running render instead of launching another; reuse a completed delivery recorded for the same composition. A bare `final.mp4` filename does not establish that revised inputs are already rendered. `render:revision` aliases the same direct `output/final.mp4` output. If the normal render hits a known failure, follow the matching entry in [Troubleshooting](troubleshooting.md); do not probe alternative renderers or worker settings. Read command summaries and saved data for recovery; routine delivery does not require rereading helper source or dumping full JSON.
 
 ### Optional preview
 

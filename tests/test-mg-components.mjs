@@ -89,6 +89,66 @@ for(const name of ["ordered-steps","linear-flow","quote"]){
 }
 assert.equal(narrow.layout.primaryBoundsNormalized.x + narrow.layout.primaryBoundsNormalized.width / 2, .5);
 assert.throws(() => resolveComponent("parallel-points").render({beat:{id:"bad",start:0,end:3,templateData:{items:[{label:"字",description:123}]}}}), /strings/);
+const comparisonData = { title: "画面方案", items: [
+  { label: "普通方案", description: "速度更快" },
+  { label: "精细方案", description: ["质感更好", "多花半分钟"] }
+], revealTimes: [0, .2, .5, 1, 1.5, 2.2] };
+const comparison = resolveComponent("comparison");
+const splitComparison = comparison.render({ beat: { id: "split-comparison", start: 0, end: 5, templateData: comparisonData } });
+assert.deepEqual(comparison.content({ templateData: comparisonData }).copy,
+  ["画面方案", "普通方案", "速度更快", "精细方案", "质感更好", "多花半分钟"]);
+assert.deepEqual([...splitComparison.fragment.matchAll(/data-at="([^"]+)"/g)].map(match => Number(match[1])), comparisonData.revealTimes);
+assert.match(splitComparison.fragment, /<p class="compare-value" data-at="1\.5">质感更好<\/p><p class="compare-value" data-at="2\.2">多花半分钟<\/p>/);
+const splitPlan = planBeat({ templateId: "comparison", templateData: comparisonData });
+assert.deepEqual(planBeat(splitPlan), splitPlan, "Description parts and flattened copy survive regeneration");
+assert.deepEqual(splitPlan.onScreenCopy, comparison.content({ templateData: comparisonData }).copy);
+assert.throws(() => comparison.render({ beat: { id: "bad-parts", start: 0, end: 5,
+  templateData: { items: [{ label: "方案", description: ["词句", 123] }] } } }), /text strings/);
+assert.throws(() => comparison.render({ beat: { id: "bad-slot-count", start: 0, end: 5,
+  templateData: { ...comparisonData, revealTimes: [0, .2, .5, 1, 1.5] } } }), /6 relative times/);
+
+const convergence = resolveComponent("converge-sources");
+for (const count of [1, 2, 4, 5, 6, 7]) {
+  const columns = count <= 4 ? count : 3;
+  const html = convergence.render({ beat: { id: "grid", start: 0, end: 8,
+    templateData: { items: Array.from({ length: count }, (_, i) => `输入${i}`), result: "全部在云端" } } }).fragment;
+  assert.match(html, new RegExp(`--grid-columns:${columns * 2}(?:;|\\")`));
+  assert.equal([...html.matchAll(/<h3 data-at=/g)].length, count);
+  assert.equal([...html.matchAll(/data-at=/g)].length, count + 1);
+  if (count === 5) {
+    assert.match(html, /grid-column:2 \/ span 2/);
+    assert.match(html, /grid-column:4 \/ span 2/);
+  }
+  if (count === 7) assert.match(html, /grid-column:3 \/ span 2/);
+}
+assert.match(fs.readFileSync(path.join(templateRoot, "converge-sources/style.css"), "utf8"), /display:grid;grid-template-columns:/);
+
+// Connector geometry must use untransformed layout pixels, even when the host
+// is scaled and entry animation has moved the labels. Browser verification
+// separately checks that CSS produces these 3+2 rows after the real font loads.
+const svgPaths = [], animated = [];
+const geometryRoot = { offsetWidth: 900, offsetHeight: 460,
+  ownerDocument: { createElementNS() { return { dataset: {}, style: {}, attrs: {}, setAttribute(key, value) { this.attrs[key] = value; } }; } } };
+const panel = { offsetLeft: 0, offsetTop: 0, offsetParent: geometryRoot };
+const inputContainer = { offsetLeft: 0, offsetTop: 0, offsetParent: panel };
+const geometryInputs = [[18, 0], [312, 0], [606, 0], [165, 144], [459, 144]].map(([x, y], i) => ({
+  offsetLeft: x, offsetTop: y, offsetWidth: 276, offsetHeight: 112, offsetParent: inputContainer,
+  dataset: { at: String(i / 10) }, getBoundingClientRect() { throw new Error("Transformed viewport rectangles are not SVG layout coordinates"); }
+}));
+const geometryResult = { offsetLeft: 198, offsetTop: 364, offsetWidth: 504, offsetHeight: 96,
+  offsetParent: panel, dataset: { at: ".8" } };
+const geometrySvg = { attrs: {}, setAttribute(key, value) { this.attrs[key] = value; }, appendChild(node) { svgPaths.push(node); } };
+const geometrySelect = selector => ({ "[data-at]": [...geometryInputs, geometryResult], svg: [geometrySvg],
+  ".converge-branches, .converge-collector": [], ".converge-inputs h3": geometryInputs, ".converge-result": [geometryResult] })[selector];
+new Function("root", "select", "beat", "timeline", fs.readFileSync(path.join(templateRoot, "converge-sources/timeline.mjs"), "utf8"))(
+  geometryRoot, geometrySelect, { start: 1, end: 4 }, { set() {}, fromTo(node, from, to, at) { animated.push({ node, at }); } });
+assert.equal(geometrySvg.attrs.viewBox, "0 0 900 460");
+assert.equal(svgPaths.length, 6);
+assert.equal(svgPaths[0].attrs.d, "M 156 112 V 121 H 896 V 296 H 450");
+assert.equal(svgPaths[3].attrs.d, "M 303 256 V 296 H 450");
+assert.equal(svgPaths[5].attrs.d, "M 450 296 V 352 m -8 -8 l 8 8 8 -8");
+assert.deepEqual(svgPaths.map(path => Number(Number(path.dataset.linkAt).toFixed(6))), [0, .1, .2, .3, .4, .8]);
+assert.equal(animated.filter(({ node }) => svgPaths.includes(node)).length, 6);
 for(const count of [1,3]) {
   const result = resolveComponent("evidence-focus").render({beat:{id:"focus",start:0,end:5,templateData:{image:"assets/demo.png",alt:"演示",focus:Array.from({length:count},()=>({x:10,y:10,width:20,height:20}))}}});
   assert.equal([...result.fragment.matchAll(/data-at=/g)].length,count);

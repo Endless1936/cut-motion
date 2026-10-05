@@ -32,6 +32,18 @@ try {
   assert.equal(split.segments.map((segment) => segment.text).join(""), "你好");
   assert.deepEqual(split.segments[0].words.map(({ text, start, end }) => ({ text, start, end })), [{ text: "你好", start: 0, end: 0.8 }]);
   assert.equal(buildCaptionPlan({ transcript: split }).cues[0].text, "你好");
+  const namedText = "使用 book-video 和 GPT Image 2。";
+  const namedTranscript = { revision: 1, segments: [{ id: "names", text: namedText,
+    start: 0, end: 2, words: [{ text: namedText, start: 0, end: 2 }] }] };
+  const namedLexicon = { protectedTerms: ["book-video", "GPT", "GPT Image 2"] };
+  assert.equal(buildCaptionPlan({ transcript: namedTranscript, lexicon: namedLexicon }).cues[0].text,
+    "使用book-video和GPT Image 2");
+  assert.equal(buildCaptionPlan({ transcript: namedTranscript, lexicon: namedLexicon,
+    captionCues: [{ segmentId: "names", text: namedText, start: 0, end: 2 }] }).cues[0].text,
+    "使用book-video和GPT Image 2");
+  assert.deepEqual(buildCaptionPlan({ transcript: namedTranscript, lexicon: namedLexicon,
+    captionEdits: { names: ["使用book-video", "和GPT Image 2"] } }).cues.map(cue => cue.text),
+    ["使用book-video", "和GPT Image 2"], "semantic phrase input preserves punctuation and spaces inside protected product names");
   const splitEvidence = buildSourceWordEvidence({ sourceTranscript: source, timelineWindows: splitWindows, releasedTranscript: split, fps: 30 });
   assert.deepEqual(splitEvidence.entries, [{ sourceStartMs: 0, sourceEndMs: 1000, timelineStartFrame: 0, timelineEndFrame: 24 }]);
   const fragmentedWindows = { clips: [clip(0, 0.2, 0), clip(0.4, 0.6, 0.2), clip(0.8, 1, 0.4)] };
@@ -501,6 +513,48 @@ try {
   assert.deepEqual(manualPlan.cues.map((cue) => cue.text), ["今天我要", "演示", "这个新工具", "很好用"]);
   assert.equal(manualPlan.cues[0].segmentId, "main-001");
   script("check-caption-review-plan.mjs", [manualPlanPath]);
+
+  // One author input corrects the standard main-timeline route and reuses phrase
+  // cards; only the deliberately changed entry supplies replacement cues.
+  const sparseMainJob = path.join(temporaryRoot, "sparse-main-caption-job");
+  fs.cpSync(manualMainJob, sparseMainJob, { recursive: true });
+  const sparseSnapshot = readJson(path.join(sparseMainJob, "state/chatcut-main-timeline.json"));
+  sparseSnapshot.transcript.entries[1].text = "这个新功具很好用";
+  writeJson(path.join(sparseMainJob, "state/chatcut-main-timeline.json"), sparseSnapshot);
+  const sparseInputs = { ...manualMainInputs, corrections: { "新功具": "新工具" },
+    captionTimingPath: "state/caption-timing.json",
+    captionEdits: { "main-001": [{ text: "今天我要", start: .5, end: 1.3 }, { text: "演示", start: 1.3, end: 2.4 }] }
+  };
+  delete sparseInputs.captionCues;
+  writeJson(path.join(sparseMainJob, "state/planning-inputs.json"), sparseInputs);
+  writeJson(path.join(sparseMainJob, "state/caption-timing.json"), { structuredContent: {
+    timelineId: "main-caption-fixture", hasMore: false,
+    text: '[C0] id=cue:1 frame=15-72 text="今天我要演示"\n'
+      + '[C1] id=cue:2 frame=90-126 text="这个新功具"\n'
+      + '[C2] id=cue:3 frame=126-162 text="很好用"\n'
+  } });
+  script("generate-plan.mjs", [sparseMainJob, "--write", "--replace-existing"]);
+  const sparseTranscript = readJson(path.join(sparseMainJob, "state/transcript.json"));
+  assert.equal(sparseTranscript.segments[1].text, "这个新工具很好用");
+  assert.equal(sparseTranscript.segments[1].rawText, "这个新功具很好用");
+  const sparsePlan = readJson(path.join(sparseMainJob, "captions/caption-review-plan.json"));
+  assert.deepEqual(sparsePlan.cues.map(cue => cue.text), ["今天我要", "演示", "这个新工具", "很好用"]);
+  assert.equal(sparsePlan.cues[2].start, 3);
+  assert.equal(sparsePlan.cues[2].end, 4.2);
+  script("check-caption-review-plan.mjs", [path.join(sparseMainJob, "captions/caption-review-plan.json")]);
+  sparseInputs.captionEdits = { "main-001": ["今天我要", "演示"] };
+  writeJson(path.join(sparseMainJob, "state/planning-inputs.json"), sparseInputs);
+  script("generate-plan.mjs", [sparseMainJob, "--write", "--replace-existing"]);
+  const phraseOnlyPlan = readJson(path.join(sparseMainJob, "captions/caption-review-plan.json"));
+  assert.deepEqual(phraseOnlyPlan.cues.map(cue => cue.text), ["今天我要", "演示", "这个新工具", "很好用"]);
+  assert.equal(phraseOnlyPlan.cues[0].start, .5);
+  assert.equal(phraseOnlyPlan.cues[1].end, 2.4);
+  assert.match(phraseOnlyPlan.timingAuthority, /captions only/);
+  writeJson(path.join(sparseMainJob, "state/chatcut-main-timeline.json"), { structuredContent: null,
+    content: [{ type: "text", text: JSON.stringify(sparseSnapshot) }] });
+  script("generate-plan.mjs", [sparseMainJob, "--write", "--replace-existing"]);
+  assert.equal(readJson(path.join(sparseMainJob, "captions/chatcut-pages.json")).timelineVersion,
+    "chatcut-timeline-main-caption-fixture", "the shared wrapper parser preserves main-timeline identity as well as text");
   script("promote-caption-review-plan.mjs", [manualMainJob]);
   const promotedManualCaptions = readJson(path.join(manualMainJob, "captions", "captions.json"));
   assert.deepEqual(promotedManualCaptions.cues.map((cue) => cue.viewerText), ["今天我要", "演示", "这个新工具", "很好用"]);
@@ -621,6 +675,9 @@ try {
     beats: [{ id: "b01", start: 1, end: 3, text: "示例", layout: { faceSafetyNote: "Fixture" }, ...beat }]
   }).beats[0];
   const minimal = beatMapFor({ templateId: "correction", onScreenCopy: ["旧工具", "新工具"] });
+  const withDelayAlias = beatMapFor({ templateId: "correction", templateData: { copy: ["旧工具", "新工具"],
+    revealCues: [{ atStart: true }, { after: 0, frames: 6 }] } });
+  assert.deepEqual(withDelayAlias.templateData.revealCues[1], { after: 0, delayFrames: 6 }, "author delay alias is normalized before schema/composition");
   const strikeMeta = resolveComponent("correction").meta;
   for (const field of ["semanticTopology", "primaryFlowAxis", "motionFamily", "transitionFamily"]) assert.equal(minimal[field], strikeMeta[field]);
   assert.equal(minimal.visualStyle, strikeMeta.summaryZh ?? strikeMeta.summary);

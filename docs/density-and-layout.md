@@ -16,7 +16,7 @@ Use one focal group and one to four supporting elements. In motion-copy or a B-a
 
 ## MG cadence target
 
-For plans with discrete MG nodes, target an average of about one node per 20 seconds of finished runtime, spread across meaningful sections (about six nodes in a two-minute video). Treat this as a planning target, not a fixed interval or validation threshold. Motion Copy remains one continuous treatment rather than a reason to add separate MG nodes.
+For subtitle-led plans with discrete MG nodes, start with about six to eight meaningful nodes in a two-minute video, spread across its argument. Add a node when a process, relationship, contrast or result benefits from visualization; ordinary narration can remain caption-only. Keep related phrases in one scene instead of automatically making a new card for each subtitle. This is a content planning target, not a quota, fixed interval or validation threshold. Motion Copy remains one continuous treatment rather than a reason to add separate MG nodes.
 
 If the frame feels empty, enrich the focal idea before adding decoration. If it feels crowded, remove low-priority support before shrinking copy.
 

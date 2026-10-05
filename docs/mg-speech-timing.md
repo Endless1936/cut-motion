@@ -1,6 +1,6 @@
 # MG internal speech timing
 
-Multi-element MGs reveal independent content in spoken order. Bind each spoken element to its own keyword onset; do not use template sample intervals or text-length interpolation. A value and its unit can form one semantic element. Context headings and decorative rules may enter at the beat start; attribution, connectors and strikes may follow a content cue by a short explicit frame delay. Use the existing exit anchor and fade, and keep the final content readable before exit.
+Multi-element MGs reveal independent content in spoken order. Bind each spoken element to its own keyword onset; do not use template sample intervals or text-length interpolation. A value and its unit can form one semantic element. Neutral organizational headings and decorative rules may enter at the beat start; a spoken tool name or result needs its keyword cue even when styled as a title. Attribution, connectors and strikes may follow a content cue by a short explicit frame delay. Use the existing exit anchor and fade, and keep the final content readable before exit.
 
 The approved main-timeline preview provides phrase timing. Its generated `words[0]` / `:word-001` is a whole-entry timing unit, not word-level alignment. Authored phrase caption cues also do not prove a keyword onset.
 
@@ -8,19 +8,23 @@ Apply this during the first composition, after ordinary plan delivery; do not wa
 
 ## Existing ChatCut timing first
 
+If the approved timeline already has a CaptionProgram, locate that existing program in the current project and request `read_captions({projectId:<project>,json:JSON.stringify({words:true,limit:100})})`. Continue any returned pagination with the same program, revision and filters, changing only the offset; save pages in order. Reuse its measured tokens: `node scripts/prepare-mg-speech-timing.mjs <job> <saved-caption-pages.json> --write`. The command accepts `structuredContent.text` with `[C...]` cards and `- token=... timing=measured` rows, unwrapped responses or normalized `cards` arrays. Use the approved timeline FPS; all token ranges are timeline frames. It handles saved pages, discards empty/zero-duration tokens and ignores estimated tokens. Card spans never substitute for word timing. This route needs no source-window conversion and no new transcription. Do not create a CaptionProgram just to use this route; otherwise use the source-word lookup below.
+
 Use clip placement from the final approved cut, including any rough-cut review revisions. Reuse the saved timeline-only snapshot that confirmed the last editing batch; if it predates a change, save the current `preview_timeline({views:["timeline"]})` pages once. Refresh `state/timeline-source-windows.json` with `node scripts/prepare-rough-cut.mjs <job> windows <saved-timeline-pages.json>...`. This converts source ranges, frame placement and explicit playback rates without scanning audio, recalculating tightening or editing ChatCut. It also works when tightening was skipped or only partly applied. Use the actual timeline, not the proposed tightening mapping; the main transcript snapshot and source windows must describe the same approved edit. This command handles one source video track; retain an explicit source mapping for other arrangements.
 
-Request `find_transcript` on the approved timeline with `includeWordTimestamps:true` for MG keyword phrases only. Save a private `state/mg-word-lookups.json` with `schemaVersion:1`, `provider:"chatcut.find_transcript"`, project/timeline/asset IDs, and `lookups:[{query,text}]`; `text` is the returned word-bearing response text, without browser handoff URLs. Use `inspect_asset` source transcript ranges if a lookup needs a wider context. Neither route retranscribes the audio.
+Request `find_transcript` on the approved timeline with `includeWordTimestamps:true` for MG keyword phrases only. Save a private `state/mg-word-lookups.json` with `schemaVersion:1`, `provider:"chatcut.find_transcript"`, project/timeline/asset IDs, and `lookups:[{query,text}]`; `text` may be the returned word-bearing text, its JSON string wrapper, or the complete `content`/`structuredContent` response. The shared parser unwraps these forms; do not write a separate regex converter. Keep browser handoff URLs out of authored notes. Use `inspect_asset` source transcript ranges if a lookup needs a wider context. Neither route retranscribes the audio.
 
 Run `node scripts/prepare-mg-speech-timing.mjs <job> <job>/state/mg-word-lookups.json --write`. It clips source word timestamps to the locked media windows, maps them through playback rate, and binds them to generated main entries in preview order. Multiple transcript entries can share a single clip. Reveal on the first frame at or after the keyword onset; frame quantization adds less than one frame, separate from ASR alignment accuracy.
 
+Local keyword lookups incrementally retain previously measured words from the same approved snapshot/FPS and valid source mapping, so filling one missing keyword does not erase the other bindings; obsolete evidence is not reused.
+
 In `templateData.revealCues`, provide one cue per fragment `data-at` slot, in DOM order:
 
-- `{keyword:"文案",segmentId:"main-003"}` for spoken content. The keyword is the recorded ASR wording; on-screen copy may be an approved paraphrase.
-- `{atStart:true}` for contextual/decorative content.
-- `{after:0,delayFrames:6}` for a nonspeech embellishment following the earlier slot at index 0.
+- `{keyword:"文案",segmentId:"main-003"}` for spoken content. The keyword may use the recorded ASR wording or a terminology correction from `planning-inputs.json`; the resolver locates the original measured words without moving their timestamps. On-screen copy may be an approved paraphrase. If the same phrase is truly spoken twice within the entry, add `occurrence:2` for its second onset.
+- `{atStart:true}` for neutral organizational headings or decorative content, never a spoken tool/result label.
+- `{after:0,delayFrames:6}` for a nonspeech embellishment following the earlier slot at index 0. The plan generator also accepts `frames:6` and normalizes it to `delayFrames`.
 
-Assembly derives template `revealTimes`; composition binds the same resolved timings into custom fragments. Keep custom animation code reading `data-at`. Missing or repeated keyword matches, changed approved snapshots, slot-count differences and reveals outside the beat window fail explicitly. Fetch/refine the affected anchor rather than guessing. Existing jobs without bindings retain their authored timings; those timings alone do not satisfy speech alignment.
+Assembly derives template `revealTimes`; composition binds the same resolved timings into custom fragments. Keep custom animation code reading `data-at`. Resolve a missing or ambiguous keyword by fetching/refining only that affected anchor rather than guessing or looking up every subtitle. Preserve genuine repetitions and source replays. The existing validation reports changed approved snapshots, slot-count differences and reveals outside the beat window; this adds no workflow checkpoint. Existing jobs without bindings retain their authored timings; those timings alone do not satisfy speech alignment.
 
 ## Additional alignment only if necessary
 

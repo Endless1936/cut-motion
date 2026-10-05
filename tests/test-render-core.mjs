@@ -375,6 +375,13 @@ process.exit(result.status ?? 1);
   const auditRender = renderOutput(jobRoot, "standard", auditOutput);
   assert.equal(auditRender.receipt.mode, "monolithic");
   assert.equal(verifyAssemblyReceipt(jobRoot, "previews/audit.mp4", { quality: "standard" }).mode, "monolithic");
+  const reusedRender = renderOutput(jobRoot, "standard", auditOutput);
+  assert.equal(reusedRender.reused, true);
+  assert.equal(fs.readFileSync(renderLogPath, "utf8").trim().split("\n").length, 3);
+  fs.appendFileSync(path.join(jobRoot, "hyperframes/extra.css"), "\n.changed { color: yellow; }\n");
+  const revisedRender = renderOutput(jobRoot, "standard", auditOutput);
+  assert.notEqual(revisedRender.reused, true);
+  assert.equal(fs.readFileSync(renderLogPath, "utf8").trim().split("\n").length, 4);
 
   console.log("Render core tests passed");
 } finally {

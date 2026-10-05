@@ -1,6 +1,6 @@
 # Talking-Head Rough Cut
 
-Default: **one semantic pass → one pause-cleanup pass → one edge-tightening pass → deliver the ChatCut project for listening**. For a 5–6 minute recording, target roughly ten minutes to this handoff when tools are available. Report a blocking tool failure promptly with the usable result so far. The user judges listening quality in `rough-cut-review`.
+Default: **one semantic pass → one pause-cleanup pass → one edge-tightening pass → deliver the ChatCut project for listening**. For a 5–6 minute recording, target this handoff within 6 minutes, including preparation, tool runtime and recovery. This is an execution budget, not a gate or a target cut duration. Report a blocking tool failure promptly with the usable result so far. The user judges listening quality in `rough-cut-review`.
 
 ## Start or resume
 
@@ -10,7 +10,7 @@ Create the job once; this entry point copies the source and creates workflow sta
 ./scripts/scaffold-project.sh jobs/<job-id> /absolute/source.mov review
 ```
 
-Resume from `workflow-state.mjs ... status`. Match the source to its ChatCut asset once. If a usable cut already exists, give the user its project link and apply only requested revisions. Local source-word conversion, reconciliation, Caption Plan and MG planning belong after rough-cut approval.
+Resume from `workflow-state.mjs ... status`. Match the source to its ChatCut asset once. If a usable cut already exists, give the user its project link and apply only requested revisions. Use a supplied reference script to understand intended wording and takes; preserve it for caption correction after approval. Local source-word conversion, transcript spelling edits, reconciliation, Caption Plan and MG planning belong after rough-cut approval.
 
 ## Three editing passes
 
@@ -28,9 +28,9 @@ node scripts/prepare-rough-cut.mjs jobs/<job-id> tighten jobs/<job-id>/state/cha
 
 The command builds/reuses the waveform index, converts timeline entries into source windows, and writes `state/seam-tightening-plan.json`. It supports a single source video track at an integer timeline fps with a linear 1x mapping; the source span must agree with each clip's frame duration. Fetch another timeline page only when pagination requires it. Query individual items only to resolve missing or unsupported mapping data.
 
-For each plan clip, send ChatCut the computed `timelineStartFrameAfterShift`, `durationFramesAfterTrim`, `sourceStartUsAfterTrim` and `sourceEndUsAfterTrim` in the tool's corresponding fields. Keep item IDs unchanged. The companion `timeline-source-windows.proposed.json` contains the resulting mapping: adopt it as `timeline-source-windows.json` only after the entire batch succeeds. For a partial failure, fetch the actual current timeline once and report the outcome rather than reapplying the old batch.
+Load the saved plan as JSON and send its `editItemArgs` directly to `edit_item`. This contains the complete atomic `updates` batch with item/timeline/track IDs, `fromFrame`, `durationInFrames` and source starts in seconds; `projectId` comes from the saved preview. For a legacy preview without `projectId`, add the project ID that produced that snapshot. Keep the supplied frame counts and `ripple:false`: all final positions are already calculated. Do not print the whole plan, translate fields by hand, or derive frame durations with `ceil` from rounded microsecond ranges. If `updates` is empty, skip the call. The companion `timeline-source-windows.proposed.json` contains the resulting mapping: adopt it as `timeline-source-windows.json` only after the batch succeeds. If an edit fails, fetch the actual current timeline once before any recovery rather than reapplying an old batch.
 
-One final timeline read confirms the batch landed; save its structured pages for later source mapping. Deliver immediately; no further scan, ASR-overlap sweep, gap reclassification, per-seam playback or MP4 export precedes listening. Do not run global audio smoothing by default.
+One final timeline read confirms the batch landed; save its structured pages for later source mapping. Deliver immediately; no further scan, ASR-overlap sweep, gap reclassification, per-seam playback or MP4 export precedes listening. This project's three-pass delivery replaces a generic plugin's extra cleanup or global `smooth_audio` step. Audio smoothing is a targeted response to an audible seam problem, not routine rough-cut preparation.
 
 ## Handoff
 

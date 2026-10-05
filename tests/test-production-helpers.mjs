@@ -75,6 +75,36 @@ try {
   assert.equal(fs.readFileSync(output, "utf8"), "new-media");
   assert.equal(fs.readFileSync(input, "utf8"), "source");
   assert.equal(fs.readdirSync(path.dirname(output)).some((name) => name.startsWith(".align-")), false);
+
+  for (const name of ["compose-job.mjs", "workflow-utils.mjs", "motion-window-utils.mjs"]) {
+    put(`repo/scripts/${name}`, fs.readFileSync(path.join(root, "scripts", name)));
+  }
+  put("repo/scripts/assemble-mg.mjs", "console.log('assembled');\n");
+  put("repo/scripts/workflow-state.mjs", `import fs from 'node:fs';
+const file = process.argv[2];
+const state = JSON.parse(fs.readFileSync(file));
+state.currentState = state.currentState === 'motion-plan' ? 'composition' : 'render';
+fs.writeFileSync(file, JSON.stringify(state));
+fs.appendFileSync(file + '.steps', 'advance\\n');\n`);
+  const composeJob = "compose job'quoted";
+  const composePut = (relative, value) => put(`${composeJob}/${relative}`, JSON.stringify(value));
+  composePut("state/workflow.json", { currentState: "motion-plan", captionMode: "motion-copy" });
+  composePut("state/transcript.json", { segments: [{ id: "main-001", words: [{ start: 1, end: 5 }, { start: 8, end: 12 }] }] });
+  composePut("state/beat-map.json", { fps: 30, duration: 15, beats: [
+    { id: "first", start: 1, end: 6, entryAnchorWordId: "main-001:word-001", exitAnchorWordId: "main-001:word-001", exitAnchorOffsetFrames: 3, exitFrames: 6 },
+    { id: "second", start: 8, end: 13, entryAnchorWordId: "main-001:word-002", exitAnchorWordId: "main-001:word-002", exitAnchorOffsetFrames: 0, exitFrames: 6 }
+  ] });
+  for (const id of ["first", "second"]) {
+    for (const file of ["fragment.html", "style.css", "timeline.mjs"]) put(`${composeJob}/hyperframes/mg/${id}/${file}`, "fixture module");
+  }
+  const composeRoot = path.join(temporary, composeJob);
+  const composeResult = spawnSync(process.execPath, [path.join(temporary, "repo/scripts/compose-job.mjs"), composeRoot], { encoding: "utf8" });
+  assert.equal(composeResult.status, 0, composeResult.stderr);
+  assert.equal(fs.existsSync(path.join(composeRoot, "state/motion-index.json")), false);
+  assert.match(composeResult.stdout, /snapshot --at 5\.066667,11\.966667 --no-end --describe false --output/);
+  assert.match(composeResult.stdout, /npm --prefix .* run render/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(composeRoot, "state/workflow.json"))).currentState, "render");
+  assert.equal(fs.readFileSync(path.join(composeRoot, "state/workflow.json.steps"), "utf8"), "advance\nadvance\n");
   console.log("Production helper tests passed.");
 } finally {
   fs.rmSync(temporary, { recursive: true, force: true });

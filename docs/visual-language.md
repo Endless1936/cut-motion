@@ -43,6 +43,7 @@ Vary the family by meaning. Keep typography, corner treatment, shadow logic, and
 
 - Empty colored shapes are not content. Add a meaningful icon, status, label, diagram, or animation.
 - Incremental sentences retain earlier clauses until the semantic unit completes.
+- A spoken result or tool name follows its own keyword, including when used as a heading. Neutral organizational headings may enter at group start; choose a convergence or conversion layout when the result follows earlier inputs.
 - Give each MG one horizontal or vertical primary flow; branch from a terminal node when meaning needs a secondary axis.
 - Copy, timing, and size-only revisions inherit their approved sample or component.
 - Use semantic containers and the design-system connector token instead of generic black frames.

@@ -6,8 +6,13 @@ elements.forEach(element => {
   timeline.fromTo(element, { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: duration(at), ease: "power3.out", immediateRender: false }, at);
 });
 const rectIn = element => {
-  const base = root.getBoundingClientRect(), r = element.getBoundingClientRect();
-  return { x: r.left - base.left, y: r.top - base.top, width: r.width, height: r.height };
+  // Layout coordinates match the SVG viewBox. Viewport rectangles include host
+  // scaling and the entrance transform, which must not move connector anchors.
+  let x = 0, y = 0;
+  for (let node = element; node && node !== root; node = node.offsetParent) {
+    x += node.offsetLeft; y += node.offsetTop;
+  }
+  return { x, y, width: element.offsetWidth, height: element.offsetHeight };
 };
 const svg = select("svg")[0];
 const makePath = (d, at, parent = svg) => {
@@ -22,11 +27,12 @@ svg.setAttribute("viewBox", `0 0 ${root.offsetWidth} ${root.offsetHeight}`);
 select(".converge-branches, .converge-collector").forEach(node => node.remove());
 const inputs = select(".converge-inputs h3"), result = select(".converge-result")[0];
 const r = rectIn(result), cx = r.x + r.width / 2;
-const railY = Math.max(...inputs.map(node => { const b = rectIn(node); return b.y + b.height; })) + 40;
-inputs.forEach(node => {
-  const b = rectIn(node), x = b.x + b.width / 2, y = b.y + b.height;
-  const rowBottom=Math.max(...inputs.map(rectIn).filter(other=>Math.abs(other.y-b.y)<5).map(other=>other.y+other.height));
-  const route=inputs.some(other=>rectIn(other).y>b.y+5)
+const boxes = inputs.map(rectIn);
+const railY = Math.max(...boxes.map(b => b.y + b.height)) + 40;
+inputs.forEach((node, i) => {
+  const b = boxes[i], x = b.x + b.width / 2, y = b.y + b.height;
+  const rowBottom=Math.max(...boxes.filter(other=>Math.abs(other.y-b.y)<5).map(other=>other.y+other.height));
+  const route=boxes.some(other=>other.y>b.y+5)
     ? `M ${x} ${y} V ${rowBottom+9} H ${root.offsetWidth-4} V ${railY} H ${cx}`
     : `M ${x} ${y} V ${railY} H ${cx}`;
   makePath(route, beat.start + Number(node.dataset.at));

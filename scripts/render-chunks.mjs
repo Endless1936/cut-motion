@@ -655,6 +655,19 @@ export const renderChunkedOutput = (jobRootInput, quality, outputPathInput) => {
 
 export const renderOutput = (jobRootInput, quality, outputPathInput, { mode = "auto" } = {}) => {
   const prepared = prepareRender(jobRootInput, quality, outputPathInput, mode);
+  // Reuse only an existing success record whose media and current inputs match.
+  // Ordinary Review renders still produce no additional record or audit step.
+  if (fs.existsSync(assemblyReceiptPath(prepared.outputPath))) {
+    try {
+      const receipt = verifyAssemblyReceipt(prepared.jobRoot, path.relative(prepared.jobRoot, prepared.outputPath), {
+        quality,
+        contentManifestSha256: prepared.manifest.contentManifestSha256
+      });
+      return { mode: receipt.mode, outputPath: prepared.outputPath, manifest: prepared.manifest, receipt, reused: true };
+    } catch {
+      // A stale or incomplete result is rendered through the normal route.
+    }
+  }
   if (prepared.renderMode === "monolithic") {
     return renderMonolithic(
       prepared.jobRoot,
@@ -681,7 +694,9 @@ if (isCli) {
     process.exit(64);
   }
   const result = renderOutput(jobRoot, quality, outputPath, { mode });
-  console.log(result.mode === "monolithic"
+  console.log(result.reused
+    ? `Reused verified ${quality} output: ${result.outputPath}`
+    : result.mode === "monolithic"
     ? `Rendered monolithic output: ${result.outputPath}`
     : `Chunk render complete: ${result.renderedChunks} rendered, ${result.reusedChunks} reused`);
 }

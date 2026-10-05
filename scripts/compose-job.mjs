@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Run after the plan package is approved in Review mode, or after plan generation in explicitly selected Auto mode.
 import path from "node:path";
+import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { readJson } from "./workflow-utils.mjs";
+import { resolveBeatRenderWindow, transcriptWordsById } from "./motion-window-utils.mjs";
 
 const [job, ...extra] = process.argv.slice(2);
 if (!job || extra.length) {
@@ -34,4 +36,22 @@ if (workflow.captionMode === "subtitles") {
 }
 // The transition rebuilds once and binds the actual output for rendering.
 run("workflow-state.mjs", [workflowPath, "advance", "--artifact", "hyperframes/index.html"]);
-console.log("Composition ready. Inspect MG final-state HTML snapshots per docs/workflow.md#mg-final-state-self-review, then run npm run render from the job's hyperframes directory. Initial deliveries and revisions write output/final.mp4.");
+const beatMap = readJson(path.join(root, "state", "beat-map.json"));
+const modules = beatMap.beats.filter(beat => ["fragment.html", "style.css", "timeline.mjs"].every(file =>
+  fs.existsSync(path.join(root, "hyperframes", "mg", beat.id, file))));
+const wordsById = modules.length ? transcriptWordsById(readJson(path.join(root, "state", "transcript.json"))) : new Map();
+const fps = Number(beatMap.fps);
+const snapshotTimes = [...new Set(modules.map(beat => {
+  const window = resolveBeatRenderWindow(beat, beatMap, wordsById);
+  // Inspect the fully expanded card immediately before its exit begins.
+  const frame = Math.min(Math.ceil(window.exitStartTime * fps) - 1, Math.ceil(window.end * fps) - 1);
+  return Number((Math.max(window.start, frame / fps)).toFixed(6));
+}))].sort((left, right) => left - right);
+const shellQuote = value => `'${String(value).replaceAll("'", "'\\''")}'`;
+console.log(`Composition ready: ${path.join(root, "hyperframes", "index.html")}`);
+if (snapshotTimes.length) {
+  console.log(`Inspect ${snapshotTimes.length} MG final states in one batch from ${path.join(root, "hyperframes")}:`);
+  console.log(`./node_modules/.bin/hyperframes snapshot --at ${snapshotTimes.join(",")} --no-end --describe false --output ../previews/mg-final-state`);
+}
+console.log(`After inspecting${snapshotTimes.length ? " the MG snapshots" : " the composition"}, render once: npm --prefix ${shellQuote(path.join(root, "hyperframes"))} run render`);
+console.log(`Delivery: ${path.join(root, "output", "final.mp4")}`);

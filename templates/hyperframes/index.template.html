@@ -64,6 +64,12 @@
     </div>
 
     <script>
+      // Measure connectors after local fonts and evidence images settle.
+      // Register only the finished, seekable timeline for the renderer.
+      Promise.all([
+        document.fonts.ready,
+        ...[...document.images].map(image => image.decode().catch(() => {}))
+      ]).then(() => {
       const timelineWindowStart = Number("__CUT_MOTION_MEDIA_START__");
       const timelineWindowDuration = Number("__CUT_MOTION_DURATION__");
       const timeline = gsap.timeline({ paused: true, defaults: { ease: "power3.out" } });
@@ -95,6 +101,7 @@
       timeline.totalDuration = function chunkTotalDuration() { return timelineWindowDuration; };
       window.__timelines = window.__timelines || {};
       window.__timelines.main = timeline;
+      });
     </script>
   </body>
 </html>

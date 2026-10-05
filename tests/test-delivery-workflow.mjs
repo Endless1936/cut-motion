@@ -4,7 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { computeCreativeAuthorities, readJson, sha256File, writeJsonAtomic } from "../scripts/workflow-utils.mjs";
+import { readJson, sha256File, writeJsonAtomic } from "../scripts/workflow-utils.mjs";
 
 const [fontPath] = process.argv.slice(2);
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -93,23 +93,32 @@ try {
   writeJsonAtomic(projectPath, project);
  script("workflow-state.mjs", [workflowPath, "advance", "--artifact", "roughcut/a-roll.mp4"]);
 
-  writeJson("state/beat-map.json", { fps: 30, duration: 3.2, captionMode: "subtitles", beats: [] });
-  // The composition transition requires a creative package whose declared
-  // authorities match the job, exactly as `generate-plan.mjs --write` leaves it.
-  writeJson("captions/caption-review-plan.json", { schemaVersion: "1.0.0", status: "proposed", cues: [] });
-  const confirmationPath = path.join(jobRoot, "state", "creative-confirmation.json");
-  const confirmation = readJson(confirmationPath);
-  confirmation.authorities = computeCreativeAuthorities(jobRoot, "subtitles");
-  writeJsonAtomic(confirmationPath, confirmation);
-  fs.writeFileSync(
-    path.join(jobRoot, "docs", "motion-plan.md"),
-    "| Time | Audio phrase | Axis | Main flow | Visual reference | Visual treatment | Transition |\n"
-      + "| --- | --- | --- | --- | --- | --- | --- |\n"
-      + "| 0.0–3.2 | Runtime fixture | A | horizontal | none | caption-only | cut |\n\n"
-      + "Caption mode: subtitles\n"
-  );
-  script("workflow-state.mjs", [workflowPath, "advance", "--artifact", "docs/motion-plan.md"]);
-  script("workflow-state.mjs", [workflowPath, "advance", "--artifact", "hyperframes/index.html"]);
+  writeJson("state/chatcut-main-timeline.json", {
+    state: { id: "runtime-timeline", fps: 30, durationFrames: 96 },
+    transcript: { coverage: { status: "complete", candidateItemCount: 2, coveredItemCount: 2, missingItemIds: [] },
+      entries: transcript.segments.map((segment, index) => ({
+      itemId: `runtime-item-${index + 1}`, text: segment.text,
+      timelineRange: { fromFrame: Math.round(segment.start * 30), toFrame: Math.round(segment.end * 30) }
+    })) }
+  });
+  writeJson("state/planning-inputs.json", { scenes: [{ id: "intro", start: 0, end: 3.2 }],
+    beats: [{ id: "b01-effects", sceneId: "intro", sourceSegmentIds: ["main-001"], text: "看看这些特效",
+      start: 0, end: 1.5, intent: "强调演示", templateId: "annotation", onScreenCopy: ["特效示例"],
+      entryAnchorWordId: "main-001:word-001", exitAnchorWordId: "main-001:word-001",
+      exitAnchorOffsetFrames: 0, exitFrames: 6, entranceFrames: 6,
+      viewerQuestion: "展示什么", supportRole: "clarification", removalLoss: "缺少特效演示标注",
+      visualEncoding: "单条标注", stillFrameValue: "暂停仍可读", attentionCost: "low" }],
+    documents: { globalDirection: ["Runtime fixture"], rhythmNotes: [], openQuestions: [] }
+  });
+  script("generate-plan.mjs", [jobRoot, "--write", "--replace-existing"]);
+  assert.equal(fs.existsSync(path.join(jobRoot, "state/motion-index.json")), false);
+  const composeSummary = script("compose-job.mjs", [jobRoot]);
+  assert.equal(fs.existsSync(path.join(jobRoot, "state/motion-index.json")), false);
+  const assembly = readJson(path.join(jobRoot, "state/mg-assembly.json"));
+  assert.ok(assembly.files["hyperframes/mg/b01-effects/fragment.html"]);
+  assert.match(fs.readFileSync(path.join(jobRoot, "hyperframes/index.html"), "utf8"), /data-mg-beat-id="b01-effects"/);
+  assert.match(composeSummary, /snapshot --at 1\.466667 --no-end --describe false --output/);
+  assert.ok(composeSummary.includes(`npm --prefix '${path.join(jobRoot, "hyperframes")}' run render`));
   assert.equal(readJson(workflowPath).currentState, "render");
 
   const finalPath = path.join(jobRoot, "output", "final.mp4");

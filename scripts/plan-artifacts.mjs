@@ -10,17 +10,26 @@
 import { sha256File } from "./workflow-utils.mjs";
 import { resolveComponent, DEFAULT_MG_TOP_PX } from "./motion-template-library.mjs";
 import { normalizeCaptionText } from "./caption-review-utils.mjs";
+import { chatcutPages, correctCaptionText, deriveCaptionCues } from "./chatcut-caption-data.mjs";
 
 export const decimal = (value, places = 6) => Number(Number(value).toFixed(places));
 const pad3 = (value) => String(value).padStart(3, "0");
 export const wordId = (segmentId, index) => `${segmentId}:word-${pad3(index)}`;
 
 const EPSILON = 1e-9;
-/** Cue text must carry no punctuation; only a closing question mark survives. */
+/** Strip sentence punctuation while preserving protected names and a closing question mark. */
 const PUNCTUATION = /[，。；：！？、,.!?;:'"“”‘’（）()《》〈〉—–\-]/gu;
-const stripPunctuation = (text) => {
+const stripPunctuation = (text, protectedTerms = []) => {
+  const preserved = [];
+  for (const term of [...protectedTerms].filter(Boolean).sort((a, b) => b.length - a.length)) {
+    if (!text.includes(term)) continue;
+    const marker = `\uE000${preserved.length}\uE001`;
+    preserved.push(term);
+    text = text.replaceAll(term, marker);
+  }
   const closing = /[?？]$/u.test(text) ? text.slice(-1) : "";
-  return `${text.replace(PUNCTUATION, "").replace(/\s+/gu, "")}${closing}`;
+  return `${text.replace(PUNCTUATION, "").replace(/\s+/gu, "")}${closing}`
+    .replace(/\uE000(\d+)\uE001/gu, (_, index) => preserved[Number(index)]);
 };
 /** Ordered, non-overlapping source->timeline placement pairs for the locked cut. */
 const placementPairs = (sourceTranscript, timelineWindows, fps, corrections) => {
@@ -79,23 +88,31 @@ const placementPairs = (sourceTranscript, timelineWindows, fps, corrections) => 
   return groups.map((group) => ({ ...group, words: applyCorrections(group.words, corrections) }));
 };
 
-/** Fold an ASR mis-split pair (e.g. 扣 + dex -> Codex) into a single word. */
+/** Correct isolated words and arbitrary ASR splits without changing their measured range. */
 export const applyCorrections = (words, corrections = {}) => {
   const merged = [];
   for (let index = 0; index < words.length;) {
-    const next = words[index + 1];
-    const pair = words[index].text + (next ? next.text : "");
-    if (next && Object.prototype.hasOwnProperty.call(corrections, pair)) {
+    let text = "";
+    let matched;
+    const longest = Math.max(0, ...Object.keys(corrections).map(key => key.length));
+    for (let end = index; end < words.length && text.length <= longest; end += 1) {
+      text += words[end].text;
+      if (Object.prototype.hasOwnProperty.call(corrections, text)) matched = { end, text };
+    }
+    if (matched) {
+      const next = words[matched.end];
       merged.push({
         ...words[index],
-        text: corrections[pair],
+        text: corrections[matched.text],
+        rawText: words.slice(index, matched.end + 1).map(word => word.rawText ?? word.text).join(""),
         end: next.end,
         sourceEnd: next.sourceEnd ?? words[index].sourceEnd,
         confidence: words[index].confidence
       });
-      index += 2;
+      index = matched.end + 1;
     } else {
-      merged.push(words[index]);
+      const text = correctCaptionText(words[index].text, corrections);
+      merged.push(text === words[index].text ? words[index] : { ...words[index], rawText: words[index].text, text });
       index += 1;
     }
   }
@@ -140,8 +157,8 @@ export const buildReleasedTranscript = ({
  * Each returned entry is one transcript unit; its range comes from the
  * timeline item, never from a per-word ASR lookup.
  */
-export const buildMainTimelineTranscript = ({ snapshot, fps, revision = 2, language = "zh-CN" }) => {
-  const pages = (Array.isArray(snapshot) ? snapshot : [snapshot]).map((page) => page?.structuredContent ?? page);
+export const buildMainTimelineTranscript = ({ snapshot, fps, corrections = {}, revision = 2, language = "zh-CN" }) => {
+  const pages = chatcutPages(snapshot);
   const entries = pages.flatMap((page) => page?.transcript?.entries ?? []);
   const first = pages[0] ?? {};
   const timelineFps = first.state?.fps ?? first.fps ?? fps;
@@ -187,7 +204,8 @@ export const buildMainTimelineTranscript = ({ snapshot, fps, revision = 2, langu
   if (nextOffset !== undefined && nextOffset !== null) throw new Error(`ChatCut main-timeline preview has another page at offset ${nextOffset}; retrieve it and add it to state/chatcut-main-timeline.json before generating plans`);
 
   const segments = entries.map((entry, index) => {
-    const text = String(entry.text ?? entry.transcript ?? "").trim();
+    const rawText = String(entry.text ?? entry.transcript ?? "").trim();
+    const text = correctCaptionText(rawText, corrections);
     const range = entry.timelineRange ?? entry.range ?? {};
     const startFrame = range.fromFrame ?? range.startFrame;
     const endFrame = range.toFrame ?? range.endFrame;
@@ -198,7 +216,8 @@ export const buildMainTimelineTranscript = ({ snapshot, fps, revision = 2, langu
     }
     const start = decimal(startFrame / timelineFps);
     const end = decimal(endFrame / timelineFps);
-    return { id, text, start, end, confidence: null, words: [{ text, start, end, confidence: null }] };
+    return { id, text, ...(text === rawText ? {} : { rawText }), start, end, confidence: null,
+      words: [{ text, start, end, confidence: null }] };
   });
   if (segments.length === 0) throw new Error("main timeline preview contains no transcript entries");
   const lastFrame = pages.reduce((latest, page) => Math.max(latest, page.state?.durationFrames ?? page.durationFrames ?? 0), 0);
@@ -284,6 +303,10 @@ export const buildCaptionPlan = ({
   transcriptSha256,
   cueLines,
   captionCues,
+  captionData,
+  captionEdits,
+  corrections = {},
+  fps = captionData?.fps ?? 30,
   timingAuthority = "state/transcript.json word ranges",
   segmentationAuthority: requestedSegmentationAuthority,
   lexicon = {},
@@ -291,9 +314,17 @@ export const buildCaptionPlan = ({
   exceptions = {},
   status = "proposed"
 }) => {
+  let derivedCues = false;
+  if (captionCues === undefined && (captionData || captionEdits)) {
+    captionCues = deriveCaptionCues(transcript, captionData, corrections, captionEdits, fps);
+    derivedCues = true;
+    requestedSegmentationAuthority ??= "existing ChatCut phrase cards with sparse agent edits";
+  }
   if (captionCues !== undefined) {
     const segmentById = new Map(transcript.segments.map((segment) => [segment.id, segment]));
     const segmentIndex = new Map(transcript.segments.map((segment, index) => [segment.id, index]));
+    const canonicalSegments = new Set(transcript.segments.filter(segment => normalizeCaptionText(
+      captionCues.filter(cue => cue.segmentId === segment.id).map(cue => cue.text).join("")) === normalizeCaptionText(segment.text)).map(segment => segment.id));
     const cues = captionCues.map((line, index) => {
       const segment = segmentById.get(line.segmentId);
       if (!segment) throw new Error(`caption cue ${index + 1} references an unknown segment ${line.segmentId}`);
@@ -303,7 +334,7 @@ export const buildCaptionPlan = ({
       }
       return {
         id: `caption-${String(index + 1).padStart(4, "0")}`,
-        text: stripPunctuation(line.text),
+        text: stripPunctuation(derivedCues || canonicalSegments.has(line.segmentId) ? line.text : correctCaptionText(line.text, corrections), lexicon.protectedTerms),
         segmentId: line.segmentId,
         start: decimal(line.start),
         end: decimal(line.end),
@@ -368,7 +399,7 @@ export const buildCaptionPlan = ({
     if (line.fromWord < 1 || line.toWord < line.fromWord || line.toWord > segment.words.length) {
       throw new Error(`cue ${index + 1} word range ${line.fromWord}-${line.toWord} is outside ${line.segmentId} (${segment.words.length} words)`);
     }
-    const text = stripPunctuation(segment.words.slice(line.fromWord - 1, line.toWord).map((word) => word.text).join(""));
+    const text = stripPunctuation(segment.words.slice(line.fromWord - 1, line.toWord).map((word) => word.text).join(""), lexicon.protectedTerms);
     return {
       id: `caption-${String(index + 1).padStart(4, "0")}`,
       text,
@@ -485,6 +516,12 @@ export const buildBeatMap = ({
     designSystem: designSystemPath,
     beats: beats.map((beat) => {
       const out = { ...beat };
+      if (beat.templateData?.revealCues) out.templateData = { ...beat.templateData,
+        revealCues: beat.templateData.revealCues.map(cue => {
+          if (cue.after === undefined || cue.frames === undefined || cue.delayFrames !== undefined) return cue;
+          const { frames, ...rest } = cue;
+          return { ...rest, delayFrames: frames };
+        }) };
       if (out.audioAnchorTime === undefined) out.audioAnchorTime = beat.start;
       if (out.recipe === undefined) out.recipe = out.templateId ?? CAPTION_ONLY.recipe;
       if (out.mgScope === undefined) out.mgScope = out.recipe === "caption-only" ? "none" : "local";
@@ -560,7 +597,7 @@ export const buildReconciliationItems = ({ transcript, corrections = {}, plan = 
     }
     const previous = matching[0];
     const override = { ...previous, ...overrides[segment.id] };
-    const type = override.type ?? (correctedSegments.has(segment.id) ? "asr-correction" : "speech-only");
+    const type = override.type ?? (correctedSegments.has(segment.id) || segment.rawText !== undefined ? "asr-correction" : "speech-only");
     return {
       id: previous?.id ?? `r-${segment.id}`,
       type,
