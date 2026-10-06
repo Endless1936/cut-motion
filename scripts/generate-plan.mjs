@@ -169,7 +169,8 @@ const previousReferenceOrder = existingReconciliation.referenceScript?.itemOrder
 const referenceItemOrder = [...previousReferenceOrder.filter((id) => referenceItemIds.includes(id)), ...referenceItemIds.filter((id) => !previousReferenceOrder.includes(id))];
 const cleanExportPath = project.mediaArtifacts?.roughcut?.path ?? "roughcut/a-roll.mp4";
 const sourceMediaPath = project.sourceVideo ?? "input/source.mp4";
-const fingerprintPath = fs.existsSync(rel(sourceMediaPath)) ? sourceMediaPath : cleanExportPath;
+const fingerprintPath = workflow.authoritativeMediaPath
+  ?? (fs.existsSync(rel(sourceMediaPath)) ? sourceMediaPath : cleanExportPath);
 require_(fingerprintPath);
 const mediaFingerprint = sha256File(rel(fingerprintPath));
 const roughCutLocked = ["manual-approved", "automatic-fallback"].includes(workflow.roughCutReviewDecision);

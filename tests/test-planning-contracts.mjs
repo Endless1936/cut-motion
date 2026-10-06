@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseReferenceScript, buildReferenceScriptAnnotations } from "../scripts/reference-script-annotations.mjs";
-import { buildBeatMap, buildReleasedTranscript, buildCaptionPlan, buildReconciliationItems, buildSourceWordEvidence } from "../scripts/plan-artifacts.mjs";
+import { buildBeatMap, buildReleasedTranscript, buildMainTimelineTranscript, buildCaptionPlan, buildReconciliationItems, buildSourceWordEvidence } from "../scripts/plan-artifacts.mjs";
 import { resolveComponent } from "../scripts/motion-template-library.mjs";
 import { sha256File } from "../scripts/workflow-utils.mjs";
 
@@ -25,6 +25,18 @@ const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const writeJson = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 
 try {
+  const adjacentSnapshot = {
+    state: { id: "adjacent", fps: 30, durationFrames: 90 },
+    transcript: { coverage: { status: "complete" }, entries: [
+      { itemId: "a", text: "第一句", timelineRange: { fromFrame: 0, toFrame: 45 } },
+      { itemId: "b", text: "第二句", timelineRange: { fromFrame: 44, toFrame: 90 } }
+    ] }
+  };
+  const adjacent = buildMainTimelineTranscript({ snapshot: adjacentSnapshot, fps: 30 });
+  assert.equal(adjacent.segments[1].start, adjacent.segments[0].end);
+  assert.equal(adjacentSnapshot.transcript.entries[1].timelineRange.fromFrame, 44);
+  adjacentSnapshot.transcript.entries[1].timelineRange.fromFrame = 43;
+  assert.throws(() => buildMainTimelineTranscript({ snapshot: adjacentSnapshot, fps: 30 }), /more than one boundary frame/);
   const source = { segments: [{ id: "split", words: [{ text: "你好", start: 0, end: 1 }] }, { id: "later", words: [{ text: "再见", start: 2, end: 3 }] }] };
   const clip = (start, end, at) => ({ srcStartUs: start * 1e6, srcEndUs: end * 1e6, timelineStartFrame: at * 30, durationFrames: (end - start) * 30 });
   const splitWindows = { clips: [clip(0, 0.4, 0), clip(0.6, 1, 0.4)] };
@@ -469,6 +481,10 @@ try {
   fs.appendFileSync(path.join(planJob, "state/source-transcript.json"), " ");
   script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"], false, /Source transcript changed/);
   fs.writeFileSync(path.join(planJob, "state/source-transcript.json"), fs.readFileSync(path.join(planJob, "state/source-transcript.json"), "utf8").slice(0, -1));
+  script("generate-plan.mjs", [planJob, "--write", "--legacy-source-timing"]);
+  const reconciledMedia = readJson(path.join(planJob, "state/transcript-reconciliation.json"));
+  assert.equal(reconciledMedia.verification.mediaPath, "roughcut/a-roll.mp4");
+  assert.equal(reconciledMedia.mediaFingerprint, sha256File(path.join(planJob, "roughcut/a-roll.mp4")));
   const derived = readJson(path.join(planJob, "state", "transcript.json"));
   assert.equal(derived.revision, 2);
   assert.equal(derived.duration, 6);
@@ -483,7 +499,7 @@ try {
   assert.equal(derivedBeats.beats[1].typography.fontFamily, "Smiley Sans");
   assert.deepEqual(derivedBeats.beats[1].captionCueIds, ["caption-0002"]);
   script("check-caption-review-plan.mjs", [path.join(planJob, "captions", "caption-review-plan.json")]);
-  script("check-transcript-reconciliation.mjs", [path.join(planJob, "state", "transcript-reconciliation.json"), "--expected-media", "input/source.mp4"]);
+  script("check-transcript-reconciliation.mjs", [path.join(planJob, "state", "transcript-reconciliation.json"), "--expected-media", "roughcut/a-roll.mp4"]);
 
   const manualMainJob = path.join(temporaryRoot, "manual-main-caption-job");
   fs.cpSync(planJob, manualMainJob, { recursive: true });
@@ -764,7 +780,7 @@ try {
   const reorderedReconciliation = readJson(reconciliationPath);
   assert.deepEqual(reorderedReconciliation.items.map((item) => item.segmentId), ["s2", "s1"]);
   assert.deepEqual(reorderedReconciliation.referenceScript.itemOrder, ["r-s1", "r-s2"]);
-  script("check-transcript-reconciliation.mjs", [reconciliationPath, "--expected-media", "input/source.mp4"]);
+  script("check-transcript-reconciliation.mjs", [reconciliationPath, "--expected-media", "roughcut/a-roll.mp4"]);
   reorderedReconciliation.referenceScript.itemOrder = ["r-s1", "r-s1"];
   writeJson(reconciliationPath, reorderedReconciliation);
   script("check-transcript-reconciliation.mjs", [reconciliationPath], false, /every reference-bearing item exactly once/);

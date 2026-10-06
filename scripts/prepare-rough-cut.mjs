@@ -78,28 +78,42 @@ if (command === "transcript") {
   }
   if (entries.size !== total) throw new Error(`Missing timeline pages: received ${entries.size}/${total} entries`);
   const clips = [...entries.values()].sort((a, b) => a.timelineRange?.fromFrame - b.timelineRange?.fromFrame);
-  if (new Set(clips.map((e) => e.asset?.id)).size !== 1 || new Set(clips.map((e) => e.trackId)).size !== 1) throw new Error("Use one source video track for this adapter");
-  const indexPath = state("source-audio-waveform-index.json");
-  const sourceHash = sha256File(source);
-  let index = fs.existsSync(indexPath) ? readJson(indexPath) : null;
-  if (command === "tighten" && (index?.schemaVersion !== 4 || index?.source?.sha256 !== sourceHash)) {
-    run("index-source-silence.mjs", [source, "--output", indexPath]);
-    index = readJson(indexPath);
+  if (new Set(clips.map((e) => e.trackId)).size !== 1) throw new Error("Use one source video track for this adapter");
+  const assetIds = [...new Set(clips.map((e) => e.asset?.id))];
+  const multiSource = assetIds.length > 1;
+  const sources = [];
+  const indexes = new Map();
+  for (const assetId of assetIds) {
+    if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Unsupported timeline entry");
+    const registered = (project.sourceVideos ?? []).find(entry => entry.assetId === assetId);
+    if (multiSource && !registered) throw new Error(`Register local source media for asset ${assetId} with register-source-media.mjs`);
+    const media = registered ? path.resolve(root, registered.sourceVideo) : source;
+    assertRegularContainedFile(path.join(root, "input"), media, "Source media");
+    const sourceHash = sha256File(media);
+    const indexPath = multiSource ? state(`source-audio-waveform-index-${sourceHash}.json`) : state("source-audio-waveform-index.json");
+    let index = fs.existsSync(indexPath) ? readJson(indexPath) : null;
+    if (command === "tighten" && (index?.schemaVersion !== 4 || index?.source?.sha256 !== sourceHash)) {
+      run("index-source-silence.mjs", [media, "--output", indexPath]);
+      index = readJson(indexPath);
+    }
+    let sourceDurationUs = index?.source?.sha256 === sourceHash ? index.source.durationUs : null;
+    if (command === "windows" && !(sourceDurationUs > 0)) {
+      const probe = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", media], { encoding: "utf8" });
+      sourceDurationUs = Math.round(Number(probe.stdout?.trim()) * 1e6);
+      if (probe.error || probe.status !== 0 || !(sourceDurationUs > 0)) throw new Error("Cannot read source duration for the approved timeline mapping");
+    }
+    sources.push({ sourceAssetId: assetId, sourceSha256: sourceHash, sourceDurationUs });
+    indexes.set(assetId, index);
   }
-  let sourceDurationUs = index?.source?.sha256 === sourceHash ? index.source.durationUs : null;
-  if (command === "windows" && !(sourceDurationUs > 0)) {
-    const probe = spawnSync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", source], { encoding: "utf8" });
-    sourceDurationUs = Math.round(Number(probe.stdout?.trim()) * 1e6);
-    if (probe.error || probe.status !== 0 || !(sourceDurationUs > 0)) throw new Error("Cannot read source duration for the approved timeline mapping");
-  }
-  const manifest = { schemaVersion: 1, sourceSha256: sourceHash, sourceDurationUs,
-    sourceAssetId: clips[0].asset.id, timelineFps: { numerator: fps, denominator: 1 },
+  const manifest = { schemaVersion: multiSource ? 2 : 1,
+    ...(multiSource ? { sources } : sources[0]), timelineFps: { numerator: fps, denominator: 1 },
     clips: clips.map((e) => {
       if (e.itemType !== "video" || !e.id || !e.asset?.id) throw new Error("Unsupported timeline entry");
       const rate = e.playbackRate ?? 1;
       if (command === "tighten" && rate !== 1) throw new Error("Retimed footage needs an explicit source mapping");
       const start = e.timelineRange?.fromFrame;
       const duration = e.timelineRange?.toFrame - start;
+      const sourceDurationUs = sources.find(source => source.sourceAssetId === e.asset.id).sourceDurationUs;
       if (command === "windows" && (!Number.isFinite(rate) || rate <= 0
         || !Number.isSafeInteger(start) || !Number.isSafeInteger(duration) || start < 0 || duration <= 0
         || !Number.isSafeInteger(e.sourceRange?.start) || !Number.isSafeInteger(e.sourceRange?.end)
@@ -112,6 +126,7 @@ if (command === "transcript") {
         playbackRateNumerator: rate === 1 ? 1 : Math.round(rate * 1e6), playbackRateDenominator: rate === 1 ? 1 : 1e6 };
     }) };
   if (manifest.clips[0].timelineStartFrame !== 0 || manifest.clips.at(-1).timelineStartFrame + manifest.clips.at(-1).durationFrames !== first.state.durationFrames) throw new Error("Timeline coverage differs from the snapshot duration");
+  if (manifest.clips.some((clip, i) => i > 0 && clip.timelineStartFrame !== manifest.clips[i - 1].timelineStartFrame + manifest.clips[i - 1].durationFrames)) throw new Error("Timeline clips must be ordered and contiguous");
   if (command === "windows") {
     project.fps = fps;
     writeJsonAtomic(state("project.json"), project);
@@ -119,7 +134,7 @@ if (command === "transcript") {
     console.log(`Refreshed ${manifest.clips.length} source windows from the approved timeline; no audio scan or tightening plan generated.`);
     process.exit(0);
   }
-  const plan = computeSeamTighteningPlan(index, manifest);
+  const plan = computeSeamTighteningPlan(multiSource ? indexes : indexes.get(assetIds[0]), manifest);
   // Keep exact snapshot frame counts. Microsecond source ends are rounded media
   // addresses, not a new duration to ceil back into frames. Supply the entire
   // track in one atomic edit so ChatCut sees the final positions together.

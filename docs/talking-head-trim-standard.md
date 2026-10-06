@@ -26,7 +26,15 @@ Use a 30 fps timeline by default. Save tool responses directly as JSON under the
 node scripts/prepare-rough-cut.mjs jobs/<job-id> tighten jobs/<job-id>/state/chatcut-timeline.json
 ```
 
-The command builds/reuses the waveform index, converts timeline entries into source windows, and writes `state/seam-tightening-plan.json`. It supports a single source video track at an integer timeline fps with a linear 1x mapping; the source span must agree with each clip's frame duration. Fetch another timeline page only when pagination requires it. Query individual items only to resolve missing or unsupported mapping data.
+The command builds/reuses a waveform index for each source, converts timeline entries into source windows, and writes `state/seam-tightening-plan.json`. It supports one video track containing multiple sources at an integer timeline fps with a linear 1x mapping; the source span must agree with each clip's frame duration. Fetch another timeline page only when pagination requires it. Query individual items only to resolve missing or unsupported mapping data.
+
+For multiple recordings, bind the imported asset IDs to their corresponding local files once:
+
+```bash
+node scripts/register-source-media.mjs jobs/<job-id> <asset-id-1> /absolute/source-1.mov <asset-id-2> /absolute/source-2.mov
+```
+
+This preserves copies in the job's `input/` and records `sourceVideos` in `state/project.json`. Each clip uses its own source's waveform; all trims shift the shared timeline in one batch. Single-source jobs retain their existing index and mapping format.
 
 Load the saved plan as JSON and send its `editItemArgs` directly to `edit_item`. This contains the complete atomic `updates` batch with item/timeline/track IDs, `fromFrame`, `durationInFrames` and source starts in seconds; `projectId` comes from the saved preview. For a legacy preview without `projectId`, add the project ID that produced that snapshot. Keep the supplied frame counts and `ripple:false`: all final positions are already calculated. Do not print the whole plan, translate fields by hand, or derive frame durations with `ceil` from rounded microsecond ranges. If `updates` is empty, skip the call. The companion `timeline-source-windows.proposed.json` contains the resulting mapping: adopt it as `timeline-source-windows.json` only after the batch succeeds. If an edit fails, fetch the actual current timeline once before any recovery rather than reapplying an old batch.
 

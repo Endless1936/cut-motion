@@ -203,17 +203,27 @@ export const buildMainTimelineTranscript = ({ snapshot, fps, corrections = {}, r
   const nextOffset = lastPage?.nextOffset ?? lastPage?.transcript?.nextOffset ?? lastPage?.transcript?.pagination?.nextOffset;
   if (nextOffset !== undefined && nextOffset !== null) throw new Error(`ChatCut main-timeline preview has another page at offset ${nextOffset}; retrieve it and add it to state/chatcut-main-timeline.json before generating plans`);
 
+  let previousEntryEndFrame = 0;
   const segments = entries.map((entry, index) => {
     const rawText = String(entry.text ?? entry.transcript ?? "").trim();
     const text = correctCaptionText(rawText, corrections);
     const range = entry.timelineRange ?? entry.range ?? {};
-    const startFrame = range.fromFrame ?? range.startFrame;
+    let startFrame = range.fromFrame ?? range.startFrame;
     const endFrame = range.toFrame ?? range.endFrame;
     const id = `main-${pad3(index + 1)}`;
     if (!text) throw new Error(`ChatCut main-timeline entry ${id} has no transcript text`);
     if (!Number.isInteger(startFrame) || !Number.isInteger(endFrame) || endFrame <= startFrame) {
       throw new Error(`ChatCut main-timeline entry ${id} has no valid frame range`);
     }
+    // Adjacent preview entries may share one boundary frame. Keep the saved
+    // snapshot intact while giving the released wording a unique frame owner.
+    if (startFrame < previousEntryEndFrame) {
+      if (previousEntryEndFrame - startFrame > 1 || endFrame <= previousEntryEndFrame) {
+        throw new Error(`ChatCut main-timeline entry ${id} overlaps the previous entry by more than one boundary frame`);
+      }
+      startFrame = previousEntryEndFrame;
+    }
+    previousEntryEndFrame = endFrame;
     const start = decimal(startFrame / timelineFps);
     const end = decimal(endFrame / timelineFps);
     return { id, text, ...(text === rawText ? {} : { rawText }), start, end, confidence: null,

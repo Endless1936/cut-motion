@@ -109,6 +109,59 @@ try {
   assert.match(run(precise, "tighten", mixedPages, false), /different snapshots or projects/);
   assert.equal(sha256File(path.join(precise, "state", "seam-tightening-plan.json")), beforeMixed);
 
+  // A/B/C/A uses different waveforms even at identical source times, with one
+  // global shift and exact frame counts when an asset returns later in the cut.
+  const multi = job("multi-source");
+  const assetIds = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222", "33333333-3333-4333-8333-333333333333"];
+  const originals = assetIds.map((id, i) => {
+    const file = path.join(root, `original-${i}.mov`);
+    fs.writeFileSync(file, `distinct source ${i}`);
+    return file;
+  });
+  const registerScript = path.join(path.dirname(script), "register-source-media.mjs");
+  const registerArgs = [registerScript, multi, ...assetIds.flatMap((id, i) => [id, originals[i]])];
+  const registration = spawnSync(process.execPath, registerArgs, { encoding: "utf8" });
+  assert.equal(registration.status, 0, registration.stderr);
+  assert.equal(spawnSync(process.execPath, registerArgs, { encoding: "utf8" }).status, 0, "Registration is reusable");
+  const registry = read(path.join(multi, "state/project.json")).sourceVideos;
+  const cachedHashes = [];
+  registry.forEach((entry, i) => {
+    const hash = sha256File(path.join(multi, entry.sourceVideo));
+    assert.equal(hash, sha256File(originals[i]), "Original source stays untouched");
+    const sourceIndex = structuredClone(preciseIndex);
+    sourceIndex.source.sha256 = hash;
+    sourceIndex.waveform.windows = Array.from({ length: 200 }, (_, n) => {
+      const active = i === 0 ? n >= 20 && n < 80 : i === 1 ? n >= 40 && n < 60 : n >= 100;
+      return active ? [600, 600, 4, 0] : [0, 0, 0, 480];
+    });
+    const file = path.join(multi, "state", `source-audio-waveform-index-${hash}.json`);
+    write(file, sourceIndex);
+    cachedHashes.push([file, sha256File(file)]);
+  });
+  const multiEntries = [
+    ["a-first", 0, 30, 0, 1000000, 0], ["b", 30, 60, 0, 1000000, 1],
+    ["c-short", 60, 62, 1000000, 1066667, 2], ["a-return", 62, 92, 0, 1000000, 0],
+  ].map(([id, from, to, start, end, asset]) => ({ id, itemType: "video", asset: { id: assetIds[asset] }, trackId: "track",
+    timelineRange: { fromFrame: from, toFrame: to }, sourceRange: { start, end } }));
+  const multiSnapshot = { projectId: "multi-project", state: { id: "multi-timeline", fps: 30, durationFrames: 92 },
+    timeline: { totalEntries: multiEntries.length, entries: multiEntries } };
+  run(multi, "tighten", multiSnapshot);
+  const multiPlan = read(path.join(multi, "state/seam-tightening-plan.json"));
+  assert.equal(multiPlan.proposedTotalTrimFrames, 42);
+  assert.deepEqual(multiPlan.editItemArgs.updates.map(u => [u.fromFrame, u.durationInFrames]), [[0, 20], [20, 8], [28, 2], [30, 20]]);
+  assert.equal(multiPlan.clips[1].sourceStartUsAfterTrim, 366667, "B uses its own activity boundary");
+  cachedHashes.forEach(([file, hash]) => assert.equal(sha256File(file), hash, "Reuse each source's cached waveform"));
+  run(multi, "windows", multiSnapshot);
+  const multiWindows = read(path.join(multi, "state/timeline-source-windows.json"));
+  assert.equal(multiWindows.sources.length, 3);
+  assert.deepEqual(multiWindows.clips.map(c => c.assetId), [assetIds[0], assetIds[1], assetIds[2], assetIds[0]]);
+  const missingRegistry = read(path.join(multi, "state/project.json"));
+  missingRegistry.sourceVideos.pop();
+  write(path.join(multi, "state/project.json"), missingRegistry);
+  const preservedPlanHash = sha256File(path.join(multi, "state/seam-tightening-plan.json"));
+  assert.match(run(multi, "tighten", multiSnapshot, false), /Register local source media/);
+  assert.equal(sha256File(path.join(multi, "state/seam-tightening-plan.json")), preservedPlanHash);
+
   run(tightened, "tighten", { state: { id: "timeline", fps: 30, durationFrames: 2 },
     timeline: { totalEntries: 1, entries: [{ id: "no-op", itemType: "video", asset: { id: "asset" }, trackId: "track",
       timelineRange: { fromFrame: 0, toFrame: 2 }, sourceRange: { start: 0, end: 66667 } }] } });

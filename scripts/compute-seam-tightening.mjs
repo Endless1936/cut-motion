@@ -182,8 +182,18 @@ function trimFramesAfter(boundaryUs, clipEndUs, map) {
 }
 
 export function computeSeamTighteningPlan(indexJson, manifest) {
-  const index = validateIndex(indexJson);
-  const map = validateManifest(indexJson, manifest);
+  const multiSource = manifest.schemaVersion === 2;
+  const sources = multiSource ? manifest.sources : [{ sourceAssetId: manifest.sourceAssetId,
+    sourceSha256: manifest.sourceSha256, sourceDurationUs: manifest.sourceDurationUs }];
+  if (!Array.isArray(sources) || sources.length === 0) fail("Timeline windows must identify source media.");
+  const sourceMaps = new Map();
+  for (const source of sources) {
+    if (sourceMaps.has(source.sourceAssetId)) fail("Duplicate source asset in timeline windows.");
+    const rawIndex = multiSource ? indexJson.get(source.sourceAssetId) : indexJson;
+    const index = validateIndex(rawIndex);
+    const map = validateManifest(rawIndex, { ...manifest, ...source, schemaVersion: multiSource ? 1 : manifest.schemaVersion });
+    sourceMaps.set(source.sourceAssetId, { index, map });
+  }
   if (!Array.isArray(manifest.clips) || manifest.clips.length === 0) {
     fail("Timeline windows must contain a non-empty clips array.");
   }
@@ -202,7 +212,9 @@ export function computeSeamTighteningPlan(indexJson, manifest) {
       fail("Clip " + i + " must have a unique non-empty itemId.");
     }
     seenItemIds.add(itemId);
-    if (clip.assetId !== map.sourceAssetId) fail("Clip " + itemId + " refers to a different source asset.");
+    const sourceMap = sourceMaps.get(clip.assetId);
+    if (!sourceMap) fail("Clip " + itemId + " refers to a different source asset.");
+    const { index, map } = sourceMap;
     const timelineStartFrame = safeInteger(clip.timelineStartFrame, itemId + ".timelineStartFrame", { min: 0 });
     const durationFrames = safeInteger(clip.durationFrames, itemId + ".durationFrames", { min: 1 });
     if (priorTimelineEnd !== null && timelineStartFrame !== priorTimelineEnd) {
@@ -279,6 +291,7 @@ export function computeSeamTighteningPlan(indexJson, manifest) {
       : "No sustained primary-threshold activity found; no edge trim proposed.";
     clips.push({
       itemId,
+      ...(multiSource ? { assetId: clip.assetId } : {}),
       timelineStartFrame,
       timelineStartFrameAfterShift,
       durationFrames,
@@ -298,12 +311,11 @@ export function computeSeamTighteningPlan(indexJson, manifest) {
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: multiSource ? 2 : 1,
     mode: "candidate-plan-only",
-    sourceSha256: indexJson.source.sha256,
-    chatcutAssetId: map.sourceAssetId,
+    ...(multiSource ? { sources } : { sourceSha256: indexJson.source.sha256,
+      chatcutAssetId: manifest.sourceAssetId, waveformOriginUs: Number(sourceMaps.get(manifest.sourceAssetId).index.audioStartUs) }),
     timelineFps: manifest.timelineFps,
-    waveformOriginUs: Number(index.audioStartUs),
     activityThresholdsRms16: { primary: PRIMARY_ACTIVITY_RMS16, lowLevelGuard: LOW_LEVEL_GUARD_RMS16 },
     consecutiveWindows: RUN_WINDOWS,
     safety: "Thresholds measure signal level only, not sound categories. Searches stay inside each source interval; one full timeline frame is retained at each proposed edge.",
