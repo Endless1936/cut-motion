@@ -1,16 +1,21 @@
-.mg-root { position:absolute;top:var(--mg-top, 280px);left:0;right:0;margin-inline:auto;width:var(--mg-width,88%);max-width:88%;color:var(--mg-paper,#F4F1E8);font-family:"Smiley Sans",sans-serif;font-weight:400;pointer-events:none;opacity:0;visibility:hidden;box-sizing:border-box; }
-.mg-root *, .mg-root *::before, .mg-root *::after { box-sizing:border-box; }
-.mg-root [data-at] { opacity:0;visibility:hidden; }
-
-.map-panel { position:relative; }
-.map-source { position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:16px;margin:0 auto;padding:22px 28px;width:fit-content;max-width:88%;background:var(--mg-surface,rgba(18,20,24,.74));border-radius:var(--mg-radius,18px); }
-.source-mark { width:10px;height:10px;border-radius:50%;background:var(--mg-yellow,#FFD15C); }
-.map-source h3 { margin:0;font-size:64px;line-height:1.15;font-weight:400; }
-.map-targets { position:relative;z-index:1;margin-top:100px;display:grid;grid-template-columns:repeat(var(--items,3),minmax(0,1fr));gap:18px; }
-.map-target { position:relative;display:grid;place-items:center;min-height:96px;padding:18px 16px;background:var(--mg-surface,rgba(18,20,24,.74));border-radius:var(--mg-radius,18px); }
-.map-target h4 { margin:0;font-size:60px;font-weight:400;line-height:1.15;overflow-wrap:anywhere; }
-.map-description { margin:8px 0 0;font-size:40px;line-height:1.2; }
+.map-panel { position:relative;padding:38px;background:var(--mg-c-surface);border:1px solid var(--mg-c-line);border-radius:var(--mg-c-radius);box-shadow:inset 0 1px #e0eaff1a,0 18px 56px #030a1929; }
+.map-source { position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:20px;margin:0 auto;padding:24px 32px;width:fit-content;max-width:100%;min-width:52%;min-height:116px;border:1px solid #a9bdff52;background:var(--mg-c-node);border-radius:22px;box-shadow:inset 0 1px #dde7ff1a; }
+.source-mark { flex:0 0 54px;display:grid;place-items:center;width:54px;height:54px;color:var(--mg-c-blue);border-radius:16px;background:#a9bdff21; }
+.source-mark svg { width:36px;height:36px; }
+.source-mark:empty::after { content:"";width:22px;height:22px;border:2px solid currentColor;border-radius:6px;transform:rotate(45deg); }
+.map-source h3 { margin:0;font-size:58px;line-height:1.15;font-weight:400;overflow-wrap:anywhere; }
+.map-targets { position:relative;z-index:1;margin-top:88px;display:grid;grid-template-columns:repeat(var(--items,3),minmax(0,1fr));gap:20px; }
+.map-target { position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:166px;padding:24px 16px;text-align:center;border:1px solid #a9bdff33;background:var(--mg-c-node);border-radius:22px;box-shadow:inset 0 1px #dde7ff14; }
+.map-drop { display:grid;place-items:center;width:42px;height:42px;color:var(--mg-c-blue);font-style:normal; }
+.map-drop svg { width:38px;height:38px; }
+.map-drop:empty::after { content:"";width:24px;height:24px;border:2px solid currentColor;border-radius:6px; }
+.map-target h4 { margin:0;font-size:46px;font-weight:400;line-height:1.15;overflow-wrap:anywhere; }
+.map-description { margin:0;color:var(--mg-c-muted);font-size:28px;line-height:1.25;overflow-wrap:anywhere; }
 .map-wiring { position:absolute;inset:0;width:100%;height:100%;overflow:visible; }
-.map-wiring path { stroke:var(--mg-mint,#7DF2C4);stroke-width:4;stroke-linecap:round;stroke-linejoin:round; }
-.map-drop { display:none; }
-[data-layout="vertical"] .map-targets { grid-template-columns:1fr;width:70%;margin-inline:auto;gap:20px; }
+.map-wiring path { stroke:#a9bdffa6;stroke-width:3;stroke-linecap:round;stroke-linejoin:round; }
+.map-targets:has(.map-target:nth-child(5)) { grid-template-columns:repeat(3,minmax(0,1fr)); }
+[data-layout="vertical"].relation-map { --mg-width:720px; }
+[data-layout="vertical"] .map-targets { grid-template-columns:1fr;width:88%;margin:68px 0 0 auto;gap:14px; }
+[data-layout="vertical"] .map-target { display:grid;grid-template-columns:42px minmax(0,1fr);column-gap:18px;min-height:94px;padding:18px 22px;text-align:left;justify-items:start; }
+[data-layout="vertical"] .map-target h4 { font-size:44px; }
+[data-layout="vertical"] .map-description { grid-column:2; }

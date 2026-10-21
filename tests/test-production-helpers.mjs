@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { resolveBeatRenderWindow } from "../scripts/motion-window-utils.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "cut-motion-helpers-"));
@@ -20,6 +21,17 @@ const run = (script, args, env = {}, success = true) => {
   return result;
 };
 try {
+  const timedBeat = { id: "timed", start: 0, end: 4.2, entryAnchorWordId: "s:word-001",
+    exitAnchorWordId: "s:word-001", exitAnchorOffsetFrames: 0, exitFrames: 6 };
+  const timingMap = { fps: 30, duration: 5 };
+  const timingWords = new Map([["s:word-001", { start: 0, end: 1 }]]);
+  assert.equal(resolveBeatRenderWindow(timedBeat, timingMap, timingWords).end, 1.2);
+  assert.equal(resolveBeatRenderWindow({ ...timedBeat, exitAnchorOffsetFrames: -6 }, timingMap, timingWords).exitStartTime, .8);
+  assert.throws(() => resolveBeatRenderWindow({ ...timedBeat, exitAnchorOffsetFrames: -33 }, timingMap, timingWords), /render window is invalid/);
+  assert.throws(() => resolveBeatRenderWindow({ ...timedBeat, exitAnchorOffsetFrames: 13 }, timingMap, timingWords), /at most 12/);
+  const maskWindow = resolveBeatRenderWindow({ ...timedBeat, templateId: "redaction-mask" }, timingMap, timingWords);
+  assert.equal(maskWindow.end, 4.2, "Mask coverage is independent of the speech end");
+  assert.equal(maskWindow.exitDuration, 0, "Only the mask's own windows control its fade");
   for (const name of ["install-font.sh", "align-export.sh"]) {
     put(`repo/scripts/${name}`, fs.readFileSync(path.join(root, "scripts", name)));
     run("-n", [path.join(temporary, "repo/scripts", name)]);

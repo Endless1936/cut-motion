@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { buildComposition, findContentCollision, rebuildVisualSample } from "../scripts/build-composition.mjs";
 import { renderTemplate } from "../scripts/motion-template-library.mjs";
@@ -264,6 +265,38 @@ try {
   execFileSync("bash", [path.join(repositoryRoot, "scripts", "scaffold-project.sh"), scaffoldJob, scaffoldSource], { stdio: "pipe" });
   assert.equal(fs.existsSync(path.join(scaffoldJob, "hyperframes", "index.html")), true, "scaffold must build index.html");
 
+  // Exercise the assembled production timeline, including the builder's exit policy.
+  {
+    const maskJob = path.join(temporaryRoot, "mask-job");
+    const maskDirectory = path.join(maskJob, "hyperframes");
+    const moduleDirectory = path.join(maskDirectory, "mg", "mask");
+    fs.mkdirSync(moduleDirectory, { recursive: true });
+    fs.mkdirSync(path.join(maskJob, "state"));
+    const maskBeat = { id: "mask", start: 0, end: 4.2, mgScope: "local", templateId: "redaction-mask",
+      entryAnchorWordId: "s:word-001", exitAnchorWordId: "s:word-001", exitAnchorOffsetFrames: 0, exitFrames: 6,
+      templateData: { masks: [{ rects: [{ x: 0, y: 0, width: 100, height: 100 }] }] } };
+    fs.writeFileSync(path.join(maskJob, "state/beat-map.json"), JSON.stringify({ duration: 5, fps: 30, captionMode: "subtitles", beats: [maskBeat] }));
+    fs.writeFileSync(path.join(maskJob, "state/transcript.json"), JSON.stringify({ segments: [{ id: "s", words: [{ start: 0, end: 1 }] }] }));
+    const maskSource = renderTemplate("redaction-mask", maskBeat);
+    for (const [key, file] of [["fragment", "fragment.html"], ["style", "style.css"], ["timeline", "timeline.mjs"]]) fs.writeFileSync(path.join(moduleDirectory, file), maskSource[key]);
+    fs.writeFileSync(path.join(maskDirectory, "index.template.html"), '<style>/* CUT_MOTION_MG_STYLES */</style><div id="root"><!-- CUT_MOTION_MG_FRAGMENTS --></div><script>/* CUT_MOTION_MG_TIMELINES */</script>');
+    const maskHtml = fs.readFileSync(buildComposition(maskDirectory).outputPath, "utf8");
+    assert.match(maskHtml, /data-mg-beat-id="mask"[^>]*data-duration="4\.2"/, "Mask clip must retain its complete coverage window");
+    const { gsap } = createRequire(import.meta.url)(path.join(repositoryRoot, "node_modules/gsap/dist/gsap.js"));
+    const region = { autoAlpha: 0, dataset: { opacity: "1", windows: "[[0,0.1,4.1,4.2]]" } };
+    const maskRoot = { autoAlpha: 0, querySelectorAll: () => [region], contains: () => true };
+    const maskTimeline = gsap.timeline({ paused: true });
+    try {
+      vm.runInNewContext(maskHtml.match(/<script>([\s\S]*?)<\/script>/)[1], { timeline: maskTimeline, document: { querySelector: () => maskRoot } });
+      const effectiveAlpha = time => { maskTimeline.seek(time, false); return maskRoot.autoAlpha * region.autoAlpha; };
+      assert.equal(effectiveAlpha(4.05), 1, "Production must not fade the parent during full coverage");
+      assert.equal(effectiveAlpha(4.1), 1);
+      assert.ok(Math.abs(effectiveAlpha(4.15) - .5) < .0001, "The mask's linear fade must not be multiplied by another fade");
+      assert.equal(effectiveAlpha(4.2), 0);
+      assert.equal(effectiveAlpha(4.05), 1, "Full coverage survives reverse seeking");
+    } finally { maskTimeline.kill(); gsap.ticker.sleep(); }
+  }
+
   if (process.argv.includes("--browser")) {
     const { default: puppeteer } = await import("puppeteer-core");
     const chromeRoot = path.join(os.homedir(), ".cache/hyperframes/chrome/chrome-headless-shell");
@@ -306,8 +339,10 @@ try {
         const states = time => { timeline.seek(time); return inputs.map(node => [getComputedStyle(node).opacity, getComputedStyle(node).visibility]); };
         const early = states(.25), late = states(6), again = states(.25);
         timeline.seek(6);
-        const result = root.querySelector(".converge-result").getBoundingClientRect();
+        const resultNode = root.querySelector(".converge-result"), result = resultNode.getBoundingClientRect();
         return { fontsLoaded: document.fonts.check('64px "Smiley Sans"'), early, late, again,
+          resultVisible: getComputedStyle(resultNode).visibility === "visible" && Number(getComputedStyle(resultNode).opacity) > .99,
+          connectorTolerancePx: 1 + Math.max(...branches.map(node => Number.parseFloat(getComputedStyle(node).strokeWidth))) / 2,
           resultSample: { x: Math.round(result.left + 24), y: Math.round(result.top + result.height / 2) },
           errors: inputs.map((node, index) => {
             const box = node.getBoundingClientRect(), point = branches[index].getPointAtLength(0);
@@ -316,11 +351,13 @@ try {
       });
       assert.ok(delayedFonts > 0, "exercise late loading of the actual local font");
       assert.equal(geometry.fontsLoaded, true);
-      // offset metrics round to whole layout pixels; keep endpoints within one pixel.
-      assert.ok(geometry.errors.every(value => value < 1), `connector endpoints drifted: ${geometry.errors}`);
+      // Integer layout metrics and the painted half-stroke can meet the node border.
+      assert.ok(geometry.errors.every(value => value <= geometry.connectorTolerancePx), `connector endpoints drifted: ${geometry.errors}`);
       assert.deepEqual(geometry.early, geometry.again, "production timeline must seek backwards deterministically");
       assert.ok(geometry.late.every(([opacity, visibility]) => opacity === "1" && visibility === "visible"));
+      assert.equal(geometry.resultVisible, true, "The reference snapshot must contain the revealed result");
       assert.deepEqual(errors, []);
+      const referenceSnapshot = await page.screenshot({ encoding: "base64" });
       // Exercise the pinned renderer's timeline readiness, without requiring job media.
       fs.writeFileSync(full.outputPath, fs.readFileSync(full.outputPath, "utf8").replace(/<(video|audio)\b[^>]*>[\s\S]*?<\/\1>/g, ""));
       const snapshots = path.join(temporaryRoot, "snapshots");
@@ -329,14 +366,38 @@ try {
       const png = fs.readdirSync(snapshots).find(file => file.endsWith(".png"));
       assert.ok(png, "pinned CLI must capture the async production composition");
       await page.goto(pathToFileURL(path.join(snapshots, png)).href);
-      const pixel = await page.evaluate(({ x, y }) => {
+      const pixels = await page.evaluate(async ({ x, y, referenceSnapshot }) => {
         const image = document.querySelector("img"), canvas = document.createElement("canvas");
         canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
-        const context = canvas.getContext("2d"); context.drawImage(image, 0, 0);
-        return [...context.getImageData(x, y, 1, 1).data];
-      }, geometry.resultSample);
-      assert.ok([125, 242, 196].every((value, index) => Math.abs(value - pixel[index]) <= 3), `CLI snapshot missed the revealed result: ${pixel}`);
+        const context = canvas.getContext("2d");
+        const sample = image => { context.drawImage(image, 0, 0); return [...context.getImageData(x, y, 1, 1).data]; };
+        const actual = sample(image), reference = new Image();
+        reference.src = `data:image/png;base64,${referenceSnapshot}`;
+        await reference.decode();
+        return { actual, expected: sample(reference) };
+      }, { ...geometry.resultSample, referenceSnapshot });
+      assert.ok(pixels.expected.every((value, index) => Math.abs(value - pixels.actual[index]) <= 3), `CLI snapshot differs from the current theme: ${JSON.stringify(pixels)}`);
+      const maskBeat = { id: "beat-001", start: 0, end: 4.2, templateId: "redaction-mask", mgScope: "local",
+        entryAnchorWordId: "segment-001:word-001", exitAnchorWordId: "segment-001:word-001", exitAnchorOffsetFrames: 0, exitFrames: 6,
+        templateData: { masks: [{ rects: [{ x: 100, y: 420, width: 100, height: 100 }] }] } };
+      fs.writeFileSync(beatMapPath, JSON.stringify({ duration: 5, fps: 30, beats: [maskBeat] }));
+      fs.writeFileSync(path.join(fixture.jobRoot, "state/transcript.json"), JSON.stringify({ segments: [{ id: "segment-001", words: [{ start: 0, end: 1 }] }] }));
+      const maskSources = renderTemplate("redaction-mask", maskBeat);
+      for (const [key, filename] of [["fragment", "fragment.html"], ["style", "style.css"], ["timeline", "timeline.mjs"]]) fs.writeFileSync(path.join(fixture.moduleDirectory, filename), maskSources[key]);
+      fs.writeFileSync(templatePath, fs.readFileSync(templatePath, "utf8").replace(/<(video|audio)\b[^>]*>[\s\S]*?<\/\1>/g, ""));
+      buildComposition(fixture.hyperframes);
+      await page.goto(pathToFileURL(full.outputPath).href);
+      await page.waitForFunction(() => Boolean(window.__timelines?.main));
+      const maskAlphas = await page.evaluate(() => {
+        const root = document.querySelector(".redaction-mask"), region = root.querySelector(".redaction-region");
+        return [4.05, 4.1, 4.15, 4.2, 4.05].map(time => {
+          window.__timelines.main.seek(time, false);
+          return Number(getComputedStyle(root).opacity) * Number(getComputedStyle(region).opacity);
+        });
+      });
+      assert.ok(maskAlphas.every((alpha, index) => Math.abs(alpha - [1, 1, .5, 0, 1][index]) < .001), `Production redaction coverage differs from its own windows: ${maskAlphas}`);
       console.log("Production browser geometry passed: delayed font, five input endpoints and repeated seeking.");
+      console.log("Production redaction coverage passed: full opacity, linear fade and reverse seeking.");
     } finally { await browser.close(); }
   }
 

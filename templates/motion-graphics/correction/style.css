@@ -1,9 +1,5 @@
-.mg-root { position:absolute;top:var(--mg-top, 280px);left:0;right:0;margin-inline:auto;width:var(--mg-width,88%);max-width:88%;color:var(--mg-paper,#F4F1E8);font-family:"Smiley Sans",sans-serif;font-weight:400;pointer-events:none;opacity:0;visibility:hidden;box-sizing:border-box; }
-.mg-root *, .mg-root *::before, .mg-root *::after { box-sizing:border-box; }
-.mg-root [data-at] { opacity:0;visibility:hidden; }
-
-.mg-root { padding:28px 34px 28px 56px;background:var(--mg-surface,rgba(18,20,24,.74));border-radius:var(--mg-radius,18px); }
-.mg-root::before { content:"";position:absolute;left:22px;top:28px;bottom:28px;width:5px;border-radius:3px;background:var(--mg-yellow,#FFD15C); }
-.correction-old { position:relative;width:fit-content;max-width:100%;margin:0;font-size:60px;line-height:1.15; }
-.correction-strike { position:absolute;left:0;right:0;top:52%;height:6px;border-radius:3px;background:var(--mg-yellow,#FFD15C);box-shadow:0 1px 2px rgba(18,20,24,.45);transform-origin:left center; }
-.correction-new { margin:20px 0 0;color:var(--mg-mint,#7DF2C4);font-size:76px;line-height:1.15; }
+.mg-root { padding:34px;background:var(--mg-c-surface);border:1px solid var(--mg-c-line);border-radius:var(--mg-c-radius);box-shadow:inset 0 1px 0 #ffffff15,0 16px 48px #00000020; }
+.correction-old { position:relative;width:fit-content;max-width:100%;margin:0 auto;padding:10px 18px;font-size:48px;line-height:1.25;color:var(--mg-c-muted);overflow-wrap:anywhere; }
+.correction-strike { position:absolute;left:8px;right:8px;top:51%;height:2px;border-radius:2px;background:#b7c2d4cc;transform-origin:left center; }
+.correction-new { display:flex;align-items:center;justify-content:center;gap:20px;min-height:116px;margin:30px 0 0;padding:24px 28px;border:1px solid #55dda530;border-radius:22px;background:linear-gradient(135deg,#1b5542ed,#102e29ec);color:var(--mg-c-mint);text-align:center;font-size:62px;line-height:1.2;overflow-wrap:anywhere; }
+.correction-new::before { content:"";flex:none;width:28px;height:16px;border-left:4px solid var(--mg-c-mint);border-bottom:4px solid var(--mg-c-mint);transform:rotate(-45deg) translateY(-4px); }

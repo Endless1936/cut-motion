@@ -7,3 +7,5 @@ elements.forEach(element => {
 });
 const strike = select(".correction-strike")[0], at = beat.start + Number(strike.dataset.at);
 timeline.fromTo(strike, { scaleX: 0, transformOrigin: "left" }, { scaleX: 1, duration: duration(at), ease: "power2.out", immediateRender: false }, at);
+const correctionOld = select(".correction-old")[0];
+timeline.to(correctionOld, { color: "#78869c", duration: duration(at), ease: "power2.out" }, at);

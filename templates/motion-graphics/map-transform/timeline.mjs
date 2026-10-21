@@ -8,10 +8,15 @@ elements.forEach(element => {
 const source = select(".transform-source")[0], result = select(".transform-result")[0], link = select(".transform-link")[0];
 link.dataset.linkAt=result.dataset.at;
 Object.assign(link.style,{opacity:"0",visibility:"hidden"});
-const panel = select(".transform-panel")[0].getBoundingClientRect();
-const s = source.getBoundingClientRect(), r = result.getBoundingClientRect();
+const panel = select(".transform-panel")[0];
+const rectInPanel = element => {
+  let x=0,y=0;
+  for(let node=element;node&&node!==panel;node=node.offsetParent){x+=node.offsetLeft;y+=node.offsetTop;}
+  return {left:x,top:y,right:x+element.offsetWidth,bottom:y+element.offsetHeight};
+};
+const s = rectInPanel(source), r = rectInPanel(result);
 const horizontal = root.dataset.primaryFlowAxis === "horizontal";
 Object.assign(link.style, horizontal
-  ? { left: (s.right - panel.left + 12) + "px", right: "auto", top: ((s.top + s.bottom) / 2 - panel.top) + "px", bottom: "auto", width: (r.left - s.right - 24) + "px", height: "4px" }
-  : { left: ((s.left + s.right) / 2 - panel.left) + "px", right: "auto", top: (s.bottom - panel.top + 12) + "px", bottom: "auto", width: "4px", height: (r.top - s.bottom - 24) + "px" });
+  ? { left: (s.right + 8) + "px", right: "auto", top: ((s.top + s.bottom) / 2) + "px", bottom: "auto", width: Math.max(0,r.left - s.right - 16) + "px", height: "3px" }
+  : { left: ((s.left + s.right) / 2) + "px", right: "auto", top: (s.bottom + 8) + "px", bottom: "auto", width: "3px", height: Math.max(0,r.top - s.bottom - 16) + "px" });
 timeline.fromTo(link, { autoAlpha: 0, [horizontal ? "scaleX" : "scaleY"]: 0, transformOrigin: horizontal ? "left" : "top" }, { autoAlpha: 1, [horizontal ? "scaleX" : "scaleY"]: 1, duration: .24, immediateRender: false }, beat.start + Number(result.dataset.at));

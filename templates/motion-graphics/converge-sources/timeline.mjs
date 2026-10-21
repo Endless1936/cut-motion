@@ -33,7 +33,7 @@ inputs.forEach((node, i) => {
   const b = boxes[i], x = b.x + b.width / 2, y = b.y + b.height;
   const rowBottom=Math.max(...boxes.filter(other=>Math.abs(other.y-b.y)<5).map(other=>other.y+other.height));
   const route=boxes.some(other=>other.y>b.y+5)
-    ? `M ${x} ${y} V ${rowBottom+9} H ${root.offsetWidth-4} V ${railY} H ${cx}`
+    ? `M ${x} ${y} V ${rowBottom+14} H ${root.offsetWidth-22} V ${railY} H ${cx}`
     : `M ${x} ${y} V ${railY} H ${cx}`;
   makePath(route, beat.start + Number(node.dataset.at));
 });

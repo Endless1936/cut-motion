@@ -15,11 +15,16 @@ const entries = {
   "map-transform": ["h3", "p"],
   comparison: ["p", "span", "p", "span", "p"],
   "metric-proof": ["p", "span", "span", "p"],
+  "metric-grid": [],
+  "comparison-table": [],
+  "factor-expansion": [],
+  "growth-trend": [],
   "evidence-focus": [],
   quote: ["p", "p"],
   "code-snippet": ["p", "code", "code", "code", "code"],
   correction: ["old", "p"],
   annotation: ["p"],
+  "redaction-mask": [],
   "stage/b-axis-horizon-grid": [],
   "stage/axis-stage-transition": []
 };
@@ -40,7 +45,7 @@ export function resolveComponent(reference) {
     primaryFlowAxis = root.match(/\bdata-primary-flow-axis=["']([^"']+)["']/)?.[1];
     if (!semanticTopology || !primaryFlowAxis) throw new Error(`${name}: template root needs data-topology and data-primary-flow-axis`);
   }
-  return { meta: { name, semanticTopology, primaryFlowAxis, motionFamily: "editorial", transitionFamily: "template-reveal", summary: `Reusable ${name} template`, legacyCopySlots: slots.length, ...(!name.startsWith("stage/") ? { defaultTopPx: DEFAULT_MG_TOP_PX } : {}) }, content: beat => templateContent(name, beat), render: ({ beat }) => renderTemplate(name, beat) };
+  return { meta: { name, semanticTopology, primaryFlowAxis, motionFamily: "editorial", transitionFamily: "template-reveal", summary: `Reusable ${name} template`, legacyCopySlots: slots.length, ...(!name.startsWith("stage/") && name !== "redaction-mask" ? { defaultTopPx: DEFAULT_MG_TOP_PX } : {}) }, content: beat => templateContent(name, beat), render: ({ beat }) => renderTemplate(name, beat) };
 }
 export const describeComponents = () => componentNames().map((name) => resolveComponent(name).meta);
 export function componentFor(beat) {
@@ -68,7 +73,7 @@ export function renderTemplate(name, beat) {
   }
   const content = templateContent(name, beat);
   if (content) {
-    if (name !== "evidence-focus" && !content.copy.length) throw new Error(`${beat.id}: MG needs meaningful content`);
+    if (!["evidence-focus","redaction-mask"].includes(name) && !content.copy.length) throw new Error(`${beat.id}: MG needs meaningful content`);
     const rootTag = fragment.match(/^\s*<div\b[^>]*>/)[0].replace(/\s(?:style|data-layout)="[^"]*"/g, "");
     const layout = data.layout ?? (name === "linear-flow" && (data.items?.length ?? copy.length) > 4 ? "vertical" : "default");
     const axis = name === "linear-flow" && layout === "vertical" ? "vertical" : content.axis;
@@ -86,7 +91,7 @@ export function renderTemplate(name, beat) {
     if (time >= beat.end - beat.start) throw new Error(`${beat.id}: sample reveal exceeds beat; supply revealTimes`);
     return `data-at="${time}"`;
   });
-  const topPx = data.topPx !== undefined ? data.topPx : (!name.startsWith("stage/") ? DEFAULT_MG_TOP_PX : undefined);
+  const topPx = name === "redaction-mask" ? undefined : (data.topPx !== undefined ? data.topPx : (!name.startsWith("stage/") ? DEFAULT_MG_TOP_PX : undefined));
   if (topPx !== undefined) {
     if (!Number.isFinite(topPx)) throw new Error(`${beat.id}: topPx must be finite`);
     if (data.widthPx !== undefined && (!Number.isFinite(data.widthPx) || data.widthPx <= 0)) throw new Error(`${beat.id}: widthPx must be positive`);
@@ -94,5 +99,6 @@ export function renderTemplate(name, beat) {
     fragment = fragment.replace(/^(\s*<div[^>]*)(>)/, `$1 style="--mg-top:${topPx}px${width}"$2`);
   }
   let style = fs.readFileSync(path.join(directory, "style.css"), "utf8");
+  if (!name.startsWith("stage/")) style = fs.readFileSync(path.join(templateRoot, "theme.css"), "utf8") + "\n" + style;
   return { fragment, style, timeline: fs.readFileSync(path.join(directory, "timeline.mjs"), "utf8") };
 }

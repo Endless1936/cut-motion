@@ -139,6 +139,16 @@ try {
   script("check-visual-plan.mjs", [validMotion, transcript, design]);
   script("check-visual-plan.mjs", [validSubtitles, transcript, design]);
 
+  const earlierExit = readJson(validSubtitles);
+  earlierExit.beats.forEach(beat => { beat.exitAnchorOffsetFrames = -3; });
+  const earlierExitPath = path.join(temporaryRoot, "earlier-exit.json");
+  writeJson(earlierExitPath, earlierExit);
+  script("check-visual-plan.mjs", [earlierExitPath, transcript, design]);
+  const exitOffsetSchema = readJson(path.join(repositoryRoot, "schemas/beat-map.schema.json"))
+    .properties.beats.items.properties.exitAnchorOffsetFrames;
+  assert.equal(exitOffsetSchema.minimum, undefined, "Negative offsets retain existing composition timing");
+  assert.equal(exitOffsetSchema.maximum, 12);
+
   const faceCoverage = readJson(validSubtitles);
   faceCoverage.beats = [faceCoverage.beats[0]];
   Object.assign(faceCoverage.beats[0], { axis: "A", end: 3.2, sourceSegmentIds: ["seg-001", "seg-002"], exitAnchorWordId: "seg-002:word-003", staticHoldReason: "Read the source evidence" });

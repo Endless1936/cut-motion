@@ -85,8 +85,8 @@ for (let index = 0; index < beats.length; index += 1) {
   const exitWord = wordsById.get(beat.exitAnchorWordId);
   if (!entryWord) errors.push(`${beat.id}: entryAnchorWordId does not resolve; use the generated main-NNN:word-001 id for the approved preview entry`);
   if (!exitWord) errors.push(`${beat.id}: exitAnchorWordId does not resolve; use the generated main-NNN:word-001 id for the approved preview entry`);
-  if (!Number.isInteger(beat.exitAnchorOffsetFrames) || beat.exitAnchorOffsetFrames < 0 || beat.exitAnchorOffsetFrames > 12) {
-    errors.push(`${beat.id}: exitAnchorOffsetFrames must be an integer from 0 to 12`);
+  if (!Number.isInteger(beat.exitAnchorOffsetFrames) || beat.exitAnchorOffsetFrames > 12) {
+    errors.push(`${beat.id}: exitAnchorOffsetFrames must be an integer at most 12`);
   }
   let renderWindow = null;
   if (entryWord && exitWord) {

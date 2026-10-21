@@ -1,11 +1,7 @@
-.mg-root { position:absolute;top:var(--mg-top, 280px);left:0;right:0;margin-inline:auto;width:var(--mg-width,88%);max-width:88%;color:var(--mg-paper,#F4F1E8);font-family:"Smiley Sans",sans-serif;font-weight:400;pointer-events:none;opacity:0;visibility:hidden;box-sizing:border-box; }
-.mg-root *, .mg-root *::before, .mg-root *::after { box-sizing:border-box; }
-.mg-root [data-at] { opacity:0;visibility:hidden; }
-
-.mg-root { padding:28px 34px 28px 56px;background:var(--mg-surface,rgba(18,20,24,.74));border-radius:var(--mg-radius,18px); }
-.mg-root::before { content:"";position:absolute;left:22px;top:28px;bottom:28px;width:5px;border-radius:3px;background:var(--mg-mint,#7DF2C4); }
-.proof-source { margin:0 0 14px;font-size:44px;color:var(--mg-yellow,#FFD15C);line-height:1.15; }
-.proof-reading { display:flex;flex-wrap:wrap;align-items:baseline;column-gap:20px;row-gap:12px; }
-.proof-value { color:var(--mg-mint,#7DF2C4);font-size:160px;line-height:1;font-weight:400;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;max-width:100%; }
-.proof-unit { font-size:64px;line-height:1.15; }
-.proof-caption { margin:18px 0 0;font-size:44px;color:rgba(244,241,232,.9);line-height:1.25; }
+.mg-root { padding:34px 40px 32px;background:var(--mg-c-surface);border:1px solid var(--mg-c-line);border-radius:var(--mg-c-radius);box-shadow:inset 0 1px 0 #ffffff15,0 16px 48px #00000020; }
+.proof-source { display:flex;align-items:center;gap:14px;margin:0;padding-bottom:23px;border-bottom:1px solid #c1d3ff26;font-size:40px;line-height:1.25;color:var(--mg-c-paper); }
+.proof-source::before { content:"";flex:none;display:block;width:10px;height:10px;border-radius:50%;background:var(--mg-c-mint);box-shadow:0 0 0 7px #55dda512; }
+.proof-reading { display:flex;flex-wrap:wrap;align-items:baseline;justify-content:center;column-gap:18px;row-gap:10px;padding:30px 0 24px; }
+.proof-value { max-width:100%;color:var(--mg-c-yellow);font-size:var(--proof-value-size,126px);line-height:1.05;font-weight:400;font-variant-numeric:tabular-nums;overflow-wrap:anywhere; }
+.proof-unit { font-size:44px;line-height:1.2;color:var(--mg-c-paper); }
+.proof-caption { margin:0;padding:16px 20px;border:1px solid #a9bdff12;border-radius:16px;background:#a9bdff0c;text-align:center;font-size:36px;line-height:1.3;color:var(--mg-c-muted);overflow-wrap:anywhere; }

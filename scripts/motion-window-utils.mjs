@@ -16,9 +16,17 @@ export const resolveBeatRenderWindow = (beat, beatMap, wordsById) => {
   if (!Number.isFinite(fps) || fps <= 0) throw new Error(`${beat.id}: Beat Map fps must be positive`);
   if (!Number.isFinite(fullDuration) || fullDuration <= 0) throw new Error(`${beat.id}: Beat Map duration must be positive`);
   if (!Number.isFinite(start) || start < 0) throw new Error(`${beat.id}: Beat start must be non-negative`);
+  // Redaction owns its coverage windows; speech anchors must not shorten them.
+  if ((beat.templateId ?? beat.mgComponent ?? beat.recipe) === "redaction-mask") {
+    const unclampedEnd = Number(beat.end);
+    const end = Math.min(fullDuration, unclampedEnd);
+    if (!Number.isFinite(unclampedEnd) || end <= start) throw new Error(`${beat.id}: resolved render window is invalid`);
+    return { start: decimal(start), end: decimal(end), entryAnchorTime: decimal(start),
+      exitAnchorTime: decimal(end), exitStartTime: decimal(end), exitDuration: 0, unclampedEnd: decimal(unclampedEnd) };
+  }
   if (!entryWord || !exitWord) throw new Error(`${beat.id}: use entry and exit timing units from the generated transcript; routine ChatCut plans use main-timeline entry units`);
-  if (!Number.isInteger(beat.exitAnchorOffsetFrames) || beat.exitAnchorOffsetFrames < 0) {
-    throw new Error(`${beat.id}: exitAnchorOffsetFrames must be a non-negative integer`);
+  if (!Number.isInteger(beat.exitAnchorOffsetFrames) || beat.exitAnchorOffsetFrames > 12) {
+    throw new Error(`${beat.id}: exitAnchorOffsetFrames must be an integer at most 12`);
   }
   if (!Number.isInteger(beat.exitFrames) || beat.exitFrames < 1) {
     throw new Error(`${beat.id}: exitFrames must be a positive integer`);
@@ -27,7 +35,7 @@ export const resolveBeatRenderWindow = (beat, beatMap, wordsById) => {
   const exitDuration = beat.exitFrames / fps;
   const unclampedEnd = exitStart + exitDuration;
   const end = Math.min(fullDuration, unclampedEnd);
-  if (!Number.isFinite(exitStart) || end <= start) throw new Error(`${beat.id}: resolved render window is invalid`);
+  if (!Number.isFinite(exitStart) || exitStart < start || end <= start) throw new Error(`${beat.id}: resolved render window is invalid`);
   return {
     start: decimal(start),
     end: decimal(end),

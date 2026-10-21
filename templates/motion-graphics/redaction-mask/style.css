@@ -1,0 +1,5 @@
+/* Place this auxiliary overlay above its footage, with the same coordinate frame. */
+.mg-root.redaction-mask { position:absolute;inset:0;top:0;width:100%;height:100%;max-width:none;margin:0;z-index:30;pointer-events:none; }
+.redaction-frame { position:absolute;transform-origin:0 0; }
+.redaction-region { position:absolute;inset:0;opacity:0;visibility:hidden; }
+.redaction-rect { position:absolute;display:block;background:var(--redaction-color,#2b2a2c); }

@@ -449,6 +449,24 @@ try {
     );
   }
 
+  for (const currentState of ["rough-cut-export", "motion-plan", "composition", "render"]) {
+    const job = scaffold(`active-auto-rough-cut-${currentState}`, "auto", "subtitles");
+    const workflowPath = path.join(job, "state", "workflow.json");
+    const workflow = readJson(workflowPath);
+    workflow.currentState = currentState;
+    workflow.authoritativeMediaPath = "roughcut/a-roll.mp4";
+    workflow.authoritativeMediaSha256 = "a".repeat(64);
+    workflow.roughCutReviewDecision = "automatic-fallback";
+    writeJsonAtomic(workflowPath, workflow);
+    script("workflow-state.mjs", [workflowPath, "reopen", "rough-cut", "--actor", "agent", "--note", "unrequested"], false, /requires --actor user/);
+    script("workflow-state.mjs", [workflowPath, "reopen", "rough-cut", "--actor", "user", "--note", "Revise the active cut"]);
+    const reopened = readJson(workflowPath);
+    assert.equal(reopened.currentState, "rough-cut");
+    assert.equal(reopened.authoritativeMediaSha256, null);
+    assert.equal(reopened.roughCutReviewDecision, "pending");
+    assert.equal(reopened.gates["rough-cut-review"].status, "not-reached");
+  }
+
   // ------------------------------------------------------- recorded bindings
   // Every fingerprint the workflow records is written at a transition and was
   // never re-checked, so a rebuild or a hand edit performed outside the state

@@ -14,6 +14,6 @@ select(".step-link").forEach(link => {
 });
 select(".step").forEach((step,index,steps)=>{
   const marker=step.querySelector(".step-number"),at=beat.start+Number(step.dataset.at);
-  timeline.to(marker,{color:"#FFD15C",borderColor:"#FFD15C",duration:.18},at);
-  if(index)timeline.to(steps[index-1].querySelector(".step-number"),{color:"#7DF2C4",borderColor:"#7DF2C4",duration:.18},at);
+  timeline.to(marker,{backgroundColor:"rgba(169,189,255,.2)",borderColor:"rgba(169,189,255,.6)",duration:.2},at);
+  if(index)timeline.to(steps[index-1].querySelector(".step-number"),{backgroundColor:"rgba(169,189,255,.08)",borderColor:"rgba(169,189,255,.28)",duration:.2},at);
 });

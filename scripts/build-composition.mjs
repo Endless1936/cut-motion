@@ -397,7 +397,9 @@ export const buildComposition = (hyperframesDirectory, options = {}) => {
       `  if (!root) throw new Error(${JSON.stringify(`${beatId}: Beat root is missing`)});`,
       "  const select = (selector) => [...root.querySelectorAll(selector)].filter((node) => root.contains(node));",
       sources["timeline.mjs"].split("\n").map((line) => `  ${line}`).join("\n"),
-      "  timeline.to(root, { autoAlpha: 0, duration: beat.exitDuration, ease: \"power2.in\" }, beat.exitStartTime);",
+      ...(renderWindow.exitDuration > 0
+        ? ["  timeline.to(root, { autoAlpha: 0, duration: beat.exitDuration, ease: \"power2.in\" }, beat.exitStartTime);"]
+        : []),
       "}"
     ].join("\n"));
     trackIndex += 1;

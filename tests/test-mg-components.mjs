@@ -6,8 +6,13 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { componentNames, resolveComponent, templateRoot, DEFAULT_MG_TOP_PX } from "../scripts/motion-template-library.mjs";
 import { buildComposition } from "../scripts/build-composition.mjs";
+import { templateSamples } from "../scripts/mg-template-samples.mjs";
 import { buildBeatMap } from "../scripts/plan-artifacts.mjs";
 
+const structured = new Set(["metric-grid", "comparison-table", "factor-expansion", "growth-trend"]);
+const topologyValues = JSON.parse(fs.readFileSync(new URL("../schemas/beat-map.schema.json", import.meta.url), "utf8"))
+  .properties.beats.items.properties.semanticTopology.enum;
+const maskData = {...templateSamples["redaction-mask"],masks:templateSamples["redaction-mask"].masks.map(mask=>({...mask,windows:[[.2,.3,3.5,3.6]]}))};
 const planBeat = (beat) => buildBeatMap({
   transcript: { duration: 5 }, captionMode: "subtitles",
   designSystem: { typography: { displayFamily: "Smiley Sans", outlineReservePx: 18 }, captions: { fontSizePx: 96 } },
@@ -33,13 +38,15 @@ assert.equal(exampleNote.templateData.topPx / 1920, exampleNote.layout.primaryBo
 for (const id of componentNames()) {
   const component = resolveComponent(id);
   if (id === "stage/axis-stage-transition") continue;
+  if (!id.startsWith("stage/")) assert.ok(topologyValues.includes(component.meta.semanticTopology), `${id} topology must be accepted by the Beat Map schema`);
   const beat = { id: "test-beat", start: 0, end: 5, axis: "A", templateData: {
+    ...(id === "redaction-mask" ? maskData : structured.has(id) ? templateSamples[id] : {}),
     copy: Array.from({ length: component.meta.legacyCopySlots }, (_, i) => `测试<&${i}`),
     image: "assets/evidence.png", alt: "真实截图",
     focus: [{ x: 1, y: 2, width: 30, height: 20 }, { x: 2, y: 30, width: 40, height: 20 }]
   } };
   const result = component.render({ beat });
-  if (!id.startsWith("stage/")) {
+  if (!id.startsWith("stage/") && id !== "redaction-mask") {
     assert.equal(component.meta.defaultTopPx, DEFAULT_MG_TOP_PX);
     assert.match(result.fragment, /style="--mg-top:280px"/);
     assert.match(result.style, /var\(--mg-top,\s*280px\)/);
@@ -53,12 +60,53 @@ for (const id of componentNames()) {
   assert.equal(result.fragment.match(/data-topology="([^"]+)"/)[1], component.meta.semanticTopology);
   assert.equal(result.fragment.match(/data-primary-flow-axis="([^"]+)"/)[1], component.content(beat)?.axis ?? component.meta.primaryFlowAxis);
   assert.match(result.fragment, /data-beat-id="test-beat"/);
-  assert.equal(result.style, fs.readFileSync(path.join(templateRoot, id, "style.css"), "utf8"));
+  assert.equal(result.style, (id.startsWith("stage/") ? "" : fs.readFileSync(path.join(templateRoot, "theme.css"), "utf8") + "\n") + fs.readFileSync(path.join(templateRoot, id, "style.css"), "utf8"));
   assert.equal(result.timeline, fs.readFileSync(path.join(templateRoot, id, "timeline.mjs"), "utf8"));
   if (component.meta.legacyCopySlots) assert.match(result.fragment, /测试&lt;&amp;0/);
   new Function("root", "select", "beat", "timeline", result.timeline);
 }
 assert.equal(resolveComponent("mapping"), null, "Do not silently substitute a different topology");
+const redaction = resolveComponent("redaction-mask");
+const maskBeat = {id:"mask",start:10,end:18,templateData:templateSamples["redaction-mask"]};
+const overlay = redaction.render({beat:maskBeat});
+assert.equal(redaction.meta.defaultTopPx, undefined, "Masks use footage coordinates, not card placement");
+assert.doesNotMatch(overlay.fragment, /data-at=|--mg-top|--mg-width/);
+assert.deepEqual(redaction.content(maskBeat).copy, [], "A privacy overlay does not introduce spoken copy");
+assert.equal([...overlay.fragment.matchAll(/class="redaction-region"/g)].length, 2);
+assert.equal([...overlay.fragment.matchAll(/class="redaction-rect"/g)].length, 4);
+assert.match(overlay.fragment, /data-windows='\[\[0\.9,1,3\.9,4\],\[4\.9,5,6\.9,7\]\]'/);
+assert.match(overlay.fragment, /border-radius:50% \/ 50%/);
+assert.match(overlay.style, /background:var\(--redaction-color,#2b2a2c\)/);
+const plannedMask=planBeat({templateId:"redaction-mask",templateData:maskData});
+assert.equal(plannedMask.templateData.topPx,undefined);
+assert.deepEqual(planBeat(plannedMask),plannedMask,"Redaction windows survive plan regeneration");
+const badMask = masks => redaction.render({beat:{...maskBeat,templateData:{...maskBeat.templateData,masks}}});
+assert.throws(()=>badMask([{rects:[{x:0,y:0,width:900,height:20}]}]),/exceeds coordinateSize/);
+assert.throws(()=>badMask([{rects:[{x:0,y:0,width:20,height:20}],windows:[[1,2,1.5,3]]}]),/ordered/);
+assert.throws(()=>badMask([{rects:[{x:0,y:0,width:20,height:20}],windows:[[1,2,3,4],[3.5,4,5,6]]}]),/nonoverlapping/);
+assert.throws(()=>badMask([{rects:[{x:0,y:0,width:20,height:20}],color:"red;background:url(x)"}]),/hex color/);
+assert.throws(()=>badMask([{rects:[{x:0,y:0,width:20,height:20}],opacity:1.1}]),/opacity/);
+assert.doesNotThrow(()=>redaction.render({beat:{id:"short",start:0,end:.05,templateData:{masks:[{rects:[{x:0,y:0,width:20,height:20}]}]}}}),"Default fades fit short beats");
+for (const name of structured) {
+  const component = resolveComponent(name), data = templateSamples[name];
+  const base = { id: name, start: 2, end: 10, templateData: data };
+  const slotCount = [...component.render({ beat: base }).fragment.matchAll(/data-at=/g)].length;
+  const revealTimes = Array.from({ length: slotCount }, (_, i) => i * .4);
+  const rendered = component.render({ beat: { ...base, templateData: { ...data, revealTimes } } });
+  assert.deepEqual([...rendered.fragment.matchAll(/data-at="([^"]+)"/g)].map(m => Number(m[1])), revealTimes,
+    `${name} must preserve supplied spoken timing for complete semantic groups`);
+  const planned = planBeat({templateId:name, templateData:data});
+  assert.deepEqual(planBeat(planned), planned, `${name} structured data survives planning`);
+  assert.doesNotMatch(rendered.fragment, /undefined|NaN/);
+}
+const tableComponent = resolveComponent("comparison-table");
+const table = tableComponent.render({beat:{id:"table",start:0,end:8,templateData:templateSamples["comparison-table"]}}).fragment;
+assert.equal([...table.matchAll(/data-at=/g)].length, 6, "Table heading, headers and first two rows reveal as groups; final two cells reveal in order");
+assert.throws(() => tableComponent.render({beat:{id:"bad-table",start:0,end:8,templateData:{headers:["A","B"],rows:[{values:["one"]}]}}}), /width must match/);
+const zeroGrowth = resolveComponent("growth-trend").render({beat:{id:"zero",start:0,end:8,templateData:{items:[{label:"起点",value:0},{label:"终点",value:24}],result:"变化"}}});
+assert.match(zeroGrowth.fragment, /data-value="0"/);
+assert.throws(() => resolveComponent("growth-trend").render({beat:{id:"bad-value",start:0,end:8,templateData:{items:[{label:"起点",value:-1}],result:"变化"}}}), /nonnegative/);
+assert.throws(() => resolveComponent("metric-grid").render({beat:{id:"bad-metric",start:0,end:8,templateData:{items:[{label:"指标",value:Infinity}]}}}), /finite/);
 assert.doesNotThrow(() => resolveComponent("quote").render({ beat: { id: "x", start: 0, end: 1, onScreenCopy: ["one"] } }));
 assert.throws(() => resolveComponent("quote").render({ beat: { id: "x", start: 0, end: 1, onScreenCopy: ["one","two"], templateData: { revealTimes: [0,2,3] } } }), /relative times/);
 
@@ -144,7 +192,7 @@ new Function("root", "select", "beat", "timeline", fs.readFileSync(path.join(tem
   geometryRoot, geometrySelect, { start: 1, end: 4 }, { set() {}, fromTo(node, from, to, at) { animated.push({ node, at }); } });
 assert.equal(geometrySvg.attrs.viewBox, "0 0 900 460");
 assert.equal(svgPaths.length, 6);
-assert.equal(svgPaths[0].attrs.d, "M 156 112 V 121 H 896 V 296 H 450");
+assert.equal(svgPaths[0].attrs.d, "M 156 112 V 126 H 878 V 296 H 450");
 assert.equal(svgPaths[3].attrs.d, "M 303 256 V 296 H 450");
 assert.equal(svgPaths[5].attrs.d, "M 450 296 V 352 m -8 -8 l 8 8 8 -8");
 assert.deepEqual(svgPaths.map(path => Number(Number(path.dataset.linkAt).toFixed(6))), [0, .1, .2, .3, .4, .8]);
@@ -198,6 +246,7 @@ try {
   fs.writeFileSync(path.join(temporary,"hyperframes/assets/evidence.svg"), '<svg xmlns="http://www.w3.org/2000/svg"/>');
   fs.writeFileSync(path.join(temporary,"hyperframes/index.template.html"), '<style>/* CUT_MOTION_MG_STYLES */</style><div id="root"><video id="a-roll"></video><!-- CUT_MOTION_MG_FRAGMENTS --></div><script>const timeline={}; /* CUT_MOTION_MG_TIMELINES */</script>');
   map.beats = componentNames().map((id,index) => ({...base,id:`canonical-${index}`,templateId:id,templateData:{
+    ...(id === "redaction-mask" ? maskData : structured.has(id) ? templateSamples[id] : {}),
     copy:Array.from({length:resolveComponent(id).meta.legacyCopySlots},(_,i)=>`文案${i}`),
     image:"assets/evidence.svg",alt:"证据",
     focus:[{x:1,y:2,width:30,height:20},{x:2,y:30,width:40,height:20}]

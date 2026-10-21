@@ -13,6 +13,6 @@ select(".flow-link").forEach(link => {
 });
 select(".flow-node").forEach((node,index,nodes)=>{
   const at=beat.start+Number(node.dataset.at);
-  timeline.to(node.querySelector(".flow-orb"),{borderColor:"#FFD15C",duration:.18},at);
-  if(index)timeline.to(nodes[index-1].querySelector(".flow-orb"),{borderColor:"#7DF2C4",duration:.18},at);
+  timeline.to(node.querySelector(".flow-orb"),{borderColor:"rgba(169,189,255,.65)",backgroundColor:"rgba(169,189,255,.2)",duration:.2},at);
+  if(index)timeline.to(nodes[index-1].querySelector(".flow-orb"),{borderColor:"rgba(169,189,255,.22)",backgroundColor:"rgba(169,189,255,.1)",duration:.2},at);
 });

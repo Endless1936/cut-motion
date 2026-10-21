@@ -1,0 +1,18 @@
+.growth-panel { position:relative;padding:38px;background:var(--mg-c-surface);border:1px solid var(--mg-c-line);border-radius:var(--mg-c-radius);box-shadow:inset 0 1px #e0eaff1a,0 18px 56px #030a1929; }
+.growth-title { margin:0 0 32px;color:var(--mg-c-muted);font-size:38px;line-height:1.2; }
+.growth-chart { position:relative;height:408px; }
+.growth-axes,.growth-line { position:absolute;inset:0;width:100%;height:100%;overflow:visible; }
+.growth-axes path { fill:none;stroke:#a9bdff4d;stroke-width:2;stroke-linecap:round;stroke-linejoin:round; }
+.growth-line { z-index:3; }
+.growth-line path { fill:none;stroke:var(--mg-c-mint);stroke-width:4;stroke-linecap:round;stroke-linejoin:round; }
+.growth-line circle { fill:#102f2a;stroke:var(--mg-c-mint);stroke-width:3; }
+.growth-columns { position:absolute;inset:16px 20px 0 48px;display:grid;grid-template-columns:repeat(var(--columns,4),minmax(0,1fr));gap:24px; }
+.growth-item { position:relative;min-width:0;height:100%;display:flex;flex-direction:column;align-items:center; }
+.growth-bar-shell { position:absolute;bottom:64px;width:58%;max-width:82px;height:calc(100% - 112px); }
+.growth-bar { display:block;position:absolute;inset:auto 0 0;height:var(--bar-height,0px);border:1px solid #b4c7ff66;border-radius:12px 12px 2px 2px;background:linear-gradient(180deg,#96b0ffdb,#3c5ab3ab);box-shadow:inset 0 1px #e0eaff40;transform-origin:50% 100%; }
+.growth-value { position:absolute;bottom:calc(64px + var(--bar-height,0px) + 14px);color:var(--mg-c-blue);font-size:38px;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap; }
+.growth-label { position:absolute;bottom:0;left:0;right:0;min-height:44px;text-align:center;font-size:30px;line-height:1.2;color:var(--mg-c-paper);overflow-wrap:anywhere; }
+.growth-result { position:relative;min-height:110px;margin:30px 0 0;padding:24px 26px;display:grid;place-items:center;border:1px solid #55dda552;border-radius:24px;background:linear-gradient(145deg,#185241eb,#0f302af0);color:#d8ffec;box-shadow:inset 0 1px #aaf7ce21;font-size:62px;line-height:1.16;text-align:center;overflow-wrap:anywhere; }
+.growth-columns:has(.growth-item:nth-child(6)) { gap:18px; }
+.growth-columns:has(.growth-item:nth-child(6)) .growth-value { font-size:32px; }
+.growth-columns:has(.growth-item:nth-child(6)) .growth-label { font-size:26px; }

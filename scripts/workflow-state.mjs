@@ -468,8 +468,10 @@ if (command === "reopen") {
     && ["composition", "render"].includes(workflow.currentState)
     && workflow.mode === "review"
     && workflow.roughCutReviewDecision !== "automatic-fallback";
-  if (workflow.currentState !== "complete" && !activeReviewCompositionRevision) {
-    throw new Error("Only a completed job or an active review-mode composition/render revision can be reopened");
+  const activeRoughCutRevision = scope === "rough-cut"
+    && ["rough-cut-export", "motion-plan", "composition", "render"].includes(workflow.currentState);
+  if (workflow.currentState !== "complete" && !activeReviewCompositionRevision && !activeRoughCutRevision) {
+    throw new Error("Only a completed job, an active rough-cut revision, or an active review-mode composition/render revision can be reopened");
   }
   if (actor !== "user") throw new Error("Reopen requires --actor user");
   if (!note) throw new Error("Reopen requires --note");

@@ -1,19 +1,22 @@
-.mg-root { position:absolute;top:var(--mg-top, 280px);left:0;right:0;margin-inline:auto;width:var(--mg-width,88%);max-width:88%;color:var(--mg-paper,#F4F1E8);font-family:"Smiley Sans",sans-serif;font-weight:400;pointer-events:none;opacity:0;visibility:hidden;box-sizing:border-box; }
-.mg-root *, .mg-root *::before, .mg-root *::after { box-sizing:border-box; }
-.mg-root [data-at] { opacity:0;visibility:hidden; }
-
-.flow-panel { padding:26px 30px;background:var(--mg-surface,rgba(18,20,24,.74));border-radius:var(--mg-radius,18px); }
-.flow-title { margin:0 0 22px;color:var(--mg-yellow,#FFD15C);font-size:44px; }
-.flow-nodes { display:grid;grid-template-columns:repeat(var(--items,4),minmax(0,1fr));gap:28px; }
-.flow-node { position:relative;text-align:center;min-width:0; }
-.flow-orb { display:grid;place-items:center;width:44px;height:44px;border:2px solid var(--mg-mint,#7DF2C4);border-radius:50%;margin:0 auto 20px;background:rgba(18,20,24,.25); }
-.flow-orb i { width:10px;height:10px;background:var(--mg-mint,#7DF2C4);border-radius:50%; }
-.flow-copy h3 { margin:0;font-size:64px;line-height:1.15;font-weight:400;overflow-wrap:anywhere; }
-.flow-description { margin:8px 0 0;font-size:40px;line-height:1.25; }
-.flow-link { position:absolute;top:21px;right:calc(50% + 24px);height:3px;width:calc(100% - 18px);background:var(--mg-mint,#7DF2C4);border-radius:2px; }
-[data-layout="vertical"] { --mg-width:720px; }
-[data-layout="vertical"] .flow-panel { padding-inline:60px; }
-[data-layout="vertical"] .flow-nodes { grid-template-columns:1fr;gap:12px; }
-[data-layout="vertical"] .flow-node { display:grid;grid-template-columns:44px minmax(0,1fr);gap:24px;align-items:center;min-height:82px;text-align:left; }
+.flow-panel { padding:36px;background:var(--mg-c-surface);border:1px solid var(--mg-c-line);border-radius:var(--mg-c-radius);box-shadow:inset 0 1px #e0eaff1a,0 18px 56px #030a1929; }
+.flow-title { margin:0 0 28px;color:var(--mg-c-muted);font-size:34px;line-height:1.2;letter-spacing:.02em; }
+.flow-nodes { display:grid;grid-template-columns:repeat(var(--items,4),minmax(0,1fr));gap:30px; }
+.flow-node { position:relative;min-width:0;padding:26px 15px 24px;text-align:center;border:1px solid #a9bdff38;border-radius:22px;background:var(--mg-c-node);box-shadow:inset 0 1px #dde7ff17; }
+.flow-orb { display:grid;place-items:center;width:68px;height:68px;margin:0 auto 20px;border:1px solid #a9bdff38;border-radius:20px;background:#7d9af71f;color:var(--mg-c-blue); }
+.flow-orb svg { width:40px;height:40px;display:block; }
+.flow-orb i { width:16px;height:16px;border-radius:5px;background:var(--mg-c-blue);box-shadow:0 0 18px #a9bdff33; }
+.flow-copy h3 { margin:0;font-size:43px;line-height:1.16;font-weight:400;overflow-wrap:anywhere; }
+.flow-description { margin:12px 0 0;color:var(--mg-c-muted);font-size:28px;line-height:1.28;overflow-wrap:anywhere; }
+.flow-link { position:absolute;top:58px;right:calc(100% + 5px);height:2px;width:20px;background:#a9bdffa6;border-radius:2px; }
+.flow-link::after { content:"";position:absolute;right:0;top:-4px;width:9px;height:9px;border-top:2px solid var(--mg-c-blue);border-right:2px solid var(--mg-c-blue);transform:rotate(45deg); }
+[data-layout="vertical"].linear-flow { --mg-width:720px; }
+[data-layout="vertical"] .flow-nodes { grid-template-columns:1fr;gap:18px; }
+[data-layout="vertical"] .flow-node { display:grid;grid-template-columns:68px minmax(0,1fr);gap:22px;align-items:center;min-height:112px;padding:21px 24px;text-align:left; }
 [data-layout="vertical"] .flow-orb { margin:0; }
-[data-layout="vertical"] .flow-link { left:21px;right:auto;top:auto;bottom:calc(50% + 24px);width:3px;height:calc(100% - 36px); }
+[data-layout="vertical"] .flow-copy h3 { font-size:50px; }
+[data-layout="vertical"] .flow-link { left:57px;right:auto;top:auto;bottom:calc(100% + 3px);width:2px;height:12px; }
+[data-layout="vertical"] .flow-link::after { right:-3.5px;top:auto;bottom:0;transform:rotate(135deg); }
+[data-layout="vertical"] .flow-nodes:has(.flow-node:nth-child(6)) .flow-node { padding-block:15px;min-height:100px; }
+[data-layout="vertical"] .flow-nodes:has(.flow-node:nth-child(6)) .flow-copy h3 { font-size:40px; }
+[data-layout="vertical"] .flow-nodes:has(.flow-node:nth-child(6)) .flow-description { font-size:26px; }
+.linear-flow:has(.flow-node:nth-child(6)) .flow-panel { padding-block:28px; }

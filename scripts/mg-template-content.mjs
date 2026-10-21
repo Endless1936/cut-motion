@@ -1,6 +1,13 @@
 /** Content structure for the reusable MGs; choreography remains in each template. */
+import { mgIcon } from "./mg-template-icons.mjs";
+import { redactionContent } from "./mg-redaction-content.mjs";
 const escape = value => { if (typeof value !== "string") throw new Error("MG text must be strings"); return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); };
 const text = value => escape(value).replaceAll("\n", "<br>");
+const numericText = (value, field) => {
+  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  throw new Error(`${field} needs nonempty text or a finite number`);
+};
 const labelOf = item => typeof item === "string" ? item : item.label ?? item.text;
 const paragraph = (className, value, timed = true) => value ? `<p class="${className}"${timed ? ' data-at="0"' : ""}>${text(value)}</p>` : "";
 const list = (items, { descriptionParts = false } = {}) => {
@@ -18,6 +25,7 @@ const list = (items, { descriptionParts = false } = {}) => {
 };
 
 export function templateContent(name, beat) {
+  if (name === "redaction-mask") return redactionContent(beat.templateData ?? {}, beat);
   const data = beat.templateData ?? {};
   const copy = data.copy ?? beat.onScreenCopy ?? [];
   let body, words = [], axis = "vertical", normalizedData = {};
@@ -39,7 +47,7 @@ export function templateContent(name, beat) {
       axis = data.layout === "chips" ? "horizontal" : "vertical";
       body = `<section class="points-panel" data-motion-surface="container"><div class="points-surface" aria-hidden="true"></div>${title("points-title")}<div class="points-list" style="--items:${items.length}">${items.map(item => {
         add(item.label); add(item.description);
-        return `<article class="point${item.emphasis ? " point-emphasis" : ""}" data-at="0"><span class="point-mark" aria-hidden="true"></span><div>${paragraph("point-copy", item.label, false)}${paragraph("point-description", item.description, false)}</div></article>`;
+        return `<article class="point${item.emphasis ? " point-emphasis" : ""}" data-at="0"><span class="point-mark" aria-hidden="true">${mgIcon(item.label, item.icon)}</span><div>${paragraph("point-copy", item.label, false)}${paragraph("point-description", item.description, false)}</div></article>`;
       }).join("")}</div>${paragraph("points-conclusion", add(data.conclusion))}</section>`;
       break;
     }
@@ -49,7 +57,7 @@ export function templateContent(name, beat) {
       axis = data.layout === "vertical" || (data.layout === undefined && items.length > 4) ? "vertical" : "horizontal";
       body = `<section class="flow-panel" data-motion-surface="container">${title("flow-title")}<div class="flow-nodes" style="--items:${items.length}">${items.map((item, i) => {
         add(item.label); add(item.description);
-        return `<article class="flow-node" data-at="0">${i ? '<i class="flow-link" aria-hidden="true"></i>' : ""}<span class="flow-orb" aria-hidden="true"><i></i></span><div class="flow-copy"><h3>${text(item.label)}</h3>${paragraph("flow-description", item.description, false)}</div></article>`;
+        return `<article class="flow-node" data-at="0">${i ? '<i class="flow-link" aria-hidden="true"></i>' : ""}<span class="flow-orb" aria-hidden="true">${mgIcon(item.label, item.icon)}</span><div class="flow-copy"><h3>${text(item.label)}</h3>${paragraph("flow-description", item.description, false)}</div></article>`;
       }).join("")}</div></section>`;
       break;
     }
@@ -57,9 +65,9 @@ export function templateContent(name, beat) {
       const source = add(data.source ?? copy[0]);
       const items = list(data.items ?? copy.slice(1));
       normalizedData = { source, items };
-      body = `<section class="map-panel"><article class="map-source" data-at="0"><span class="source-mark" aria-hidden="true"></span><h3>${text(source)}</h3></article><div class="map-targets" style="--items:${items.length}">${items.map(item => {
+      body = `<section class="map-panel"><article class="map-source" data-at="0"><span class="source-mark" aria-hidden="true">${mgIcon(source, data.sourceIcon)}</span><h3>${text(source)}</h3></article><div class="map-targets" style="--items:${items.length}">${items.map(item => {
         add(item.label); add(item.description);
-        return `<article class="map-target" data-at="0"><i class="map-drop" aria-hidden="true"></i><h4>${text(item.label)}</h4>${paragraph("map-description", item.description, false)}</article>`;
+        return `<article class="map-target" data-at="0"><i class="map-drop" aria-hidden="true">${mgIcon(item.label, item.icon)}</i><h4>${text(item.label)}</h4>${paragraph("map-description", item.description, false)}</article>`;
       }).join("")}</div><svg class="map-wiring" aria-hidden="true"><path class="map-path" fill="none"/></svg></section>`;
       break;
     }
@@ -96,6 +104,45 @@ export function templateContent(name, beat) {
       const structured = data.value !== undefined;
       normalizedData = { source: data.source ?? (structured ? "" : copy[0] ?? ""), value: data.value ?? copy[1], unit: data.unit ?? (structured ? "" : copy[2] ?? ""), caption: data.caption ?? (structured ? "" : copy[3] ?? "") };
       body = paragraph("proof-source", add(normalizedData.source)) + `<div class="proof-reading" data-at="0"><span class="proof-value">${text(add(normalizedData.value))}</span>${normalizedData.unit ? `<span class="proof-unit">${text(add(normalizedData.unit))}</span>` : ""}</div>` + paragraph("proof-caption", add(normalizedData.caption));
+      break;
+    }
+    case "metric-grid": {
+      const items = list(data.items);
+      normalizedData = { title: data.title ?? "", items };
+      body = `<section class="metrics-panel">${title("metrics-title")}<div class="metrics-rows">${items.map(item => {
+        const value = numericText(item.value, "metric value");
+        add(item.label); add(value); add(item.unit); add(item.note);
+        return `<article class="metric-row${item.emphasis ? " metric-emphasis" : ""}" data-at="0"><span class="metric-label">${text(item.label)}</span><div class="metric-reading"><span class="metric-value">${text(value)}</span>${item.unit ? `<span class="metric-unit">${text(item.unit)}</span>` : ""}</div>${paragraph("metric-note", item.note, false)}</article>`;
+      }).join("")}</div></section>`;
+      break;
+    }
+    case "comparison-table": {
+      if (!Array.isArray(data.headers) || data.headers.length < 2 || data.headers.length > 3 || !data.headers.every(v => typeof v === "string" && v.trim())) throw new Error("comparison-table needs two or three text headers");
+      if (!Array.isArray(data.rows) || !data.rows.length) throw new Error("comparison-table needs rows");
+      normalizedData = { title: data.title ?? "", headers: data.headers, rows: data.rows };
+      body = `<section class="table-panel">${title("table-title")}<div class="table-grid" style="--columns:${data.headers.length}"><div class="table-head" data-at="0">${data.headers.map(value => `<div class="table-cell"><span class="table-value">${text(add(value))}</span></div>`).join("")}</div>${data.rows.map(row => {
+        const values = Array.isArray(row) ? row : row.values;
+        if (!Array.isArray(values) || values.length !== data.headers.length) throw new Error("comparison-table row width must match headers");
+        const cells = !Array.isArray(row) && row.reveal === "cells";
+        return `<div class="table-row${row.emphasis ? " table-emphasis" : ""}"${cells ? "" : ' data-at="0"'}>${values.map(value => `<div class="table-cell"${cells ? ' data-at="0"' : ""}><span class="table-value">${text(add(numericText(value, "table value")))}</span></div>`).join("")}</div>`;
+      }).join("")}</div></section>`;
+      break;
+    }
+    case "factor-expansion": {
+      const items = list(data.items);
+      normalizedData = { source: data.source, structure: data.structure, items, result: data.result };
+      const source = add(data.source), structure = add(data.structure);
+      body = `<section class="factor-panel"><div class="factor-origin"><p class="factor-source" data-at="0">${text(source)}</p><span class="factor-arrow" aria-hidden="true"><svg viewBox="0 0 64 32"><path d="M4 16h52M45 5l11 11-11 11"/></svg></span><p class="factor-core" data-at="0">${text(structure)}</p></div><svg class="factor-wiring" aria-hidden="true"></svg><div class="factor-items" style="--columns:${Math.min(3, items.length)}">${items.map(item => {
+        add(item.label); const value = add(numericText(item.value, "factor value"));
+        return `<article class="factor-item" data-at="0"><span class="factor-icon">${mgIcon(item.label, item.icon)}</span><span class="factor-label">${text(item.label)}</span><strong class="factor-value">${text(value)}</strong></article>`;
+      }).join("")}</div><div class="factor-result" data-at="0"><div class="factor-pool" aria-hidden="true"></div><span class="factor-result-copy">${text(add(data.result))}</span></div></section>`;
+      break;
+    }
+    case "growth-trend": {
+      const items = list(data.items);
+      if (items.some(item => !Number.isFinite(item.value) || item.value < 0)) throw new Error("growth-trend values must be finite nonnegative numbers");
+      normalizedData = { title: data.title ?? "", items, result: data.result };
+      body = `<section class="growth-panel">${title("growth-title")}<div class="growth-chart"><svg class="growth-axes" aria-hidden="true"></svg><svg class="growth-line" aria-hidden="true"></svg><div class="growth-columns" style="--columns:${items.length}">${items.map(item => `<article class="growth-item" data-at="0" data-value="${item.value}"><div class="growth-bar-shell"><div class="growth-bar"></div></div><span class="growth-value">${text(add(String(item.value)))}</span><span class="growth-label">${text(add(item.label))}</span></article>`).join("")}</div></div>${paragraph("growth-result", add(data.result))}</section>`;
       break;
     }
     case "evidence-focus": {

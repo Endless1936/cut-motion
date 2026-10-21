@@ -1,0 +1,22 @@
+.factor-panel { position:relative;padding:38px;background:var(--mg-c-surface);border:1px solid var(--mg-c-line);border-radius:var(--mg-c-radius);box-shadow:inset 0 1px #e0eaff1a,0 18px 56px #030a1929; }
+.factor-origin { position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1fr) 64px minmax(0,1fr);align-items:stretch;gap:28px; }
+.factor-source,.factor-core { min-width:0;min-height:104px;margin:0;padding:24px 22px;display:grid;place-items:center;text-align:center;font-size:48px;line-height:1.16;border:1px solid #a9bdff3d;border-radius:22px;box-shadow:inset 0 1px #dde7ff17;overflow-wrap:anywhere; }
+.factor-source { background:rgba(25,60,63,.86);color:#e1fff1;border-color:#55dda533; }
+.factor-core { background:var(--mg-c-node);color:var(--mg-c-paper); }
+.factor-arrow { display:grid;place-items:center;color:var(--mg-c-blue);opacity:0;visibility:hidden; }
+.factor-arrow svg { display:block;width:64px;height:32px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round; }
+.factor-items { position:relative;z-index:1;display:grid;grid-template-columns:repeat(var(--columns,3),minmax(0,1fr));gap:20px;margin-top:76px; }
+.factor-item { min-width:0;min-height:202px;padding:24px 18px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;border:1px solid #a9bdff33;border-radius:22px;background:var(--mg-c-node);box-shadow:inset 0 1px #dde7ff17;text-align:center; }
+.factor-icon { display:grid;place-items:center;width:48px;height:48px;color:var(--mg-c-blue); }
+.factor-icon svg { display:block;width:42px;height:42px;fill:none;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round; }
+.factor-label { max-width:100%;font-size:42px;line-height:1.15;overflow-wrap:anywhere; }
+.factor-value { max-width:100%;font-size:58px;font-weight:400;line-height:1;color:var(--mg-c-blue);font-variant-numeric:tabular-nums;overflow-wrap:anywhere; }
+.factor-wiring { position:absolute;inset:0;width:100%;height:100%;overflow:visible; }
+.factor-wiring path { fill:none;stroke:#a9bdffa6;stroke-width:3;stroke-linecap:round;stroke-linejoin:round; }
+.factor-result { position:relative;z-index:1;display:grid;place-items:center;min-height:126px;margin:76px 0 0;padding:28px 22px;border:1px solid #55dda552;border-radius:24px;overflow:hidden;background:linear-gradient(145deg,#185241eb,#0f302af0);box-shadow:inset 0 1px #aaf7ce21; }
+.factor-pool { position:absolute;inset:16px;border-radius:8px;opacity:.12;background-image:linear-gradient(90deg,transparent 6px,#55dda5 6px,#55dda5 22px,transparent 22px),linear-gradient(0deg,transparent 6px,#55dda5 6px,#55dda5 22px,transparent 22px);background-size:28px 28px;mask-image:linear-gradient(90deg,#000,transparent 45%,transparent 55%,#000); }
+.factor-result-copy { position:relative;max-width:100%;font-size:64px;line-height:1.16;color:#d8ffec;text-align:center;overflow-wrap:anywhere; }
+.factor-items:has(.factor-item:nth-child(6)) .factor-item { min-height:186px;padding-block:20px;gap:10px; }
+.factor-items:has(.factor-item:nth-child(6)) { row-gap:46px; }
+.factor-items:has(.factor-item:nth-child(6)) .factor-label { font-size:38px; }
+.factor-items:has(.factor-item:nth-child(6)) .factor-value { font-size:52px; }

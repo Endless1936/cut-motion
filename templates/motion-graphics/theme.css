@@ -1,0 +1,21 @@
+/* Shared 1080×1920 content-MG foundation. Host variables remain overridable. */
+.mg-root {
+  --mg-c-paper:var(--mg-paper,#f4f5f8);
+  --mg-c-muted:var(--mg-muted,#a8b4ca);
+  --mg-c-blue:var(--mg-blue,#a9bdff);
+  --mg-c-mint:var(--mg-mint,#55dda5);
+  --mg-c-yellow:var(--mg-yellow,#FFE23B);
+  --mg-c-surface:var(--mg-surface,rgba(20,31,50,.76));
+  --mg-c-radius:var(--mg-radius,32px);
+  --mg-c-line:var(--mg-line,rgba(193,211,255,.22));
+  --mg-c-node:var(--mg-node,linear-gradient(145deg,rgba(42,63,110,.94),rgba(17,28,54,.96)));
+  position:absolute;top:var(--mg-top,280px);left:0;right:0;margin-inline:auto;
+  width:var(--mg-width,88%);max-width:88%;box-sizing:border-box;
+  color:var(--mg-c-paper);font-family:"Smiley Sans",sans-serif;font-weight:400;
+  font-synthesis:none;pointer-events:none;opacity:0;visibility:hidden;
+  font-variant-numeric:tabular-nums;
+}
+.mg-root *, .mg-root *::before, .mg-root *::after { box-sizing:border-box; }
+.mg-root [data-at] { opacity:0;visibility:hidden; }
+.mg-icon { display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round; }
+.mg-root h3,.mg-root h4,.mg-root p { font-weight:400; }
