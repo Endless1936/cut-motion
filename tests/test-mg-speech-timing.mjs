@@ -49,5 +49,47 @@ try {
   assert.throws(() => prepareSpeechTiming(job, { ...lookup, timelineId: "other" }), /provenance/);
   json("chatcut-main-timeline.json", [...pages, { projectId: "changed" }]);
   assert.throws(() => loadSpeechTiming(job), /stale/);
+
+  const splitJob = path.join(job, "split-entry");
+  fs.mkdirSync(path.join(splitJob, "state"), { recursive: true });
+  const splitWrite = (name, value) => fs.writeFileSync(path.join(splitJob, "state", name), JSON.stringify(value));
+  splitWrite("chatcut-main-timeline.json", [{ projectId: "project", state: { id: "timeline" }, transcript: { entries: [
+    { itemId: clip.itemId, sourceRange: { start: 10000000, end: 10400000 } },
+    { itemId: clip.itemId, sourceRange: { start: 10400000, end: 13000000 } }
+  ] } }]);
+  splitWrite("timeline-source-windows.json", { sourceAssetId: "asset", sourceSha256: "source", timelineFps: { numerator: 30, denominator: 1 }, clips: [clip] });
+  const splitTiming = prepareSpeechTiming(splitJob, lookup);
+  assert.equal(splitTiming.words.find(word => word.segmentId === "main-001" && word.text === "文").endFrame, 72);
+  assert.equal(keywordFrame(splitTiming, { keyword: "文案", segmentId: "main-002" }), 72, "A word crossing entries cannot make the second entry start before its own source range");
+  splitWrite("mg-speech-timing.json", { ...splitTiming, words: splitTiming.words.map(word => word.text === "文"
+    ? { ...word, startFrame: 70, endFrame: 76, sourceStartUs: 10310000, sourceEndUs: 10510000 } : word) });
+  const refreshedSplit = prepareSpeechTiming(splitJob, lookup);
+  assert.equal(refreshedSplit.words.find(word => word.segmentId === "main-001" && word.text === "文").endFrame, 72, "Fresh source evidence repairs a previously cached overlong word");
+  assert.equal(keywordFrame(refreshedSplit, { keyword: "文案", segmentId: "main-002" }), 72);
+
+  const multiJob = path.join(job, "multi-source");
+  fs.mkdirSync(path.join(multiJob, "state"), { recursive: true });
+  const multiWrite = (name, value) => fs.writeFileSync(path.join(multiJob, "state", name), JSON.stringify(value));
+  const multiClips = [
+    { assetId: "asset-a", itemId: "shared12-a", timelineStartFrame: 0 },
+    { assetId: "asset-b", itemId: "shared12-b", timelineStartFrame: 30 },
+    { assetId: "asset-a", itemId: "replay-a", timelineStartFrame: 60 }
+  ].map(clip => ({ ...clip, durationFrames: 30, srcStartUs: 0, srcEndUs: 1000000, playbackRateNumerator: 1, playbackRateDenominator: 1 }));
+  multiWrite("chatcut-main-timeline.json", [{ projectId: "project", state: { id: "timeline" }, transcript: { entries:
+    multiClips.map(clip => ({ itemId: clip.itemId, sourceRange: { start: 0, end: 1000000 } })) } }]);
+  multiWrite("timeline-source-windows.json", { schemaVersion: 2, sources: [
+    { sourceAssetId: "asset-a", sourceSha256: "source-a" }, { sourceAssetId: "asset-b", sourceSha256: "source-b" }
+  ], timelineFps: { numerator: 30, denominator: 1 }, clips: multiClips });
+  const multiLookup = (assetId, text, placements) => ({ provider: "chatcut.find_transcript", projectId: "project", timelineId: "timeline", assetId,
+    lookups: [{ text: `\n1. match\n ${placements}\n Words:\n 6f → 9f (source 00:00.200 → 00:00.300) ${text}\n` }] });
+  const firstSource = prepareSpeechTiming(multiJob, multiLookup("asset-a", "画面", "[item shared12] [item replay-a]"));
+  assert.deepEqual(firstSource.words.map(word => [word.segmentId, word.startFrame, word.assetId]), [["main-001", 6, "asset-a"], ["main-003", 66, "asset-a"]]);
+  multiWrite("mg-speech-timing.json", firstSource);
+  const bothSources = prepareSpeechTiming(multiJob, multiLookup("asset-b", "音频", "[item shared12]"));
+  assert.equal(bothSources.words.length, 3, "Collecting B retains A and its genuine replay");
+  assert.equal(keywordFrame(bothSources, { keyword: "音频", segmentId: "main-002" }), 36);
+  assert.equal(keywordFrame(bothSources, { keyword: "画面", segmentId: "main-003" }), 66);
+  assert.throws(() => prepareSpeechTiming(multiJob, multiLookup("unknown", "音频", "[item shared12]")), /provenance/);
+  assert.throws(() => prepareSpeechTiming(multiJob, multiLookup("asset-b", "音频", "[item replay-a]")), /no usable word/);
 } finally { fs.rmSync(job, { recursive: true, force: true }); }
 console.log("MG speech timing: source trims, rates, repeated clip entries, keyword anchors, missing/ambiguous cues, custom slots and stale snapshots passed");

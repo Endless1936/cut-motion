@@ -21,10 +21,14 @@ function retainMeasuredWords(jobRoot, next) {
     const windowsPath = path.join(jobRoot, "state/timeline-source-windows.json");
     if (!fs.existsSync(windowsPath) || previous.windowsSha256 !== digest(windowsPath)) return next;
   }
+  const sameWord = (left, right) => left.segmentId === right.segmentId && normalize(left.text) === normalize(right.text)
+    && left.startFrame < right.endFrame && right.startFrame < left.endFrame;
   const retained = (previous.words ?? []).filter(word => word.timingProvenance !== "estimated"
-    && Number.isInteger(word.startFrame) && Number.isInteger(word.endFrame) && word.endFrame > word.startFrame);
-  const added = next.words.filter(word => !retained.some(existing => existing.segmentId === word.segmentId
-    && normalize(existing.text) === normalize(word.text) && existing.startFrame < word.endFrame && word.startFrame < existing.endFrame));
+    && Number.isInteger(word.startFrame) && Number.isInteger(word.endFrame) && word.endFrame > word.startFrame
+    // Refresh source-mapped evidence without replacing measured caption tokens.
+    && !(word.timingProvenance !== "measured" && Number.isFinite(word.sourceStartUs)
+      && next.words.some(current => current.itemId === word.itemId && Number.isFinite(current.sourceStartUs) && sameWord(current, word))));
+  const added = next.words.filter(word => !retained.some(existing => sameWord(existing, word)));
   return { ...next, words: [...retained, ...added].sort((a, b) => a.startFrame - b.startFrame || a.endFrame - b.endFrame) };
 }
 
@@ -39,7 +43,8 @@ export function mapSourceWord(word, clip, fps) {
   const frameAt = sourceUs => clip.timelineStartFrame + (sourceUs - clip.srcStartUs) / 1e6 * fps / rate;
   const startFrame = Math.min(clipEnd, ceilFrame(frameAt(sourceStartUs)));
   const endFrame = Math.min(clipEnd, ceilFrame(frameAt(sourceEndUs)));
-  return endFrame > startFrame ? { ...word, sourceStartUs, sourceEndUs, startFrame, endFrame, itemId: clip.itemId } : null;
+  return endFrame > startFrame ? { ...word, sourceStartUs, sourceEndUs, startFrame, endFrame, itemId: clip.itemId,
+    ...(clip.assetId ? { assetId: clip.assetId } : {}) } : null;
 }
 
 export function prepareSpeechTiming(jobRoot, lookup) {
@@ -78,7 +83,9 @@ export function prepareSpeechTiming(jobRoot, lookup) {
       fps: captionData.fps, corrections, snapshotSha256: digest(snapshotPath), words: words.sort((a, b) => a.startFrame - b.startFrame || a.endFrame - b.endFrame) };
   }
   const windows = read(windowsPath);
-  if (lookup.provider !== "chatcut.find_transcript" || lookup.assetId !== windows.sourceAssetId
+  const sources = windows.schemaVersion === 2 ? windows.sources : [{ sourceAssetId: windows.sourceAssetId, sourceSha256: windows.sourceSha256 }];
+  const source = sources?.find(source => source.sourceAssetId === lookup.assetId);
+  if (lookup.provider !== "chatcut.find_transcript" || !lookup.assetId || !source
     || pages.some(page => page.projectId !== lookup.projectId || page.state.id !== lookup.timelineId)) throw new Error("MG word lookup provenance does not match the approved cut");
   const fps = windows.timelineFps.numerator / windows.timelineFps.denominator;
   if (!(fps > 0) || !Number.isFinite(fps)) throw new Error("MG speech timing requires a positive timeline FPS");
@@ -87,7 +94,8 @@ export function prepareSpeechTiming(jobRoot, lookup) {
   for (const lookupEntry of lookup.lookups) {
     for (const block of chatcutText(lookupEntry).split(/(?:^|\n)\d+\. /).slice(1)) {
       const placements = [...block.matchAll(/\[item ([\w-]+)\]/g)].map(match => match[1].replaceAll("-", ""));
-      const clips = windows.clips.filter(clip => placements.some(prefix => clip.itemId.replaceAll("-", "").startsWith(prefix)));
+      const clips = windows.clips.filter(clip => (clip.assetId ?? windows.sourceAssetId) === lookup.assetId
+        && placements.some(prefix => clip.itemId.replaceAll("-", "").startsWith(prefix)));
       for (const match of block.matchAll(/\(source ([\d:.]+) → ([\d:.]+)\)\s+([^\n]+)/g)) {
         const sourceWord = { text: match[3].trim(), sourceStartUs: Math.round(micros(match[1])), sourceEndUs: Math.round(micros(match[2])) };
         for (const clip of clips) {
@@ -96,8 +104,12 @@ export function prepareSpeechTiming(jobRoot, lookup) {
           const entries = mainEntries.filter(entry => entry.itemId === clip.itemId
             && entry.sourceRange.start < mapped.sourceEndUs && mapped.sourceStartUs < entry.sourceRange.end);
           for (const entry of entries) {
+            const entryWord = mapSourceWord({ ...sourceWord,
+              sourceStartUs: Math.max(mapped.sourceStartUs, entry.sourceRange.start),
+              sourceEndUs: Math.min(mapped.sourceEndUs, entry.sourceRange.end) }, clip, fps);
+            if (!entryWord) continue;
             const key = `${entry.segmentId}:${clip.itemId}:${sourceWord.sourceStartUs}:${sourceWord.sourceEndUs}:${normalize(sourceWord.text)}`;
-            records.set(key, { ...mapped, segmentId: entry.segmentId });
+            records.set(key, { ...entryWord, segmentId: entry.segmentId });
           }
         }
       }
@@ -105,7 +117,7 @@ export function prepareSpeechTiming(jobRoot, lookup) {
   }
   if (!records.size) throw new Error("ChatCut lookup contains no usable word timestamps");
   return retainMeasuredWords(jobRoot, { schemaVersion: 1, provider: lookup.provider, projectId: lookup.projectId, timelineId: lookup.timelineId,
-    sourceSha256: windows.sourceSha256, fps, snapshotSha256: digest(snapshotPath), windowsSha256: digest(windowsPath),
+    sourceSha256: source.sourceSha256, fps, snapshotSha256: digest(snapshotPath), windowsSha256: digest(windowsPath),
     corrections, words: [...records.values()].sort((a, b) => a.startFrame - b.startFrame || a.endFrame - b.endFrame) });
 }
 
