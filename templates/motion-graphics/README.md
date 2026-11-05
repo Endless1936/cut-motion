@@ -123,9 +123,7 @@ Every `windows` entry is `[fadeInStart, fullyCovered, fadeOutStart, fullyClear]`
 
 ## Preview and stage helpers
 
-Run `node scripts/preview-mg-templates.mjs --html-only` to generate the interactive gallery in `assets/previews/mg/gallery/index.html`. Its shared player and slider control all templates with GSAP. The gallery uses system fonts and loads only HTML, JavaScript and sample artwork. Add `--verify` to check playback and geometry and save diagnostics in `assets/previews/mg/checks/`.
-
-For local video review, run `node scripts/preview-mg-templates.mjs --verify --render`. This saves PNG snapshots and an 8-second MP4 per template in `assets/previews/mg/review/`. Add `--template redaction-mask` to render just that preview. Browser verification checks placement, reveal timing and backward seeking. The sample artwork and interface are fictional.
+Run `node scripts/preview-mg-templates.mjs` to build the same interactive gallery that [GitHub Pages serves](https://endless1936.github.io/cut-motion/). Open `assets/previews/mg/gallery/index.html` and use the shared controls to play or scrub all templates. Add `--verify` to check layout, reveal timing and backward seeking, with diagnostic snapshots and variants saved in `assets/previews/mg/checks/`. The artwork and interfaces are fictional.
 
 Stage helpers [b-axis-horizon-grid](stage/b-axis-horizon-grid/) and [axis-stage-transition](stage/axis-stage-transition/) retain full-frame geometry. Use the transition in the shared composition timeline, with B-axis intervals at least twice its duration and no overlap on the speaker track.
 

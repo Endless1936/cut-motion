@@ -7,16 +7,16 @@ const source = fs.readFileSync(new URL("../scripts/preview-mg-templates.mjs", im
 const browserScripts = [...source.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]);
 const inlineScript = file => browserScripts.find(script => script.includes(file === "index.html" ? "const frames=" : "window.ready=document.fonts.ready"));
 const messages = [], events = new Map(), callbacks = new Map();
-const frameCount = 20;
+const frameCount = 21;
 const frames = Array.from({ length: frameCount }, () => ({ contentWindow: {
   get seek() { throw new Error("SecurityError: opaque file origin"); },
   postMessage(data, origin) { messages.push({ ...data, origin }); }
 } }));
-const slider = { value: "3.4" }, button = {}, readout = {};
-const videos=Array.from({length:3},()=>({duration:8,currentTime:0,paused:true,pause(){this.paused=true},play(){this.paused=false;return Promise.resolve()}}));
+const slider = { value: "3.4" }, button = {setAttribute() {}}, readout = {};
 let nextId = 0;
 vm.runInNewContext(inlineScript("index.html"), {
-  document: { querySelectorAll: selector => selector==="iframe"?frames:selector==="video"?videos:[], querySelector: selector => ({ "#time": slider, "#play": button, "#readout": readout })[selector] },
+  document: { querySelectorAll: selector => selector==="iframe"?frames:[], querySelector: selector => ({ "#time": slider, "#play": button, "#readout": readout })[selector] },
+  ResizeObserver: class { observe() {} },
   window: { addEventListener: (type, handler) => events.set(type, handler) },
   location: { protocol: "file:", origin: "null" },
   performance: { now: () => 0 },
@@ -30,11 +30,9 @@ const tick = time => {
 };
 assert.equal(messages.length, frameCount);
 assert.ok(messages.every(message => message.origin === "*" && message.time === 3.4));
-assert.ok(videos.every(video=>video.currentTime===3.4));
 button.onclick();
 assert.equal(button.textContent, "暂停");
 assert.ok(messages.slice(-frameCount).every(message => message.time === 0));
-assert.ok(videos.every(video=>!video.paused));
 tick(1000);
 assert.equal(readout.textContent, "1.00 s");
 assert.ok(messages.slice(-frameCount).every(message => message.time === 1));
@@ -42,7 +40,6 @@ slider.value = "5.2";
 slider.oninput();
 assert.equal(callbacks.size, 0);
 assert.equal(button.textContent, "播放全部");
-assert.ok(videos.every(video=>video.paused&&video.currentTime===5.2));
 events.get("message")({ source: frames[0].contentWindow, data: { type: "mg-preview-ready" } });
 assert.equal(messages.at(-1).time, 5.2, "late-loading frames receive the current time");
 button.onclick();

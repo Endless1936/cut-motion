@@ -4,7 +4,7 @@ Store redistributable icons, palettes, font instructions, and reference media he
 
 Do not commit user footage, credentials, exported videos, or third-party assets without a compatible license. Job-specific media belongs under `jobs/<job-id>/input/` and is ignored by Git.
 
-Generated MG previews live under `assets/previews/mg/`, which Git ignores. The GitHub Pages workflow takes its HTML site from `gallery/`. Browser diagnostics go to `checks/`, and optional local video exports go to `review/`. [MG preview commands](../templates/motion-graphics/README.md#preview-and-stage-helpers)
+Generated MG previews live under `assets/previews/mg/`, which Git ignores. Open `gallery/index.html` to view the same gallery that GitHub Pages serves. Browser diagnostics go to `checks/`. [MG preview commands](../templates/motion-graphics/README.md#preview-and-stage-helpers)
 
 ## Display font cache
 

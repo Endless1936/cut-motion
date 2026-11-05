@@ -4,36 +4,26 @@ import fs from "node:fs";
 import path from "node:path";
 import http from "node:http";
 import { createRequire } from "node:module";
-import { spawn } from "node:child_process";
 import { renderTemplate } from "./motion-template-library.mjs";
 import { templateSamples, evidenceSampleFocus } from "./mg-template-samples.mjs";
 import { stagePreviewNames, stagePreviewPage, stageSpeakerSvg } from "./mg-preview-stage.mjs";
 import { redactionPreviewBackdrop, verifyRedactionPreview } from "./mg-preview-redaction.mjs";
 
 const rootPath = path.resolve(new URL("../", import.meta.url).pathname);
-const htmlOnly = process.argv.includes("--html-only");
-const renderRequested = process.argv.includes("--render");
-const galleryPath = `/assets/previews/mg/${htmlOnly ? "gallery" : "review"}`;
+const args = process.argv.slice(2);
+const unknownOption = args.find(arg => !["--verify", "--serve", "--html-only"].includes(arg));
+if (unknownOption) throw new Error(`Unsupported gallery option: ${unknownOption}. Use --verify or --serve.`);
+const verify = args.includes("--verify");
+const serve = args.includes("--serve");
+const galleryPath = "/assets/previews/mg/gallery";
+const checksPath = "/assets/previews/mg/checks";
 const output = path.join(rootPath, galleryPath.slice(1));
+const checksOutput = path.join(rootPath, checksPath.slice(1));
 const assetsPath = path.join(output, "assets");
-const templateOption=process.argv.indexOf("--template");
-const selectedTemplate=templateOption<0?null:process.argv[templateOption+1];
-if(templateOption>=0&&(!selectedTemplate||selectedTemplate.startsWith("--")))throw new Error("--template needs a template name");
-if (htmlOnly && (selectedTemplate || renderRequested)) throw new Error("--html-only builds the complete gallery without video rendering");
-const fontCandidates = ["woff2", "ttf", "otf"].flatMap(extension => [
-  path.join(rootPath, `assets/fonts/smiley-sans-oblique.${extension}`),
-  path.join(assetsPath, `font.${extension}`)
-]);
-const fontPath = htmlOnly ? null : fontCandidates.find(candidate => fs.existsSync(candidate));
-const font = fontPath ? fs.readFileSync(fontPath) : null;
-const fontName = fontPath ? `font${path.extname(fontPath)}` : null;
 const gsap = fs.readFileSync(path.join(rootPath, "node_modules/gsap/dist/gsap.min.js"));
-// Stable filenames overwrite the current set without discarding completed MP4s on a verify-only run.
 fs.mkdirSync(assetsPath, { recursive: true });
-if (font&&(!selectedTemplate||!fs.existsSync(path.join(assetsPath,fontName)))) fs.writeFileSync(path.join(assetsPath, fontName), font);
-if(!selectedTemplate||!fs.existsSync(path.join(assetsPath,"gsap.min.js")))fs.writeFileSync(path.join(assetsPath, "gsap.min.js"), gsap);
+fs.writeFileSync(path.join(assetsPath, "gsap.min.js"), gsap);
 const names = Object.keys(templateSamples);
-if(selectedTemplate&&![...names,...stagePreviewNames].includes(selectedTemplate))throw new Error("Unknown preview template: "+selectedTemplate);
 const variants = {
   "ordered-six": ["ordered-steps", {title:"六个制作步骤",items:["初始化","文案","画面","配音","剪辑","成片"]}],
   "ordered-detailed": ["ordered-steps", {title:"详细操作",items:[{label:"确认目标",description:"先明确内容要解决的问题"},{label:"整理素材",description:"保留有用信息，删除重复内容"},{label:"编排动画",description:"关键词出现时再展开对应元素"},{label:"导出成片",description:"完成画面和音频合成"}]}],
@@ -55,26 +45,22 @@ const variants = {
   "growth-six": ["growth-trend",{title:"六阶段趋势示意",items:[{label:"起步",value:10},{label:"尝试",value:17},{label:"积累",value:30},{label:"验证",value:48},{label:"增长",value:71},{label:"扩展",value:96}],result:"持续增长"}]
 };
 variants["evidence-pan"] = ["evidence-focus",{...templateSamples["evidence-focus"],focus:evidenceSampleFocus}];
-const allCases = [...Object.entries(templateSamples).map(([name,data])=>[name,name,data]),
-  ...Object.entries(htmlOnly ? {} : variants).map(([key,[name,data]])=>[key,name,data])];
-const cases=selectedTemplate?allCases.filter(([key])=>key===selectedTemplate):allCases;
-const stageCases=selectedTemplate?stagePreviewNames.filter(name=>name===selectedTemplate):stagePreviewNames;
+const cases = [
+  ...Object.entries(templateSamples).map(([name,data])=>[name,name,data]),
+  ...Object.entries(verify ? variants : {}).map(([key,[name,data]])=>[key,name,data])
+];
+if (verify) fs.mkdirSync(checksOutput, { recursive: true });
+fs.copyFileSync(path.join(rootPath, "templates/motion-graphics/evidence-focus/sample-evidence.svg"), path.join(assetsPath, "sample-evidence.svg"));
+fs.copyFileSync(path.join(rootPath, "templates/motion-graphics/card-switch/sample-second.svg"), path.join(assetsPath, "sample-second.svg"));
 for (const [key, name, data] of cases) {
   const beat = { id: name, start: 0, end: 8, templateData: data };
   const { fragment, style, timeline } = renderTemplate(name, beat);
   const backdrop=name==="redaction-mask"?redactionPreviewBackdrop(data):{style:"",fragment:""};
-  const evidencePath = path.join(output, "assets");
-  if (name === "evidence-focus" || name === "card-switch") {
-    fs.mkdirSync(evidencePath, {recursive: true});
-    fs.copyFileSync(path.join(rootPath, "templates/motion-graphics/evidence-focus/sample-evidence.svg"), path.join(evidencePath, "sample-evidence.svg"));
-  }
-  if (name === "card-switch") fs.copyFileSync(path.join(rootPath, "templates/motion-graphics/card-switch/sample-second.svg"), path.join(assetsPath, "sample-second.svg"));
-  const html = `<!doctype html><meta charset="utf-8"><style>
-  ${font ? `@font-face{font-family:"Smiley Sans";src:url("assets/${fontName}")}` : ""}
+  const html = `<!doctype html><meta charset="utf-8">${key === name ? "" : '<base href="../gallery/">'}<style>
   html,body{margin:0;width:1080px;height:1920px;overflow:hidden}
   body{background:#0b101a}
   #canvas{position:relative;width:1080px;height:1920px;background:radial-gradient(ellipse at 50% 30%,#25334b6b,transparent 64%),linear-gradient(#b9cfff06 1px,transparent 1px),linear-gradient(90deg,#b9cfff06 1px,transparent 1px),#0b101a;background-size:auto,72px 72px,72px 72px,auto}
-  .guide{position:absolute;top:1370px;width:100%;text-align:center;color:white;font:72px "Smiley Sans";text-shadow:0 3px 8px #222}
+  .guide{position:absolute;top:1370px;width:100%;margin:0;text-align:center;color:#a8b9c9;font:48px system-ui,sans-serif}
   ${style}\n${backdrop.style}\n${key==="evidence-pan"?".evidence-surface{max-height:280px}":""}</style><div id="canvas" data-composition-id="main" data-start="0" data-width="1080" data-height="1920" data-fps="30" data-duration="8">${backdrop.fragment}${fragment}<p class="guide">字幕区域示意</p></div>
   <script src="assets/gsap.min.js"></script>
   <script>
@@ -95,81 +81,147 @@ for (const [key, name, data] of cases) {
   });
   window.ready.then(()=>window.parent.postMessage({type:"mg-preview-ready"},location.protocol==="file:"?"*":location.origin));
   </script>`;
-  fs.writeFileSync(path.join(output, key + ".html"), html);
+  fs.writeFileSync(path.join(key === name ? output : checksOutput, key + ".html"), html);
 }
-if(stageCases.length)fs.writeFileSync(path.join(assetsPath,"stage-speaker.svg"),stageSpeakerSvg);
-for(const name of stageCases) fs.writeFileSync(path.join(output,name+".html"),stagePreviewPage(name,rootPath,fontName));
-const reviewNames=[...names,...stagePreviewNames];
-const cards=reviewNames.map(name=>{
-  const preview = `<div class="phone"><iframe title="${name}" src="${name}.html"></iframe></div>`;
-  const hasVideo = !htmlOnly && (fs.existsSync(path.join(output, name + ".mp4")) || (renderRequested && (!selectedTemplate || name === selectedTemplate)));
-  const media = hasVideo ? `<video controls playsinline preload="metadata" poster="${name}.png" src="${name}.mp4"></video><p><a href="${name}.mp4">打开视频</a> · <a href="${name}.html">交互预览</a></p><details open><summary>交互动画 · 可折叠</summary>${preview}</details>` : preview;
-  return `<article><h2>${name}</h2>${media}</article>`;
+fs.writeFileSync(path.join(assetsPath,"stage-speaker.svg"),stageSpeakerSvg);
+for(const name of stagePreviewNames) fs.writeFileSync(path.join(output,name+".html"),stagePreviewPage(name,rootPath));
+const galleryNames = [...names,...stagePreviewNames];
+const sections = [
+  { id: "process", title: "流程与关系", templates: ["ordered-steps", "linear-flow", "parallel-points", "relation-map", "converge-sources", "map-transform"] },
+  { id: "comparison", title: "对比与数据", templates: ["comparison", "comparison-table", "correction", "metric-proof", "metric-grid", "growth-trend", "factor-expansion"] },
+  { id: "footage", title: "素材与舞台", templates: ["evidence-focus", "card-switch", "redaction-mask", ...stagePreviewNames] },
+  { id: "text", title: "文字与说明", templates: ["quote", "code-snippet", "annotation"] }
+];
+const sectionNames = sections.flatMap(section=>section.templates);
+if (sectionNames.length !== galleryNames.length || galleryNames.some(name=>!sectionNames.includes(name))) {
+  throw new Error("Gallery sections must cover each template once");
+}
+const gallery = sections.map(({id,title,templates})=>{
+  const cards = templates.map(name=>{
+    const label = name.replaceAll("-", " ");
+    return `<article><h3>${label}</h3><div class="preview"><iframe title="${label}" src="${name}.html"></iframe></div></article>`;
+  }).join("");
+  return `<section id="${id}" aria-labelledby="${id}-title">
+    <div class="section-heading"><h2 id="${id}-title">${title}</h2><span>${templates.length} 套</span></div>
+    <div class="grid">${cards}</div>
+  </section>`;
 }).join("");
-fs.writeFileSync(path.join(output, "index.html"), `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>cut-motion · MG 模板预览</title>
-<style>body{margin:30px;background:#0b101a;color:#eee;font:16px system-ui}h1{font-size:26px}header{position:sticky;top:0;background:#0b101af2;padding:12px;z-index:2}main{display:grid;grid-template-columns:repeat(auto-fit,304px);gap:24px}h2{font-size:17px}article{padding:16px;background:#14203780;border:1px solid #c1d3ff22;border-radius:20px}.phone,video{display:block;width:270px;height:480px;overflow:hidden;border-radius:14px;background:#05080e}iframe{border:0;width:1080px;height:1920px;transform:scale(.25);transform-origin:0 0}input{width:50vw}a{color:#a9bdff}summary{cursor:pointer;color:#a8b4ca;margin:12px 0}</style>
-${htmlOnly ? "<style>@media(max-width:420px){body{margin:12px}main{grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}article{padding:9px}}</style>" : ""}
-<header><h1>cut-motion · ${reviewNames.length} 套 MG 模板</h1><p>${htmlOnly ? "每段 8 秒 · 总进度条同步控制所有模板" : "每段 8 秒 · 1080×1920 / 30fps · 视频可独立播放，展开动画可同步拖动"}</p><button id="play">播放全部</button> <input id="time" aria-label="全部模板的播放进度" type="range" min="0" max="8" step="0.03333333333333333" value="3.4"><span id="readout">3.4 s</span></header><main>${cards}</main>
+fs.writeFileSync(path.join(output, "index.html"), `<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>动效模板 · cut-motion</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --paper: #edf4f0;
+    --muted: #a3b7ad;
+    --mint: #a2edc8;
+    --background: #111716;
+    --line: #34423d;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--background); color: var(--paper); font: 16px/1.5 system-ui, sans-serif; }
+  ::selection { background: var(--mint); color: var(--background); }
+  :focus-visible { outline: 2px solid var(--mint); outline-offset: 4px; }
+  .shell { width: min(1184px, calc(100% - clamp(32px, 7vw, 96px))); margin-inline: auto; }
+  .masthead { display: flex; justify-content: space-between; align-items: center; gap: 16px; min-height: 64px; border-bottom: 1px solid var(--line); }
+  .brand { font-weight: 700; letter-spacing: -.025em; }
+  .masthead a { color: var(--muted); text-underline-offset: 4px; font-size: .875rem; }
+  .masthead a:hover { color: var(--paper); }
+  .intro { padding-block: clamp(28px, 4vw, 56px) 24px; }
+  h1 { margin: 0; font-size: clamp(2rem, 4.6vw, 3.75rem); line-height: 1.1; letter-spacing: -.035em; }
+  .intro p { margin: 12px 0 0; color: var(--muted); }
+  .section-links { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-top: 14px; }
+  .section-links a { display: inline-flex; align-items: center; min-height: 36px; color: var(--paper); font-size: .875rem; text-decoration-color: var(--line); text-underline-offset: 5px; }
+  .section-links a:hover { text-decoration-color: var(--mint); }
+  .transport { position: sticky; top: 0; z-index: 2; background: var(--background); }
+  .controls { display: flex; align-items: center; gap: clamp(12px, 2vw, 24px); padding-block: 10px; border-block: 1px solid var(--line); }
+  button { min-height: 44px; flex: none; display: inline-flex; align-items: center; gap: 9px; border: 0; border-radius: 8px; padding-inline: 14px; background: var(--mint); color: #14261d; font: 650 .875rem system-ui; cursor: pointer; }
+  button:hover { background: #bcf4d9; }
+  button::before { content: ""; display: inline-block; width: 10px; height: 12px; background: currentColor; clip-path: polygon(0 0,100% 50%,0 100%); }
+  button[aria-pressed="true"]::before { clip-path: none; background: linear-gradient(to right,currentColor 35%,transparent 35% 65%,currentColor 65%); }
+  input { flex: 1; min-width: 0; height: 44px; margin: 0; accent-color: var(--mint); cursor: pointer; }
+  output { min-width: 7ch; text-align: right; white-space: nowrap; font: .875rem/1.25 system-ui; font-variant-numeric: tabular-nums; color: var(--muted); }
+  main { padding-block: 26px 64px; }
+  main section { scroll-margin-top: 84px; }
+  main section + section { margin-top: clamp(40px,6vw,68px); }
+  .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+  .section-heading h2 { margin: 0; font-size: clamp(1.15rem, 2.3vw, 1.5rem); letter-spacing: -.015em; }
+  .section-heading span { color: var(--muted); font-size: .875rem; }
+  .grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: clamp(18px,2.5vw,30px); }
+  .preview { position: relative; aspect-ratio: 9 / 16; overflow: hidden; border-radius: 12px; background: #0b101a; outline: 1px solid var(--line); }
+  iframe { position: absolute; inset: 0; border: 0; width: 1080px; height: 1920px; transform: scale(var(--preview-scale, .25)); transform-origin: 0 0; }
+  h3 { margin: 0 0 8px; font-size: .875rem; font-weight: 650; text-transform: capitalize; }
+  @media (max-width: 780px) { .grid { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+  @media (max-width: 490px) { .grid { grid-template-columns: minmax(0,1fr); } }
+</style>
+<header class="masthead shell">
+  <span class="brand">cut-motion</span>
+  <a href="https://github.com/Endless1936/cut-motion">GitHub 仓库</a>
+</header>
+<div class="intro shell">
+  <h1>动效模板</h1>
+  <p>${galleryNames.length} 套模板 · 8 秒同步预览。播放全部，或拖动进度条对照同一时刻。</p>
+  <nav class="section-links" aria-label="模板分类">${sections.map(({id,title})=>`<a href="#${id}">${title}</a>`).join("")}</nav>
+</div>
+<div class="transport">
+  <div class="controls shell" role="group" aria-label="同步播放">
+    <button id="play" type="button" aria-pressed="false">播放全部</button>
+    <input id="time" aria-label="全部模板的播放进度" type="range" min="0" max="8" step="0.03333333333333333" value="3.4">
+    <output id="readout" for="time" aria-live="off">3.40 s</output>
+  </div>
+</div>
+<main class="shell" aria-label="动效模板">${gallery}</main>
 <script>
 const frames=[...document.querySelectorAll("iframe")],slider=document.querySelector("#time"),button=document.querySelector("#play"),readout=document.querySelector("#readout");
-const videos=[...document.querySelectorAll("video")];
+const resizePreviews = new ResizeObserver(entries => {
+  for (const {target, contentRect} of entries) target.style.setProperty("--preview-scale", contentRect.width / 1080);
+});
+document.querySelectorAll(".preview").forEach(preview => resizePreviews.observe(preview));
 const targetOrigin=location.protocol==="file:"?"*":location.origin;
 let playing=false,animationFrame=null;
 function send(frame,time){frame.contentWindow.postMessage({type:"mg-preview-seek",time},targetOrigin)}
-function seek(time,syncVideos=true){time=Math.max(0,Math.min(8,Number(time)));slider.value=time;readout.textContent=time.toFixed(2)+" s";frames.forEach(frame=>send(frame,time));if(syncVideos)videos.forEach(video=>{if(Number.isFinite(video.duration))video.currentTime=time})}
-function stop(){playing=false;cancelAnimationFrame(animationFrame);animationFrame=null;button.textContent="播放全部";videos.forEach(video=>video.pause())}
+function seek(time){time=Math.max(0,Math.min(8,Number(time)));slider.value=time;readout.textContent=time.toFixed(2)+" s";frames.forEach(frame=>send(frame,time))}
+function stop(){playing=false;cancelAnimationFrame(animationFrame);animationFrame=null;button.textContent="播放全部";button.setAttribute("aria-pressed","false")}
 slider.oninput=()=>{stop();seek(slider.value)};
 button.onclick=()=>{
   if(playing){stop();return}
-  playing=true;button.textContent="暂停";seek(0);
-  videos.forEach(video=>video.play().catch(()=>{}));
+  playing=true;button.textContent="暂停";button.setAttribute("aria-pressed","true");seek(0);
   const start=performance.now();
-  function tick(now){if(!playing)return;const time=Math.min((now-start)/1000,8);seek(time,false);if(time<8)animationFrame=requestAnimationFrame(tick);else stop()}
+  function tick(now){if(!playing)return;const time=Math.min((now-start)/1000,8);seek(time);if(time<8)animationFrame=requestAnimationFrame(tick);else stop()}
   animationFrame=requestAnimationFrame(tick);
 };
 window.addEventListener("message",event=>{if(event.data?.type!=="mg-preview-ready")return;const frame=frames.find(frame=>frame.contentWindow===event.source);if(frame)send(frame,Number(slider.value))});
 seek(slider.value);
 </script>`);
-if (!process.argv.includes("--verify") && !process.argv.includes("--serve") && !renderRequested) {
+if (!verify && !serve) {
   console.log(JSON.stringify({gallery:path.join(output,"index.html")}));
   process.exit(0);
+}
+const server=http.createServer((req,res)=>{
+  const p=path.resolve(rootPath,"."+decodeURIComponent(new URL(req.url,"http://localhost").pathname));
+  if(![output,checksOutput].some(dir=>p.startsWith(dir+path.sep))||!fs.existsSync(p)||fs.statSync(p).isDirectory()){res.writeHead(404);res.end();return}
+  res.setHeader("Content-Type",p.endsWith(".html")?"text/html":p.endsWith(".svg")?"image/svg+xml":p.endsWith(".js")?"text/javascript":"application/octet-stream");
+  fs.createReadStream(p).pipe(res);
+});
+await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
+if(serve){
+  console.log(JSON.stringify({url:`http://127.0.0.1:${server.address().port}${galleryPath}/index.html`}));
+  await new Promise(()=>{});
 }
 const require=createRequire(import.meta.url);
 const puppeteer=require(path.join(rootPath,"node_modules/puppeteer-core"));
 const browserRoot=path.join(process.env.HOME,".cache/hyperframes/chrome/chrome-headless-shell");
 const version=fs.readdirSync(browserRoot).sort().at(-1);
 const executablePath=path.join(browserRoot,version,"chrome-headless-shell-mac-arm64/chrome-headless-shell");
-const server=http.createServer((req,res)=>{
-  const p=path.resolve(rootPath,"."+decodeURIComponent(new URL(req.url,"http://localhost").pathname));
-  if(!p.startsWith(rootPath+path.sep)||!fs.existsSync(p)||fs.statSync(p).isDirectory()){res.writeHead(404);res.end();return}
-  res.setHeader("Content-Type",p.endsWith(".html")?"text/html":p.endsWith(".svg")?"image/svg+xml":p.endsWith(".js")?"text/javascript":p.endsWith(".mp4")?"video/mp4":"application/octet-stream");
-  if(p.endsWith(".mp4")){
-    const size=fs.statSync(p).size,range=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range??"");
-    res.setHeader("Accept-Ranges","bytes");
-    if(range){
-      const start=Number(range[1]),end=Math.min(Number(range[2]||size-1),size-1);
-      if(start>end||start>=size){res.writeHead(416,{"Content-Range":`bytes */${size}`});res.end();return}
-      res.writeHead(206,{"Content-Range":`bytes ${start}-${end}/${size}`,"Content-Length":end-start+1});
-      fs.createReadStream(p,{start,end}).pipe(res);return;
-    }
-    res.setHeader("Content-Length",size);
-  }
-  fs.createReadStream(p).pipe(res);
-});
-await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
-if(process.argv.includes("--serve")){
-  console.log(JSON.stringify({url:`http://127.0.0.1:${server.address().port}${galleryPath}/index.html`}));
-  await new Promise(()=>{});
-}
 const browser=await puppeteer.launch({executablePath,headless:true,args:["--no-sandbox"]});
-const checksOutput = htmlOnly ? path.join(output, "..", "checks") : output;
-fs.mkdirSync(checksOutput, { recursive: true });
 const failures=[],measurements=[],stageMeasurements=[],overlayMeasurements=[];
 try {
   const page=await browser.newPage();await page.setViewport({width:1080,height:1920});
   page.on("pageerror",e=>failures.push(e.message));
   for(const [key,name,data] of cases){
-    await page.goto(`http://127.0.0.1:${server.address().port}${galleryPath}/${key}.html`);
+    await page.goto(`http://127.0.0.1:${server.address().port}${key === name ? galleryPath : checksPath}/${key}.html`);
     await page.evaluate(()=>window.ready);
     if(name==="redaction-mask"){
       const overlay=await verifyRedactionPreview(page,data);
@@ -268,7 +320,7 @@ try {
     if(!geometry.hostOverride)failures.push(key+": host paper-color override");
     if(names.includes(key) || ["converge-six","converge-five","compare-parts"].includes(key)) await page.screenshot({path:path.join(checksOutput,key+".png")});
   }
-  for(const name of stageCases){
+  for(const name of stagePreviewNames){
     await page.goto(`http://127.0.0.1:${server.address().port}${galleryPath}/${name}.html`);
     await page.evaluate(()=>window.ready);
     const stage=await page.evaluate(()=>{
@@ -284,9 +336,8 @@ try {
   }
   await page.setViewport({width:1260,height:1700});
   await page.goto(`http://127.0.0.1:${server.address().port}${galleryPath}/index.html`);
-  if (htmlOnly && await page.$$eval("iframe, video", (nodes, count) =>
-    nodes.some(node => node.tagName === "VIDEO") || nodes.length !== count, reviewNames.length)) failures.push("gallery: HTML-only template coverage");
-  await page.evaluate(()=>document.querySelectorAll("details").forEach(detail=>detail.open=true));
+  if (await page.$$eval("iframe, video", (nodes, count) =>
+    nodes.some(node => node.tagName === "VIDEO") || nodes.length !== count, galleryNames.length)) failures.push("gallery: HTML-only template coverage");
   await page.waitForFunction(()=>[...document.querySelectorAll("iframe")].every(f=>f.contentWindow.mgTL));
   const scrubTime=await page.evaluate(()=>{const slider=document.querySelector("#time");slider.value="5.2";slider.dispatchEvent(new Event("input"));return Number(slider.value)});
   await page.waitForFunction(time=>[...document.querySelectorAll("iframe")].every(f=>Math.abs(f.contentWindow.mgTL.time()-time)<.01),{},scrubTime);
@@ -297,33 +348,8 @@ try {
   const stopped=await page.evaluate(()=>document.querySelector("#play").textContent==="播放全部");
   if(!stopped)failures.push("gallery: play/pause interaction");
   await page.evaluate(()=>{const slider=document.querySelector("#time");slider.value="3.4";slider.dispatchEvent(new Event("input"))});
-  await page.evaluate(()=>document.querySelectorAll("details").forEach(detail=>detail.open=false));
   await page.screenshot({path:path.join(checksOutput,"overview.png"),fullPage:true});
 } finally {await browser.close();server.close();}
-fs.writeFileSync(path.join(checksOutput,"verification.json"),JSON.stringify({scope:selectedTemplate??"all",measurements,stageMeasurements,overlayMeasurements,failures},null,2));
-console.log(JSON.stringify({gallery:path.join(output,"index.html"),scope:selectedTemplate??"all",cases:measurements.length,stageCases:stageMeasurements.length,overlayCases:overlayMeasurements.length,maxCenterErrorPx:Math.max(0,...measurements.map(m=>Math.abs(m.center-540))),maxCardBottomPx:Math.max(0,...measurements.map(m=>m.bottom)),failures}));
+fs.writeFileSync(path.join(checksOutput,"verification.json"),JSON.stringify({measurements,stageMeasurements,overlayMeasurements,failures},null,2));
+console.log(JSON.stringify({gallery:path.join(output,"index.html"),cases:measurements.length,stageCases:stageMeasurements.length,overlayCases:overlayMeasurements.length,maxCenterErrorPx:Math.max(0,...measurements.map(m=>Math.abs(m.center-540))),maxCardBottomPx:Math.max(0,...measurements.map(m=>m.bottom)),failures}));
 if(failures.length)process.exitCode=1;
-if(!failures.length&&renderRequested){
-  const temporary=path.join(output,".render"),cli=path.join(rootPath,"node_modules/.bin/hyperframes");
-  const renderNames=selectedTemplate?[selectedTemplate]:reviewNames;
-  fs.mkdirSync(temporary,{recursive:true});
-  let next=0;
-  const renderOne=async name=>{
-    const directory=path.join(temporary,name);fs.mkdirSync(directory,{recursive:true});
-    fs.copyFileSync(path.join(output,name+".html"),path.join(directory,"index.html"));
-    fs.symlinkSync(assetsPath,path.join(directory,"assets"),"dir");
-    await new Promise((resolve,reject)=>{
-      const child=spawn("rtk",["proxy",cli,"render",directory,"--output",path.join(output,name+".mp4"),"--fps","30","--quality","high","--workers","2"],{cwd:rootPath,stdio:["ignore","pipe","pipe"]});
-      let log="";const collect=chunk=>{log=(log+chunk.toString()).slice(-12000)};
-      child.stdout.on("data",collect);child.stderr.on("data",collect);child.on("error",reject);
-      child.on("close",code=>code===0?resolve():reject(new Error(name+": render exited "+code+"\n"+log)));
-    });
-    console.log(JSON.stringify({rendered:name,file:path.join(output,name+".mp4"),bytes:fs.statSync(path.join(output,name+".mp4")).size}));
-  };
-  try{
-    const outcomes=await Promise.allSettled(Array.from({length:2},async()=>{while(next<renderNames.length){const name=renderNames[next++];await renderOne(name)}}));
-    const errors=outcomes.filter(outcome=>outcome.status==="rejected").map(outcome=>outcome.reason);
-    if(errors.length)throw new AggregateError(errors,"MG preview renders failed");
-  } finally {fs.rmSync(temporary,{recursive:true,force:true});}
-  console.log(JSON.stringify({rendered:renderNames.length,gallery:path.join(output,"index.html")}));
-}

@@ -6,7 +6,7 @@ export const stagePreviewNames = ["b-axis-horizon-grid", "axis-stage-transition"
 // Deliberately abstract demonstration artwork; no private footage or project assets.
 export const stageSpeakerSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920"><defs><linearGradient id="back" x2="1" y2="1"><stop stop-color="#263751"/><stop offset="1" stop-color="#0d1525"/></linearGradient><linearGradient id="shirt" x2="1" y2="1"><stop stop-color="#7d97d4"/><stop offset="1" stop-color="#344d80"/></linearGradient></defs><path fill="url(#back)" d="M0 0h1080v1920H0z"/><path fill="none" stroke="#a9bdff15" stroke-width="2" d="M90 240h900M90 480h900M90 1440h900M240 100v1720M840 100v1720"/><ellipse cx="540" cy="1850" rx="500" ry="650" fill="url(#shirt)"/><rect x="444" y="1010" width="192" height="300" rx="90" fill="#b8c7e4"/><ellipse cx="540" cy="825" rx="244" ry="330" fill="#d0daee"/><path d="M292 786c-38-261 64-415 242-415 215 0 306 213 249 430-12-169-58-204-98-243-88 98-230 151-393 166Z" fill="#18243d"/><path d="M403 845h83m106 0h83" stroke="#405575" stroke-width="14" stroke-linecap="round"/><path d="M495 1012q45 28 90 0" fill="none" stroke="#7f91ae" stroke-width="10" stroke-linecap="round"/><text x="540" y="1580" fill="#dce5f9" text-anchor="middle" font-size="60" font-family="sans-serif">A · DEMO</text></svg>`;
 
-export function stagePreviewPage(name, rootPath, fontName) {
+export function stagePreviewPage(name, rootPath) {
   const folder = path.join(rootPath, "templates/motion-graphics/stage");
   const gridFragment = fs.readFileSync(path.join(folder, "b-axis-horizon-grid/fragment.html"), "utf8");
   const gridStyle = fs.readFileSync(path.join(folder, "b-axis-horizon-grid/style.css"), "utf8");
@@ -15,7 +15,6 @@ export function stagePreviewPage(name, rootPath, fontName) {
   const axisScript = fs.readFileSync(path.join(folder, "axis-stage-transition/axis-stage-transitions.js"), "utf8");
   const transition = name === "axis-stage-transition";
   return `<!doctype html><meta charset="utf-8"><style>
-  ${fontName ? `@font-face{font-family:"Smiley Sans";src:url("assets/${fontName}")}` : ""}
   html,body{margin:0;width:1080px;height:1920px;overflow:hidden;background:#050505;color:#f4f5f8;font-family:"Smiley Sans",sans-serif}
   #canvas{position:relative;width:1080px;height:1920px;overflow:hidden}
   ${axisStyle}\n${gridStyle}
@@ -24,7 +23,7 @@ export function stagePreviewPage(name, rootPath, fontName) {
   .demo-nodes{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
   .demo-node{height:180px;border:1px solid #c1d3ff26;border-radius:22px;background:linear-gradient(145deg,#2a3f6e,#111c36);display:grid;place-items:center;font-size:38px;color:#a9bdff}
   .demo-result{text-align:center;color:#55dda5;font-size:48px}
-  .guide{position:absolute;top:1370px;left:0;right:0;margin:0;text-align:center;font-size:64px;color:#f4f5f8;z-index:80}
+  .guide{position:absolute;top:1370px;left:0;right:0;margin:0;text-align:center;font:48px system-ui,sans-serif;color:#a8b9c9;z-index:80}
   ${!transition ? '.axis-stage-speaker{transform:translate(46px,1514px) scale(.205555556);clip-path:circle(540px at 540px 960px);z-index:40}' : ""}
   </style><div id="canvas" class="axis-stage-root" data-stage="${!transition}" data-composition-id="main" data-start="0" data-width="1080" data-height="1920" data-fps="30" data-duration="8">
   <img id="demo-speaker" class="axis-stage-speaker" src="assets/stage-speaker.svg" alt="抽象讲述者示意">
