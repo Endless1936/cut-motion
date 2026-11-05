@@ -150,6 +150,20 @@ export function templateContent(name, beat) {
       body = `<div class="evidence-surface" data-collision-unit><div class="evidence-canvas"><img class="evidence-image" src="${escape(data.image)}" alt="${escape(data.alt)}">${focus.map(({ x, y, width, height }) => `<span class="evidence-focus" data-at="0" style="left:${x}%;top:${y}%;width:${width}%;height:${height}%" aria-hidden="true"></span>`).join("")}</div></div>`;
       break;
     }
+    case "card-switch": {
+      const images = data.images;
+      if (!Array.isArray(images) || images.length !== 2) throw new Error(`${beat.id}: card-switch needs two local images`);
+      axis = "horizontal";
+      body = images.map((image, index) => {
+        const { src: imagePath, alt } = image ?? {};
+        const src = typeof imagePath === "string" ? imagePath.replace(/^\.\//, "") : "";
+        if (!src.startsWith("assets/") || src.split("/").some(part => !part || part === "." || part === "..") || /[\\\u0000-\u001f]/.test(src) || typeof alt !== "string") {
+          throw new Error(`${beat.id}: card-switch images need a local assets/ path and alt text`);
+        }
+        return `<img class="card-switch-image" src="${src.split("/").map(encodeURIComponent).join("/")}" alt="${escape(alt)}" data-collision-unit${index ? ' data-at="0"' : ""}>`;
+      }).join("");
+      break;
+    }
     case "quote": {
       normalizedData = { text: data.text ?? copy[0], credit: data.credit ?? (data.text !== undefined ? "" : copy[1] ?? "") };
       body = '<div class="quote-rule" data-at="0"></div>' + paragraph("quote-copy", add(normalizedData.text)) + paragraph("quote-credit", add(normalizedData.credit));

@@ -1,66 +1,58 @@
-# cut-motion
+<h1 align="center"><img src="assets/logo.png" alt="cut-motion icon" width="48" align="absmiddle"> cut-motion</h1>
 
-[中文说明](README.md)
+## 🤖 Let your Agent set it up
 
-cut-motion is an open Agent workflow that turns a talking-head recording into a tightly edited, captioned, motion-designed video.
-
-## How to use it
-
-You do not need to learn video-editing software, code, or terminal commands. Open this repository in the ChatGPT desktop app's Work or Codex tab, Claude Code, or WorkBuddy and describe what you want in natural language. The workflow requires the ChatCut Agent integration; on first use, follow the [environment guide](docs/agent-setup.md#environment-preflight) for your client.
-
-ChatCut currently publishes setup guides for these three clients. Its ChatGPT guide covers the desktop app's Work and Codex tabs; it does not cover ChatGPT website sessions or remote workspaces.
-
-For example:
+Using cut-motion for the first time? Copy this prompt into **Codex or an Agent that can work on your computer**:
 
 ```text
-Use cut-motion to edit this video:
-/Users/your-name/Desktop/video.mov
+Set up cut-motion on this computer:
+https://github.com/Endless1936/cut-motion
+
+Use the existing checkout if there is one, or clone the repository. Read AGENTS.md and docs/agent-setup.md, run the local environment check, and confirm the current session can call the ChatCut tools.
+If ChatCut is missing, follow the official setup guide for my client. Ask before installing a plugin or system tools, changing global Agent settings, or signing in.
+Use the project's pinned versions of HyperFrames and GSAP when the job reaches composition.
+Tell me which checks passed and what still needs my input. Wait for my local video path before starting an edit.
 ```
 
-The Agent checks the local environment first. Pinned HyperFrames and GSAP packages are reused from, or installed into, the repository's Git-ignored `node_modules/` directory. The Agent asks before installing global/system dependencies, changing global Agent settings, or authenticating.
+## 🎬 Turn a recording into a finished video
 
-## What happens next
+cut-motion is an open-source editing workflow for Agents. ChatCut handles the editable rough cut. HyperFrames adds captions and motion graphics and renders the final video. Give the Agent a local recording and describe the edit you want in plain language.
 
-1. You provide the local path to the talking-head video.
-2. The Agent transcribes it, removes mistakes, repeated takes, reading pauses, and unnecessary dead air.
-3. You review the rough cut in ChatCut and approve it or request revisions.
-4. After rough-cut approval, the Agent starts the clean A-roll export and prepares the caption, motion, and overall-style plans in parallel. In Review mode, you review the three plans together before production continues.
-5. After you approve the plans, the Agent assembles and renders the final video, then gives you the file location. Auto mode continues after plan generation only when you explicitly selected it.
-6. If you request changes after seeing the final video, the Agent revises the affected parts.
+The [ChatCut setup guides](docs/agent-setup.md#environment-preflight) cover the ChatGPT desktop app's Work and Codex tabs, Claude Code, and WorkBuddy.
 
-## Two caption styles
+## ✂️ From rough cut to final video
 
-- **With subtitles** — the default. Spoken content appears as readable captions, with animation added only where it improves understanding.
-- **Without subtitles** — spoken phrases become part of the motion design instead of appearing in a separate subtitle band.
+1. **Transcribe and cut** — The Agent aligns the transcript with the recording and trims mistakes, repeated takes, and long pauses.
+2. **Review the edit and style** — In the default `review` mode, you check the rough cut first, then review the caption, motion, and visual style plans together.
+3. **Render and revise** — The Agent exports an MP4. You can adjust captions, layout, or pacing in the same job.
 
-You do not need to choose in advance. If you have no preference, the Agent uses the job defaults without an extra confirmation round.
+Explicitly choose `auto` to let the Agent continue through the review points. [See the full workflow](docs/workflow.md)
 
-## What you can provide
+## ✨ Two caption styles
 
-Only the video path is required. You may also provide:
+- **With subtitles** — Show the spoken words as readable subtitles and add motion where it helps, such as a card switch between two screenshots.
+- **Motion text** — Build the spoken words into the animated layout, styled for the video.
 
-- a script or transcript;
-- a preferred caption style;
-- visual references;
-- an aspect ratio or publishing platform;
-- supporting screenshots, product footage, or other material.
+The Agent uses the job defaults when you leave the style open. [Browse the motion templates](templates/motion-graphics/README.md) · [See the visual language](docs/visual-language.md)
 
-Missing preferences do not block the workflow. The Agent analyzes the footage and makes a recommendation.
+## 📎 What you can provide
 
-A reference script may add local visual preferences after a phrase with full-width `【】`, for example `using only AI【MG: cross out AE, Premiere, and CapCut】`. These notes stay out of captions and remain advisory; the Agent still analyzes every unannotated passage for editing and motion opportunities.
+A local video path is enough to start. You can also share:
 
-## Example requests
+- 📝 A script or transcript. Add scene notes in `【】` after a phrase to keep them out of the captions.
+- 🖼️ Product screenshots, screen recordings, or visual references.
+- 📐 Caption preferences, a publishing platform, or an aspect ratio.
 
-- “Edit this talking-head video and keep the pacing natural.”
-- “Use subtitles and add motion graphics only at the important explanations.”
-- “Do not use subtitles; turn the spoken phrases into motion design.”
-- “This version feels too fast. Reopen the same job and relax the pacing.”
-- “Keep the edit, but revise the motion layout.”
+## 💬 Try asking
 
-## For Agents and contributors
+- “Edit `/path/to/video.mov` and keep the pacing natural.”
+- “Add subtitles and show screenshots or recordings when I demonstrate the product.”
+- “Keep the rough cut and use the card switch for the two opening images.”
 
-The operating contract is in [`AGENTS.md`](AGENTS.md). Environment setup and maintenance commands are in [`docs/agent-setup.md`](docs/agent-setup.md).
+## 🛠️ For Agents and contributors
 
-## License
+[`AGENTS.md`](AGENTS.md) · [Setup and maintenance](docs/agent-setup.md) · [中文说明](README.md)
+
+## 📄 License
 
 cut-motion code, documentation, and reusable templates are released under [Apache-2.0](LICENSE). Third-party tools, fonts, and user media remain subject to their own licenses. See [NOTICE](NOTICE).

@@ -1,7 +1,16 @@
 // This fictional interface belongs only to the preview, never to the overlay template.
 export function redactionPreviewBackdrop(data) {
   const {x,y,width,height}=data.frame;
+  const sourceTrack = data.masks[1].rects[0].positions;
   return {
+    timeline: `
+      const sourceLine=document.querySelector(".redaction-demo-link");
+      let lastTime=0;
+      for(const [time,x,y] of ${JSON.stringify(sourceTrack)}){
+        timeline.to(sourceLine,{left:x,top:y,duration:time-lastTime,ease:"none"},lastTime);
+        lastTime=time;
+      }
+    `,
     style:`
     .redaction-demo{position:absolute;left:${x}px;top:${y}px;width:${width}px;height:${height}px;z-index:1;overflow:hidden;border-radius:22px;background:#111a28;color:#e5eaf4;font:20px/1.4 "Smiley Sans",sans-serif;box-shadow:inset 0 0 0 1px #c1d3ff30,0 18px 64px #0006}
     .redaction-demo-header{position:absolute;inset:0 0 auto;height:70px;display:flex;align-items:center;gap:10px;padding:0 26px;border-bottom:1px solid #c1d3ff1f;background:#192538}
@@ -36,18 +45,22 @@ export async function verifyRedactionPreview(page, data) {
     const times=[.89,1.05,1.45,1.55,4.1,5.55,7.1],samples=times.map(time=>({time,alpha:read(time)}));
     const expected=[[0,0],[1,0],[1,.5],[1,1],[0,0],[1,1],[0,0]];
     const maxAlphaError=Math.max(...samples.flatMap((sample,index)=>sample.alpha.map((value,mask)=>Math.abs(value-expected[index][mask]))));
-    const first=read(1.55);read(7.1);const again=read(1.55);
+    const boxes=()=>regions.flatMap(region=>[...region.querySelectorAll(".redaction-rect")].map(element=>{
+      const {left,top,width,height}=element.getBoundingClientRect();
+      return {left,top,width,height};
+    }));
+    const state=time=>({alpha:read(time),boxes:boxes()});
+    const first=state(2),past=state(7.1),again=state(2);
     let maxCoordinateErrorPx=0;
-    regions.forEach((region,index)=>{
-      const mask=data.masks[index];
-      [...region.querySelectorAll(".redaction-rect")].forEach((element,rectIndex)=>{
-        const rect=mask.rects[rectIndex],actual=element.getBoundingClientRect();
-        const expected={left:data.frame.x+rect.x/data.coordinateSize.width*data.frame.width,top:data.frame.y+rect.y/data.coordinateSize.height*data.frame.height,width:rect.width/data.coordinateSize.width*data.frame.width,height:rect.height/data.coordinateSize.height*data.frame.height};
-        for(const key of Object.keys(expected))maxCoordinateErrorPx=Math.max(maxCoordinateErrorPx,Math.abs(actual[key]-expected[key]));
-      });
+    data.masks.flatMap(mask=>mask.rects).forEach((rect,index)=>{
+      const expected={left:data.frame.x+rect.x/data.coordinateSize.width*data.frame.width,top:data.frame.y+rect.y/data.coordinateSize.height*data.frame.height,width:rect.width/data.coordinateSize.width*data.frame.width,height:rect.height/data.coordinateSize.height*data.frame.height};
+      for(const key of Object.keys(expected)){
+        const shift=rect.positions&&key==="left"?25:0;
+        maxCoordinateErrorPx=Math.max(maxCoordinateErrorPx,Math.abs(past.boxes[index][key]-expected[key]),Math.abs(first.boxes[index][key]-expected[key]-shift));
+      }
     });
     const colors=[...root.querySelectorAll(".redaction-rect")].map(element=>getComputedStyle(element).backgroundColor);
-    window.seek(2.5);
+    window.seek(2);
     return {samples,maxAlphaError,maxCoordinateErrorPx,regions:regions.length,rects:root.querySelectorAll(".redaction-rect").length,reversible:JSON.stringify(first)===JSON.stringify(again),colors};
   },data);
 }

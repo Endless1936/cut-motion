@@ -284,7 +284,7 @@ try {
     assert.match(maskHtml, /data-mg-beat-id="mask"[^>]*data-duration="4\.2"/, "Mask clip must retain its complete coverage window");
     const { gsap } = createRequire(import.meta.url)(path.join(repositoryRoot, "node_modules/gsap/dist/gsap.js"));
     const region = { autoAlpha: 0, dataset: { opacity: "1", windows: "[[0,0.1,4.1,4.2]]" } };
-    const maskRoot = { autoAlpha: 0, querySelectorAll: () => [region], contains: () => true };
+    const maskRoot = { autoAlpha: 0, querySelectorAll: selector => selector === ".redaction-region" ? [region] : [], contains: () => true };
     const maskTimeline = gsap.timeline({ paused: true });
     try {
       vm.runInNewContext(maskHtml.match(/<script>([\s\S]*?)<\/script>/)[1], { timeline: maskTimeline, document: { querySelector: () => maskRoot } });

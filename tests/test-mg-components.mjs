@@ -9,7 +9,7 @@ import { buildComposition } from "../scripts/build-composition.mjs";
 import { templateSamples } from "../scripts/mg-template-samples.mjs";
 import { buildBeatMap } from "../scripts/plan-artifacts.mjs";
 
-const structured = new Set(["metric-grid", "comparison-table", "factor-expansion", "growth-trend"]);
+const structured = new Set(["metric-grid", "comparison-table", "factor-expansion", "growth-trend", "card-switch"]);
 const topologyValues = JSON.parse(fs.readFileSync(new URL("../schemas/beat-map.schema.json", import.meta.url), "utf8"))
   .properties.beats.items.properties.semanticTopology.enum;
 const maskData = {...templateSamples["redaction-mask"],masks:templateSamples["redaction-mask"].masks.map(mask=>({...mask,windows:[[.2,.3,3.5,3.6]]}))};
@@ -66,6 +66,14 @@ for (const id of componentNames()) {
   new Function("root", "select", "beat", "timeline", result.timeline);
 }
 assert.equal(resolveComponent("mapping"), null, "Do not silently substitute a different topology");
+const cardSwitch = resolveComponent("card-switch");
+const switchBeat = {id:"switch",start:0,end:5,templateData:templateSamples["card-switch"]};
+const switched = cardSwitch.render({beat:switchBeat});
+assert.equal([...switched.fragment.matchAll(/data-at=/g)].length,1,"Only the swap uses a spoken cue");
+assert.match(switched.fragment,/data-at="3.4"/);
+assert.throws(()=>cardSwitch.render({beat:{...switchBeat,templateData:{...switchBeat.templateData,revealTimes:[0]}}}),/cue after the beat start/);
+assert.throws(()=>cardSwitch.render({beat:{...switchBeat,exitStartTime:3}}),/cue must precede the exit/);
+assert.throws(()=>cardSwitch.content({...switchBeat,templateData:{images:[{src:"assets/../other.svg",alt:"其他"},switchBeat.templateData.images[1]]}}),/local assets/);
 const redaction = resolveComponent("redaction-mask");
 const maskBeat = {id:"mask",start:10,end:18,templateData:templateSamples["redaction-mask"]};
 const overlay = redaction.render({beat:maskBeat});
@@ -76,6 +84,7 @@ assert.equal([...overlay.fragment.matchAll(/class="redaction-region"/g)].length,
 assert.equal([...overlay.fragment.matchAll(/class="redaction-rect"/g)].length, 4);
 assert.match(overlay.fragment, /data-windows='\[\[0\.9,1,3\.9,4\],\[4\.9,5,6\.9,7\]\]'/);
 assert.match(overlay.fragment, /border-radius:50% \/ 50%/);
+assert.equal([...overlay.fragment.matchAll(/data-positions=/g)].length,1,"Only the tracked rectangle gets position animation");
 assert.match(overlay.style, /background:var\(--redaction-color,#2b2a2c\)/);
 const plannedMask=planBeat({templateId:"redaction-mask",templateData:maskData});
 assert.equal(plannedMask.templateData.topPx,undefined);
@@ -86,12 +95,18 @@ assert.throws(()=>badMask([{rects:[{x:0,y:0,width:20,height:20}],windows:[[1,2,1
 assert.throws(()=>badMask([{rects:[{x:0,y:0,width:20,height:20}],windows:[[1,2,3,4],[3.5,4,5,6]]}]),/nonoverlapping/);
 assert.throws(()=>badMask([{rects:[{x:0,y:0,width:20,height:20}],color:"red;background:url(x)"}]),/hex color/);
 assert.throws(()=>badMask([{rects:[{x:0,y:0,width:20,height:20}],opacity:1.1}]),/opacity/);
+const trackedMask = positions => badMask([{rects:[{x:0,y:0,width:20,height:20,positions}]}]);
+assert.doesNotThrow(()=>trackedMask([[0,10,20],[3,30,40]]));
+assert.throws(()=>trackedMask([[2,10,20],[2,30,40]]),/increase within the beat/);
+assert.throws(()=>trackedMask([[9,10,20]]),/increase within the beat/);
+assert.throws(()=>trackedMask([[1,870,10]]),/tracked rectangle exceeds/);
+assert.throws(()=>trackedMask([[1,10,20,50]]),/time, x, y/);
 assert.doesNotThrow(()=>redaction.render({beat:{id:"short",start:0,end:.05,templateData:{masks:[{rects:[{x:0,y:0,width:20,height:20}]}]}}}),"Default fades fit short beats");
 for (const name of structured) {
   const component = resolveComponent(name), data = templateSamples[name];
   const base = { id: name, start: 2, end: 10, templateData: data };
   const slotCount = [...component.render({ beat: base }).fragment.matchAll(/data-at=/g)].length;
-  const revealTimes = Array.from({ length: slotCount }, (_, i) => i * .4);
+  const revealTimes = Array.from({ length: slotCount }, (_, i) => (i + (name === "card-switch" ? 1 : 0)) * .4);
   const rendered = component.render({ beat: { ...base, templateData: { ...data, revealTimes } } });
   assert.deepEqual([...rendered.fragment.matchAll(/data-at="([^"]+)"/g)].map(m => Number(m[1])), revealTimes,
     `${name} must preserve supplied spoken timing for complete semantic groups`);
@@ -244,9 +259,11 @@ try {
   fs.rmSync(path.join(temporary,"hyperframes/mg"), {recursive:true,force:true});
   fs.mkdirSync(path.join(temporary,"hyperframes/assets"));
   fs.writeFileSync(path.join(temporary,"hyperframes/assets/evidence.svg"), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  fs.writeFileSync(path.join(temporary,"hyperframes/assets/切换 图.svg"), '<svg xmlns="http://www.w3.org/2000/svg"/>');
   fs.writeFileSync(path.join(temporary,"hyperframes/index.template.html"), '<style>/* CUT_MOTION_MG_STYLES */</style><div id="root"><video id="a-roll"></video><!-- CUT_MOTION_MG_FRAGMENTS --></div><script>const timeline={}; /* CUT_MOTION_MG_TIMELINES */</script>');
   map.beats = componentNames().map((id,index) => ({...base,id:`canonical-${index}`,templateId:id,templateData:{
     ...(id === "redaction-mask" ? maskData : structured.has(id) ? templateSamples[id] : {}),
+    ...(id === "card-switch" ? {images:[{src:"assets/evidence.svg",alt:"第一张"},{src:"./assets/切换 图.svg",alt:"第二张"}]} : {}),
     copy:Array.from({length:resolveComponent(id).meta.legacyCopySlots},(_,i)=>`文案${i}`),
     image:"assets/evidence.svg",alt:"证据",
     focus:[{x:1,y:2,width:30,height:20},{x:2,y:30,width:40,height:20}]
@@ -256,8 +273,11 @@ try {
   assert.equal(built.beatIds.length,componentNames().length-1);
   const html=fs.readFileSync(built.outputPath,"utf8");
   assert.match(html,/assets\/evidence.svg/);
+  assert.match(html,/assets\/%E5%88%87%E6%8D%A2%20%E5%9B%BE\.svg/);
   assert.doesNotMatch(html,/sample-evidence.svg/);
   assert.match(html,/book-video-grid-top/);
   assert.match(html,/window.addAxisStageTransitions/);
+  fs.unlinkSync(path.join(temporary,"hyperframes/assets/切换 图.svg"));
+  result=run("--write"); assert.notEqual(result.status,0); assert.match(result.stderr,/card-switch image is missing/);
 } finally { fs.rmSync(temporary,{recursive:true,force:true}); }
 console.log(`Canonical MG templates and targeted assembly tests passed (${componentNames().length} templates).`);

@@ -1,6 +1,6 @@
 # Motion Graphics templates
 
-17 reusable content templates for a 1080×1920 talking-head video, one redaction overlay, plus two stage helpers. Choose by meaning, then supply content and spoken anchors. Counts in template demonstrations are not limits.
+18 reusable content templates for a 1080×1920 talking-head video, one redaction overlay, plus two stage helpers. Choose by meaning, then supply content and spoken anchors. Counts in template demonstrations are not limits.
 
 ## Coverage and selection
 
@@ -12,13 +12,13 @@
 | Comparison / correction | 3 | [comparison](comparison/), [comparison-table](comparison-table/), [correction](correction/) | Alternatives, aligned table rows, or old wording → strike → replacement |
 | Measured result | 3 | [metric-proof](metric-proof/), [metric-grid](metric-grid/), [growth-trend](growth-trend/) | One result, several aligned metrics, or an actual numerical trend |
 | Variations | 1 | [factor-expansion](factor-expansion/) | Preserve a validated structure, vary several factors, then reveal the candidate pool |
-| Evidence | 1 | [evidence-focus](evidence-focus/) | One or more regions of a real screenshot |
+| Evidence | 2 | [evidence-focus](evidence-focus/), [card-switch](card-switch/) | Focus on screenshot regions or swap two images at a spoken handoff |
 | Statement / quotation | 1 | [quote](quote/) | Statement with optional attribution |
 | Technical instruction | 1 | [code-snippet](code-snippet/) | Commands or code with a selected emphasis |
 | Supplementary note | 1 | [annotation](annotation/) | One short note or separately timed pieces |
 | Redaction overlay | 1 | [redaction-mask](redaction-mask/) | Fixed gray coverage over avatars or link lines, with independent fade windows |
 
-The 17 types cover ordinary talking-head explanations. Complex charts and multilevel graphs may need a custom MG; a different item count alone does not.
+Complex charts and multilevel graphs may need a custom MG; a different item count alone does not.
 
 Choose the relationship before styling. For “文案、画面、音频、剪辑，全部用豆包完成”, use `converge-sources` with four `items` and `result:"豆包"`: each input follows its spoken word, then the collector leads downward to the named result. A parallel card with “豆包” in its initial title would expose that result early. Only a neutral organizational heading may enter at group start; a spoken tool, number, comparison or outcome keeps its own keyword cue even when displayed as a heading.
 
@@ -49,11 +49,12 @@ Use `templateData.items` for variable lists. An item is a string or `{label, des
 | factor-expansion | `source`, `structure`, items `{label,value,icon?}`, `result`. No inferred combination count; supply the actual result wording |
 | growth-trend | Optional title, items `{label,value:number}`, `result`. Nonnegative finite values determine actual bar height and line position; use only genuinely comparable measurements |
 | evidence-focus | Local `assets/` image, alt text, focus array of rectangles measured against the actual image. Keep highlights anchored during entry; pan the image and highlights together. |
+| card-switch | `images:[{src,alt},{src,alt}]` with two local `assets/` image paths in playback order, plus one switch cue. |
 | quote | `text`, optional `credit`; no mandatory attribution or fixed rule height |
 | code-snippet | Optional title, items; `highlightIndex` or item emphasis |
 | correction | `old`, `replacement` |
 | annotation | Items; each piece has its own reveal, one piece may enter directly |
-| redaction-mask | `frame?`, `coordinateSize?`, `color?`, `opacity?`, `masks:[{id?,rects:[{x,y,width,height,radius?}],windows?,color?,opacity?}]`; overlay coordinates and timing are independent of caption copy |
+| redaction-mask | `frame?`, `coordinateSize?`, `color?`, `opacity?`, `masks:[{id?,rects:[{x,y,width,height,radius?,positions?}],windows?,color?,opacity?}]`; overlay coordinates and timing are independent of caption copy |
 
 `icon` selects a vetted 32×32 SVG from `scripts/mg-template-icons.mjs`; omission infers a suitable icon from the label. Icons are decoration within the row cue, not extra reveal slots.
 
@@ -91,11 +92,17 @@ For content MGs, a negative `exitAnchorOffsetFrames` moves the exit earlier with
 
 Slot order follows the DOM: optional heading then each list row; parallel conclusion last; relation source then destinations; convergence inputs then result; comparison heading then each side's label followed by its description parts in array order; metric optional source then value-and-unit together then optional caption; quote rule then text then optional credit; correction old text then strike then replacement; evidence each region; annotation each piece. A neutral heading or decorative slot may use `atStart` or an explicit `after` cue. Spoken entities and outcomes use their own measured keyword; their position in a title does not turn them into decoration. Recompute bindings when adding or removing content.
 
+### Two-card switch
+
+`card-switch` shows the first image at the beat start. The images fan apart just before the one `revealCues` keyword, exchange front and back at that cue, then settle with the second image in front. If using an authored `revealTimes`, provide one positive offset in seconds before the exit. Leave enough time to read both images. Each image keeps its aspect ratio and is rounded directly, following the [direct-insert defaults](../../docs/density-and-layout.md#vertical-composition).
+
 ## Gray redaction overlay
 
-`redaction-mask` preserves the production gray (`#2b2a2c`) and linear fade, without blur, card styling or position animation. Its explicit beat interval and mask windows own the coverage; speech anchors and the shared MG exit fade do not shorten or fade that coverage. Several rectangles may form one mask group, and each group may appear more than once. The default opacity is 1; set a lower value only when incomplete coverage is intended.
+`redaction-mask` preserves the production gray (`#2b2a2c`) and linear fade. Its explicit beat interval and mask windows own the coverage; speech anchors and the shared MG exit fade do not shorten or fade that coverage. Several rectangles may form one mask group, and each group may appear more than once. The default opacity is 1; set a lower value only when incomplete coverage is intended.
 
 `frame` places the overlay frame in its host (default 1080×1920 at 0,0). `coordinateSize` defines the source-coordinate basis for rectangles and defaults to the frame dimensions. Rectangles scale with that frame. An avatar can use a circular radius; separate thin rectangles can cover only the URL portions while preserving surrounding instructions. Keep the mask and footage in the same transformed container when their positions must move together; this template does not track moving content automatically.
+
+For movement within the frame, author `positions: [[time,x,y], ...]` on each moving rectangle. Times are relative to the beat and strictly increasing. Position interpolates linearly from the authored rectangle at time zero, then holds after the last keyframe. A keyframe at zero sets the initial position. Width, height and radius stay fixed. If footage truly zooms and coverage needs to scale with it, share that zoom transform during the zoom, then hold the size through the pan. Verify coverage on the rendered motion window.
 
 Every `windows` entry is `[fadeInStart, fullyCovered, fadeOutStart, fullyClear]`, in seconds relative to the beat. Windows must be ordered, nonoverlapping and inside the beat. Place `fullyCovered` before the sensitive pixels become visible, and finish fading out before the source page disappears. Typical fades are 0.03–0.13 seconds. If windows are omitted, coverage spans the beat with up to 0.1-second fades. There are no spoken-copy or `data-at` slots; a single group's rectangles fade together.
 

@@ -36,8 +36,14 @@ for (const beat of targets) {
   if (component.meta.name === "evidence-focus" && !fs.existsSync(path.join(jobRoot, "hyperframes", beat.templateData?.image ?? "missing-evidence"))) throw new Error(`${beat.id}: evidence image is missing from hyperframes/assets`);
   const window = resolveBeatRenderWindow(beat, beatMap, words);
   const revealTimes = resolveRevealTimes(beat, window, speechTiming);
+  const templateData = { ...beat.templateData, ...(revealTimes ? { revealTimes } : {}) };
   const source = component.render({ beat: { ...beat, start: window.start, end: window.end,
-    templateData: { ...beat.templateData, ...(revealTimes ? { revealTimes } : {}) } } });
+    exitStartTime: window.exitStartTime, templateData } });
+  if (component.meta.name === "card-switch") {
+    for (const { src } of templateData.images) {
+      if (!fs.statSync(path.join(jobRoot, "hyperframes", src), { throwIfNoEntry: false })?.isFile()) throw new Error(`${beat.id}: card-switch image is missing: ${src}`);
+    }
+  }
   new Function("root", "select", "beat", "timeline", source.timeline);
   if (/<(?:script|style|video|audio)\b/i.test(source.fragment)) throw new Error(`${beat.id}: forbidden shared element`);
   for (const [file, content] of Object.entries({ "fragment.html": source.fragment, "style.css": source.style, "timeline.mjs": source.timeline })) outputs.set(`hyperframes/mg/${beat.id}/${file}`, content);

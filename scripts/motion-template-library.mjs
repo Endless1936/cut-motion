@@ -20,6 +20,7 @@ const entries = {
   "factor-expansion": [],
   "growth-trend": [],
   "evidence-focus": [],
+  "card-switch": [],
   quote: ["p", "p"],
   "code-snippet": ["p", "code", "code", "code", "code"],
   correction: ["old", "p"],
@@ -73,7 +74,7 @@ export function renderTemplate(name, beat) {
   }
   const content = templateContent(name, beat);
   if (content) {
-    if (!["evidence-focus","redaction-mask"].includes(name) && !content.copy.length) throw new Error(`${beat.id}: MG needs meaningful content`);
+    if (!["evidence-focus","card-switch","redaction-mask"].includes(name) && !content.copy.length) throw new Error(`${beat.id}: MG needs meaningful content`);
     const rootTag = fragment.match(/^\s*<div\b[^>]*>/)[0].replace(/\s(?:style|data-layout)="[^"]*"/g, "");
     const layout = data.layout ?? (name === "linear-flow" && (data.items?.length ?? copy.length) > 4 ? "vertical" : "default");
     const axis = name === "linear-flow" && layout === "vertical" ? "vertical" : content.axis;
@@ -85,6 +86,8 @@ export function renderTemplate(name, beat) {
   const times = data.revealTimes ?? (beat.microEvents?.length ? beat.microEvents.map((event) => Number(event.time) - Number(beat.start)) : null);
   const count = [...fragment.matchAll(/data-at="[^"]*"/g)].length;
   if (times && (times.length !== count || times.some((time) => !Number.isFinite(time) || time < 0 || time >= beat.end - beat.start))) throw new Error(`${beat.id}: revealTimes needs ${count} relative times inside the beat`);
+  if (name === "card-switch" && (!times || times[0] <= 0)) throw new Error(`${beat.id}: card-switch needs a switch cue after the beat start`);
+  if (name === "card-switch" && times[0] >= (beat.exitStartTime ?? beat.end) - beat.start) throw new Error(`${beat.id}: card-switch cue must precede the exit`);
   let atIndex = 0;
   fragment = fragment.replace(/data-at="([^"]*)"/g, (_, value) => {
     const time = times ? times[atIndex++] : (count <= 1 ? 0 : atIndex++ * Math.min(0.55, (beat.end - beat.start) * 0.55 / (count - 1)));

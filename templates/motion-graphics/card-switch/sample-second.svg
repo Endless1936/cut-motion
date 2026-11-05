@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="620" height="336" viewBox="0 0 960 520">
+  <rect width="960" height="520" fill="#152741"/>
+  <g font-family="sans-serif">
+    <text x="72" y="90" font-size="32" fill="#acbfdc">示例界面</text>
+    <text x="72" y="234" font-size="68" font-weight="600" fill="#f5f7fc">导出完成</text>
+    <text x="72" y="306" font-size="36" fill="#acbfdc">1080 × 1920 · MP4</text>
+  </g>
+  <circle cx="766" cy="254" r="80" fill="#55dda5"/>
+  <path d="m730 256 25 25 47-55" fill="none" stroke="#152741" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

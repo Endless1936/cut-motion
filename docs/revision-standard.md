@@ -28,7 +28,7 @@ Use the existing Beat fields rather than a second planning document:
 - `evidenceSource`/`assets` identify the current material. `visualEncoding` describes the region that needs to remain legible and any crop. Keep units, labels, and source context needed to understand the evidence.
 - `visualStyle` describes the reference behavior being reused and the adaptation for this material. `layout` records placement and caption clearance.
 
-Size the display to the material's aspect ratio and reading needs. A tall image normally gets a tall display; do not center it inside a wide empty plate. A background card is optional and follows the visible content. Before reducing scale or cropping useful information, use available vertical space; overlapping the eyes or mouth is allowed. Captions remain protected.
+Size the display to the material's aspect ratio and reading needs. A tall image normally gets a tall display; do not center it inside a wide empty plate. Follow the [direct-insert defaults](density-and-layout.md#vertical-composition) for screenshots and screen recordings. Before reducing scale or cropping useful information, use available vertical space; overlapping the eyes or mouth is allowed. Captions remain protected.
 
 For source-video proof, retain enough of the original frame, including the speaker when relevant, to establish that it came from the prior video. Do not crop it into a standalone replay of the MG unless that is the intended evidence. Remove phone status bars or other irrelevant chrome only when they do not carry the claim.
 

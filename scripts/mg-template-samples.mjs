@@ -98,6 +98,13 @@ export const templateSamples = {
     "alt": "示例证据",
     "focus": evidenceSampleFocus.slice(0,2)
   },
+  "card-switch": {
+    images: [
+      { src: "assets/sample-evidence.svg", alt: "导出设置示意" },
+      { src: "assets/sample-second.svg", alt: "导出完成示意" }
+    ],
+    revealTimes: [3.4]
+  },
   "quote": {
     "text": "让工具\n跟着表达走",
     "credit": "创作原则"
@@ -128,7 +135,7 @@ export const templateSamples = {
     color: "#2b2a2c", opacity: 1,
     masks: [
       {id:"avatar",rects:[{x:24,y:672,width:36,height:36,radius:18}],windows:[[.9,1,3.9,4],[4.9,5,6.9,7]]},
-      {id:"links",rects:[{x:400,y:180,width:300,height:18,radius:2},{x:400,y:220,width:300,height:18,radius:2},{x:400,y:260,width:240,height:18,radius:2}],windows:[[1.4,1.5,3.9,4],[5.4,5.5,6.9,7]]}
+      {id:"links",rects:[{x:400,y:180,width:300,height:18,radius:2,positions:[[1.6,400,180],[2.4,450,180],[3.5,400,180]]},{x:400,y:220,width:300,height:18,radius:2},{x:400,y:260,width:240,height:18,radius:2}],windows:[[1.4,1.5,3.9,4],[5.4,5.5,6.9,7]]}
     ]
   }
 };

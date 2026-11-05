@@ -1,0 +1,2 @@
+.card-switch-root { position:absolute;inset:0;width:100%;max-width:none;pointer-events:none; }
+.card-switch-image { position:absolute;top:var(--mg-top,280px);left:0;right:0;margin-inline:auto;width:auto;height:auto;max-width:min(var(--mg-width,88%),88%);max-height:640px;border-radius:22px;opacity:0;visibility:hidden;transform-origin:center top; }

@@ -61,6 +61,12 @@
               "replacement": { "type": "string" },
               "topPx": { "type": "number" },
               "image": { "type": "string" },
+              "images": {
+                "type": "array", "minItems": 2, "maxItems": 2,
+                "items": { "type": "object", "required": ["src", "alt"], "properties": {
+                  "src": { "type": "string", "minLength": 1 }, "alt": { "type": "string" }
+                } }
+              },
               "alt": { "type": "string" },
               "focus": { "type": "array", "items": { "type": "object" } },
               "duration": { "type": "number", "exclusiveMinimum": 0 }

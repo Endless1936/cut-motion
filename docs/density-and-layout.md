@@ -30,6 +30,8 @@ Calculate the complete background card bounds before playback and keep them fixe
 
 These are planning zones for motion-copy and B-axis stages, not rigid rows. A-roll overlays use an upper-middle starting position: 280px (14.58%) on the 1080×1920 canvas. The overall MG and background card remain horizontally centered (`x + width / 2 = 0.5` for normalized bounds); internal alignment is independent. Adjust height and width to avoid captions; eyes and mouth do not need clearance. Tall lists can move upward with compact left-aligned rows inside a centered card; short cards need no full-width empty surface. Templates provide a starting position; adjust the card around the actual caption region.
 
+For directly inserted screenshots and screen recordings, round the corners on the media itself. Skip the outer border, padded wrapper and background plate by default so the media gets the full available width. Use a shared backplate when it helps group several related elements. Content MGs keep their template surfaces.
+
 ## Peak-state measurement
 
 Approved templates reuse their implemented bounds. For a custom or resized layout, account for entrance overshoot, rotation, outline and shadows; inspect the affected moment if clipping is uncertain. Separate measurement reports for every animation phase are not required.

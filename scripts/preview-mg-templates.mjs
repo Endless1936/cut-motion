@@ -60,10 +60,11 @@ for (const [key, name, data] of cases) {
   const { fragment, style, timeline } = renderTemplate(name, beat);
   const backdrop=name==="redaction-mask"?redactionPreviewBackdrop(data):{style:"",fragment:""};
   const evidencePath = path.join(output, "assets");
-  if (name === "evidence-focus") {
+  if (name === "evidence-focus" || name === "card-switch") {
     fs.mkdirSync(evidencePath, {recursive: true});
     fs.copyFileSync(path.join(rootPath, "templates/motion-graphics/evidence-focus/sample-evidence.svg"), path.join(evidencePath, "sample-evidence.svg"));
   }
+  if (name === "card-switch") fs.copyFileSync(path.join(rootPath, "templates/motion-graphics/card-switch/sample-second.svg"), path.join(assetsPath, "sample-second.svg"));
   const html = `<!doctype html><meta charset="utf-8"><style>
   ${font ? `@font-face{font-family:"Smiley Sans";src:url("assets/${fontName}")}` : ""}
   html,body{margin:0;width:1080px;height:1920px;overflow:hidden}
@@ -78,6 +79,7 @@ for (const [key, name, data] of cases) {
       const root=document.querySelector(".mg-root"),select=selector=>[...root.querySelectorAll(selector)];
       const beat=${JSON.stringify(beat)},timeline=gsap.timeline({paused:true});
       ${timeline}
+      ${backdrop.timeline ?? ""}
       ${name === "redaction-mask" ? "" : "timeline.to(root,{autoAlpha:0,y:-8,duration:.2},7.8);"}
       timeline.set({}, {}, 8);window.__timelines={main:timeline};
       window.mgTL=timeline;window.seek=time=>timeline.seek(time,false);window.seek(3.4);resolve();
@@ -161,6 +163,33 @@ try {
       const overlay=await verifyRedactionPreview(page,data);
       overlayMeasurements.push({name:key,...overlay});
       if(overlay.regions!==data.masks.length||overlay.rects!==data.masks.reduce((sum,mask)=>sum+mask.rects.length,0)||overlay.maxAlphaError>.03||overlay.maxCoordinateErrorPx>.1||!overlay.reversible||overlay.colors.some(color=>color!=="rgb(43, 42, 44)"))failures.push(key+": overlay timing, coordinates, gray color or reverse seeking");
+      await page.screenshot({path:path.join(output,key+".png")});
+      continue;
+    }
+    if(name==="card-switch"){
+      const states=await page.evaluate(cue=>{
+        const root=document.querySelector(".card-switch-root");
+        const images=[...document.querySelectorAll(".card-switch-image")];
+        const read=time=>{
+          window.seek(time);
+          const rootOpacity=Number(getComputedStyle(root).opacity);
+          return images.map(image=>{
+            const style=getComputedStyle(image), box=image.getBoundingClientRect();
+            return {opacity:style.visibility==="hidden"?0:rootOpacity*Number(style.opacity),layer:Number(style.zIndex),center:(box.left+box.right)/2,
+              right:box.right,bottom:box.bottom,width:box.width,height:box.height,ratio:image.naturalWidth/image.naturalHeight,
+              border:style.borderTopWidth,radius:style.borderTopLeftRadius};
+          });
+        };
+        const early=read(cue-.25),fan=read(cue-1/30),swap=read(cue),settled=read(cue+.3),again=read(cue-.25);
+        window.seek(cue+.3);
+        return {early,fan,swap,settled,again};
+      },data.revealTimes[0]);
+      const {early,fan,swap,settled,again}=states, final=settled[1];
+      if(early[0].opacity!==1||early[1].opacity!==0||fan.some(card=>card.opacity!==1)||fan[0].layer<=fan[1].layer||
+        fan[1].right-fan[0].right<12||swap[1].layer<=swap[0].layer||settled[0].opacity!==0||final.opacity!==1||
+        Math.abs(final.width/final.height-final.ratio)>.01||Math.abs(final.center-540)>1||final.bottom>1250||
+        final.border!=="0px"||final.radius==="0px"||JSON.stringify(early)!==JSON.stringify(again)) failures.push(key+": card handoff, size or seeking");
+      measurements.push({name:key,center:final.center,bottom:final.bottom,...states});
       await page.screenshot({path:path.join(output,key+".png")});
       continue;
     }
