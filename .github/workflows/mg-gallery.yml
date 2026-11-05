@@ -22,7 +22,7 @@ jobs:
           node-version: 22
       - name: Build interactive gallery
         run: |
-          gsap_version=$(node -p 'require("./templates/hyperframes/package.json").dependencies.gsap')
+          gsap_version=$(node -p 'require("./templates/hyperframes/package.json").devDependencies.gsap')
           npm install --no-save --package-lock=false --ignore-scripts "gsap@$gsap_version"
           node scripts/preview-mg-templates.mjs --html-only
       - uses: actions/upload-pages-artifact@v4
