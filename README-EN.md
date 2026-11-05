@@ -35,6 +35,10 @@ Explicitly choose `auto` to let the Agent continue through the review points. [S
 
 The Agent uses the job defaults when you leave the style open. [Browse the motion templates](templates/motion-graphics/README.md) · [See the visual language](docs/visual-language.md)
 
+## ▶️ Interactive motion previews
+
+Play all templates together, or scrub the shared timeline to compare them at the same moment. [Open the MG gallery](https://endless1936.github.io/cut-motion/)
+
 ## 📎 What you can provide
 
 A local video path is enough to start. You can also share:

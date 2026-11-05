@@ -11,17 +11,20 @@ import { stagePreviewNames, stagePreviewPage, stageSpeakerSvg } from "./mg-previ
 import { redactionPreviewBackdrop, verifyRedactionPreview } from "./mg-preview-redaction.mjs";
 
 const rootPath = path.resolve(new URL("../", import.meta.url).pathname);
-const rendersPath = path.join(rootPath, "templates/motion-graphics/renders");
-const output = path.join(rendersPath, "current");
+const htmlOnly = process.argv.includes("--html-only");
+const renderRequested = process.argv.includes("--render");
+const galleryPath = `/assets/previews/mg/${htmlOnly ? "gallery" : "review"}`;
+const output = path.join(rootPath, galleryPath.slice(1));
 const assetsPath = path.join(output, "assets");
 const templateOption=process.argv.indexOf("--template");
 const selectedTemplate=templateOption<0?null:process.argv[templateOption+1];
 if(templateOption>=0&&(!selectedTemplate||selectedTemplate.startsWith("--")))throw new Error("--template needs a template name");
+if (htmlOnly && (selectedTemplate || renderRequested)) throw new Error("--html-only builds the complete gallery without video rendering");
 const fontCandidates = ["woff2", "ttf", "otf"].flatMap(extension => [
   path.join(rootPath, `assets/fonts/smiley-sans-oblique.${extension}`),
   path.join(assetsPath, `font.${extension}`)
 ]);
-const fontPath = fontCandidates.find(candidate => fs.existsSync(candidate));
+const fontPath = htmlOnly ? null : fontCandidates.find(candidate => fs.existsSync(candidate));
 const font = fontPath ? fs.readFileSync(fontPath) : null;
 const fontName = fontPath ? `font${path.extname(fontPath)}` : null;
 const gsap = fs.readFileSync(path.join(rootPath, "node_modules/gsap/dist/gsap.min.js"));
@@ -52,7 +55,8 @@ const variants = {
   "growth-six": ["growth-trend",{title:"六阶段趋势示意",items:[{label:"起步",value:10},{label:"尝试",value:17},{label:"积累",value:30},{label:"验证",value:48},{label:"增长",value:71},{label:"扩展",value:96}],result:"持续增长"}]
 };
 variants["evidence-pan"] = ["evidence-focus",{...templateSamples["evidence-focus"],focus:evidenceSampleFocus}];
-const allCases = [...Object.entries(templateSamples).map(([name,data])=>[name,name,data]), ...Object.entries(variants).map(([key,[name,data]])=>[key,name,data])];
+const allCases = [...Object.entries(templateSamples).map(([name,data])=>[name,name,data]),
+  ...Object.entries(htmlOnly ? {} : variants).map(([key,[name,data]])=>[key,name,data])];
 const cases=selectedTemplate?allCases.filter(([key])=>key===selectedTemplate):allCases;
 const stageCases=selectedTemplate?stagePreviewNames.filter(name=>name===selectedTemplate):stagePreviewNames;
 for (const [key, name, data] of cases) {
@@ -96,10 +100,16 @@ for (const [key, name, data] of cases) {
 if(stageCases.length)fs.writeFileSync(path.join(assetsPath,"stage-speaker.svg"),stageSpeakerSvg);
 for(const name of stageCases) fs.writeFileSync(path.join(output,name+".html"),stagePreviewPage(name,rootPath,fontName));
 const reviewNames=[...names,...stagePreviewNames];
-const cards=reviewNames.map(name=>`<article><h2>${name}</h2><video controls playsinline preload="metadata" poster="${name}.png" src="${name}.mp4"></video><p><a href="${name}.mp4">打开视频</a> · <a href="${name}.html">交互预览</a></p><details open><summary>交互动画 · 可折叠</summary><div class="phone"><iframe title="${name}" src="${name}.html"></iframe></div></details></article>`).join("");
-fs.writeFileSync(path.join(output, "index.html"), `<!doctype html><meta charset="utf-8"><title>MG 模板预览</title>
+const cards=reviewNames.map(name=>{
+  const preview = `<div class="phone"><iframe title="${name}" src="${name}.html"></iframe></div>`;
+  const hasVideo = !htmlOnly && (fs.existsSync(path.join(output, name + ".mp4")) || (renderRequested && (!selectedTemplate || name === selectedTemplate)));
+  const media = hasVideo ? `<video controls playsinline preload="metadata" poster="${name}.png" src="${name}.mp4"></video><p><a href="${name}.mp4">打开视频</a> · <a href="${name}.html">交互预览</a></p><details open><summary>交互动画 · 可折叠</summary>${preview}</details>` : preview;
+  return `<article><h2>${name}</h2>${media}</article>`;
+}).join("");
+fs.writeFileSync(path.join(output, "index.html"), `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>cut-motion · MG 模板预览</title>
 <style>body{margin:30px;background:#0b101a;color:#eee;font:16px system-ui}h1{font-size:26px}header{position:sticky;top:0;background:#0b101af2;padding:12px;z-index:2}main{display:grid;grid-template-columns:repeat(auto-fit,304px);gap:24px}h2{font-size:17px}article{padding:16px;background:#14203780;border:1px solid #c1d3ff22;border-radius:20px}.phone,video{display:block;width:270px;height:480px;overflow:hidden;border-radius:14px;background:#05080e}iframe{border:0;width:1080px;height:1920px;transform:scale(.25);transform-origin:0 0}input{width:50vw}a{color:#a9bdff}summary{cursor:pointer;color:#a8b4ca;margin:12px 0}</style>
-<header><h1>${names.length} 个内容 MG + ${stagePreviewNames.length} 个舞台模板</h1><p>每段 8 秒 · 1080×1920 / 30fps · 视频可独立播放，展开动画可同步拖动</p><button id="play">播放全部</button> <input id="time" type="range" min="0" max="8" step="0.03333333333333333" value="3.4"><span id="readout">3.4 s</span></header><main>${cards}</main>
+${htmlOnly ? "<style>@media(max-width:420px){body{margin:12px}main{grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}article{padding:9px}}</style>" : ""}
+<header><h1>cut-motion · ${reviewNames.length} 套 MG 模板</h1><p>${htmlOnly ? "每段 8 秒 · 总进度条同步控制所有模板" : "每段 8 秒 · 1080×1920 / 30fps · 视频可独立播放，展开动画可同步拖动"}</p><button id="play">播放全部</button> <input id="time" aria-label="全部模板的播放进度" type="range" min="0" max="8" step="0.03333333333333333" value="3.4"><span id="readout">3.4 s</span></header><main>${cards}</main>
 <script>
 const frames=[...document.querySelectorAll("iframe")],slider=document.querySelector("#time"),button=document.querySelector("#play"),readout=document.querySelector("#readout");
 const videos=[...document.querySelectorAll("video")];
@@ -120,7 +130,7 @@ button.onclick=()=>{
 window.addEventListener("message",event=>{if(event.data?.type!=="mg-preview-ready")return;const frame=frames.find(frame=>frame.contentWindow===event.source);if(frame)send(frame,Number(slider.value))});
 seek(slider.value);
 </script>`);
-if (!process.argv.includes("--verify") && !process.argv.includes("--serve") && !process.argv.includes("--render")) {
+if (!process.argv.includes("--verify") && !process.argv.includes("--serve") && !renderRequested) {
   console.log(JSON.stringify({gallery:path.join(output,"index.html")}));
   process.exit(0);
 }
@@ -148,22 +158,24 @@ const server=http.createServer((req,res)=>{
 });
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
 if(process.argv.includes("--serve")){
-  console.log(JSON.stringify({url:`http://127.0.0.1:${server.address().port}/templates/motion-graphics/renders/current/index.html`}));
+  console.log(JSON.stringify({url:`http://127.0.0.1:${server.address().port}${galleryPath}/index.html`}));
   await new Promise(()=>{});
 }
 const browser=await puppeteer.launch({executablePath,headless:true,args:["--no-sandbox"]});
+const checksOutput = htmlOnly ? path.join(output, "..", "checks") : output;
+fs.mkdirSync(checksOutput, { recursive: true });
 const failures=[],measurements=[],stageMeasurements=[],overlayMeasurements=[];
 try {
   const page=await browser.newPage();await page.setViewport({width:1080,height:1920});
   page.on("pageerror",e=>failures.push(e.message));
   for(const [key,name,data] of cases){
-    await page.goto(`http://127.0.0.1:${server.address().port}/templates/motion-graphics/renders/current/${key}.html`);
+    await page.goto(`http://127.0.0.1:${server.address().port}${galleryPath}/${key}.html`);
     await page.evaluate(()=>window.ready);
     if(name==="redaction-mask"){
       const overlay=await verifyRedactionPreview(page,data);
       overlayMeasurements.push({name:key,...overlay});
       if(overlay.regions!==data.masks.length||overlay.rects!==data.masks.reduce((sum,mask)=>sum+mask.rects.length,0)||overlay.maxAlphaError>.03||overlay.maxCoordinateErrorPx>.1||!overlay.reversible||overlay.colors.some(color=>color!=="rgb(43, 42, 44)"))failures.push(key+": overlay timing, coordinates, gray color or reverse seeking");
-      await page.screenshot({path:path.join(output,key+".png")});
+      await page.screenshot({path:path.join(checksOutput,key+".png")});
       continue;
     }
     if(name==="card-switch"){
@@ -190,7 +202,7 @@ try {
         Math.abs(final.width/final.height-final.ratio)>.01||Math.abs(final.center-540)>1||final.bottom>1250||
         final.border!=="0px"||final.radius==="0px"||JSON.stringify(early)!==JSON.stringify(again)) failures.push(key+": card handoff, size or seeking");
       measurements.push({name:key,center:final.center,bottom:final.bottom,...states});
-      await page.screenshot({path:path.join(output,key+".png")});
+      await page.screenshot({path:path.join(checksOutput,key+".png")});
       continue;
     }
     const geometry=await page.evaluate(async()=>{
@@ -254,10 +266,10 @@ try {
     if(geometry.maxFocusErrorPx>.1||geometry.changingBackplate||geometry.uncoveredContent||geometry.ahead||geometry.premature||Math.abs(geometry.center-540)>1||geometry.bottom>1250||geometry.overflow||JSON.stringify(geometry.early)!==JSON.stringify(geometry.again))failures.push(key+": placement, overflow or seeking");
     if(geometry.late.some(value=>value<.99)&&name!=="evidence-focus")failures.push(key+": missing reveal");
     if(!geometry.hostOverride)failures.push(key+": host paper-color override");
-    if(names.includes(key) || ["converge-six","converge-five","compare-parts"].includes(key)) await page.screenshot({path:path.join(output,key+".png")});
+    if(names.includes(key) || ["converge-six","converge-five","compare-parts"].includes(key)) await page.screenshot({path:path.join(checksOutput,key+".png")});
   }
   for(const name of stageCases){
-    await page.goto(`http://127.0.0.1:${server.address().port}/templates/motion-graphics/renders/current/${name}.html`);
+    await page.goto(`http://127.0.0.1:${server.address().port}${galleryPath}/${name}.html`);
     await page.evaluate(()=>window.ready);
     const stage=await page.evaluate(()=>{
       const root=document.querySelector("#canvas"),speaker=document.querySelector("#demo-speaker");
@@ -268,28 +280,30 @@ try {
     stageMeasurements.push({name,...stage});
     if(stage.width!==1080||stage.height!==1920||stage.duration!==8||JSON.stringify(stage.early)!==JSON.stringify(stage.again))failures.push(name+": composition contract or reversible seeking");
     if(name==="axis-stage-transition"&&(Math.abs(stage.middle.width-222)>.1||Math.abs(stage.middle.x-46)>.1||stage.middle.stage!=="true"||stage.late.stage!=="false"))failures.push(name+": stage transition geometry");
-    await page.screenshot({path:path.join(output,name+".png")});
+    await page.screenshot({path:path.join(checksOutput,name+".png")});
   }
-  fs.writeFileSync(path.join(output,"verification.json"),JSON.stringify({scope:selectedTemplate??"all",measurements,stageMeasurements,overlayMeasurements,failures},null,2));
   await page.setViewport({width:1260,height:1700});
-  await page.goto(`http://127.0.0.1:${server.address().port}/templates/motion-graphics/renders/current/index.html`);
+  await page.goto(`http://127.0.0.1:${server.address().port}${galleryPath}/index.html`);
+  if (htmlOnly && await page.$$eval("iframe, video", (nodes, count) =>
+    nodes.some(node => node.tagName === "VIDEO") || nodes.length !== count, reviewNames.length)) failures.push("gallery: HTML-only template coverage");
   await page.evaluate(()=>document.querySelectorAll("details").forEach(detail=>detail.open=true));
   await page.waitForFunction(()=>[...document.querySelectorAll("iframe")].every(f=>f.contentWindow.mgTL));
   const scrubTime=await page.evaluate(()=>{const slider=document.querySelector("#time");slider.value="5.2";slider.dispatchEvent(new Event("input"));return Number(slider.value)});
   await page.waitForFunction(time=>[...document.querySelectorAll("iframe")].every(f=>Math.abs(f.contentWindow.mgTL.time()-time)<.01),{},scrubTime);
   await page.click("#play");
-  await page.waitForFunction(()=>Number.parseFloat(document.querySelector("#readout").textContent)>.15);
+  await page.waitForFunction(()=>Number.parseFloat(document.querySelector("#readout").textContent)>.15 &&
+    [...document.querySelectorAll("iframe")].every(frame=>frame.contentWindow.mgTL.time()>.1));
   await page.click("#play");
   const stopped=await page.evaluate(()=>document.querySelector("#play").textContent==="播放全部");
   if(!stopped)failures.push("gallery: play/pause interaction");
   await page.evaluate(()=>{const slider=document.querySelector("#time");slider.value="3.4";slider.dispatchEvent(new Event("input"))});
   await page.evaluate(()=>document.querySelectorAll("details").forEach(detail=>detail.open=false));
-  await page.screenshot({path:path.join(output,"overview.png"),fullPage:true});
+  await page.screenshot({path:path.join(checksOutput,"overview.png"),fullPage:true});
 } finally {await browser.close();server.close();}
-fs.writeFileSync(path.join(output,"verification.json"),JSON.stringify({scope:selectedTemplate??"all",measurements,stageMeasurements,overlayMeasurements,failures},null,2));
+fs.writeFileSync(path.join(checksOutput,"verification.json"),JSON.stringify({scope:selectedTemplate??"all",measurements,stageMeasurements,overlayMeasurements,failures},null,2));
 console.log(JSON.stringify({gallery:path.join(output,"index.html"),scope:selectedTemplate??"all",cases:measurements.length,stageCases:stageMeasurements.length,overlayCases:overlayMeasurements.length,maxCenterErrorPx:Math.max(0,...measurements.map(m=>Math.abs(m.center-540))),maxCardBottomPx:Math.max(0,...measurements.map(m=>m.bottom)),failures}));
 if(failures.length)process.exitCode=1;
-if(!failures.length&&process.argv.includes("--render")){
+if(!failures.length&&renderRequested){
   const temporary=path.join(output,".render"),cli=path.join(rootPath,"node_modules/.bin/hyperframes");
   const renderNames=selectedTemplate?[selectedTemplate]:reviewNames;
   fs.mkdirSync(temporary,{recursive:true});

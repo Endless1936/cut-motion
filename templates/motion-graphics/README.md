@@ -123,7 +123,9 @@ Every `windows` entry is `[fadeInStart, fullyCovered, fadeOutStart, fullyClear]`
 
 ## Preview and stage helpers
 
-`node scripts/preview-mg-templates.mjs --verify --render` replaces `renders/` with the latest gallery in `renders/current/index.html` (ignored by Git), its local font/GSAP assets, PNG snapshots and one 8-second MP4 for every content template and stage helper. Each gallery card has a video player plus an interactive HTML preview. Keep only this latest set. `--verify` checks real browser placement, early visibility, complete reveals and backward seeking, including longer / variable-count examples. The neutral background, evidence image and redaction chat interface are fictional demonstrations. Use `--template redaction-mask --verify --render` to add or update only that preview without re-rendering the existing set. Without `--render`, the command builds the interactive previews only; without `--verify`, it skips browser verification.
+Run `node scripts/preview-mg-templates.mjs --html-only` to generate the interactive gallery in `assets/previews/mg/gallery/index.html`. Its shared player and slider control all templates with GSAP. The gallery uses system fonts and loads only HTML, JavaScript and sample artwork. Add `--verify` to check playback and geometry and save diagnostics in `assets/previews/mg/checks/`.
+
+For local video review, run `node scripts/preview-mg-templates.mjs --verify --render`. This saves PNG snapshots and an 8-second MP4 per template in `assets/previews/mg/review/`. Add `--template redaction-mask` to render just that preview. Browser verification checks placement, reveal timing and backward seeking. The sample artwork and interface are fictional.
 
 Stage helpers [b-axis-horizon-grid](stage/b-axis-horizon-grid/) and [axis-stage-transition](stage/axis-stage-transition/) retain full-frame geometry. Use the transition in the shared composition timeline, with B-axis intervals at least twice its duration and no overlap on the speaker track.
 

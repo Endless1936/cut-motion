@@ -35,6 +35,10 @@ ChatCut 的[安装指南](docs/agent-setup.md#environment-preflight)覆盖 ChatG
 
 没有特别偏好时，Agent 会沿用任务默认设置。[浏览动效模板库](templates/motion-graphics/README.md) · [查看视觉语言](docs/visual-language.md)
 
+## ▶️ 交互动效预览
+
+用「播放全部」同时播放所有模板，拖动总进度条对比同一时刻的画面。[打开 MG 模板画廊](https://endless1936.github.io/cut-motion/)
+
 ## 📎 你可以提供什么
 
 只给本地视频路径就能开工。你也可以带上：

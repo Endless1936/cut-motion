@@ -33,6 +33,7 @@ secrets.json
 *.gif
 *.heic
 !/assets/logo.png
+/assets/previews/mg/
 **/renders/
 **/.hyperframes/
 **/snapshots/
